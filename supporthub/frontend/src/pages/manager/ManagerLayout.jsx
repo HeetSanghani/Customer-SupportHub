@@ -6,7 +6,12 @@ import KnowledgeBase from './KnowledgeBase'
 import ManagerOverview from './ManagerOverview'
 import UnifiedInbox from '../../components/UnifiedInbox'
 import TicketDetail from '../../components/TicketDetail'
-
+import ManagerAnalytics from './ManagerAnalytics'
+import ManagerAgentPerformance from './ManagerAgentPerformance'
+import ManagerSLADashboard from './ManagerSLADashboard'
+import ManagerTicketReports from './ManagerTicketReports'
+import ManagerWorkflowAutomation from './ManagerWorkflowAutomation'
+import { BarChart3, Users, ShieldAlert, FileText, GitBranch } from 'lucide-react'
 export default function ManagerLayout() {
   const { role, logout, name } = useAuthStore()
   const location = useLocation()
@@ -35,6 +40,34 @@ export default function ManagerLayout() {
           <Link to="/manager" className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold transition-colors ${location.pathname === '/manager' ? 'bg-white/10 text-white' : 'text-[#9598B0] hover:bg-white/5'}`}>
             <LayoutDashboard size={18} /> Overview
           </Link>
+
+          <div className="pt-2 pb-1 px-3 text-xs font-bold text-[#6C7089] uppercase tracking-wider">
+            Insights
+          </div>
+
+          <Link to="/manager/analytics" className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold transition-colors ${location.pathname === '/manager/analytics' ? 'bg-white/10 text-white' : 'text-[#9598B0] hover:bg-white/5'}`}>
+            <BarChart3 size={18} /> Analytics
+          </Link>
+          
+          <Link to="/manager/agent-performance" className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold transition-colors ${location.pathname === '/manager/agent-performance' ? 'bg-white/10 text-white' : 'text-[#9598B0] hover:bg-white/5'}`}>
+            <Users size={18} /> Agent Performance
+          </Link>
+
+          <Link to="/manager/sla-dashboard" className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold transition-colors ${location.pathname === '/manager/sla-dashboard' ? 'bg-white/10 text-white' : 'text-[#9598B0] hover:bg-white/5'}`}>
+            <ShieldAlert size={18} /> SLA Dashboard
+          </Link>
+
+          <Link to="/manager/reports" className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold transition-colors ${location.pathname === '/manager/reports' ? 'bg-white/10 text-white' : 'text-[#9598B0] hover:bg-white/5'}`}>
+            <FileText size={18} /> Ticket Reports
+          </Link>
+
+          <Link to="/manager/workflow" className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold transition-colors ${location.pathname === '/manager/workflow' ? 'bg-white/10 text-white' : 'text-[#9598B0] hover:bg-white/5'}`}>
+            <GitBranch size={18} /> Workflow Automation
+          </Link>
+          
+          <div className="pt-2 pb-1 px-3 text-xs font-bold text-[#6C7089] uppercase tracking-wider">
+            Operations
+          </div>
 
           {/* Team Inbox Accordion */}
           <div>
@@ -101,6 +134,11 @@ export default function ManagerLayout() {
           <Route path="/inbox/active" element={<UnifiedInbox filter="active" basePath="/manager" />} />
           <Route path="/inbox/closed" element={<UnifiedInbox filter="closed" basePath="/manager" />} />
           <Route path="/tickets/:id" element={<TicketDetail basePath="/manager" />} />
+          <Route path="/analytics" element={<ManagerAnalytics />} />
+          <Route path="/agent-performance" element={<ManagerAgentPerformance />} />
+          <Route path="/sla-dashboard" element={<ManagerSLADashboard />} />
+          <Route path="/reports" element={<ManagerTicketReports />} />
+          <Route path="/workflow" element={<ManagerWorkflowAutomation />} />
           <Route path="/knowledge/*" element={<KnowledgeBase />} />
           <Route path="*" element={<Navigate to="/manager" replace />} />
         </Routes>
