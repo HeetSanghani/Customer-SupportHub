@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Routes, Route, Navigate, Link, useLocation } from 'react-router-dom'
 import { useAuthStore } from '../../store/authStore'
 import { LogOut, LayoutDashboard, Settings, BookOpen, Inbox, Clock, CheckCircle, ChevronDown } from 'lucide-react'
@@ -15,6 +15,12 @@ export default function ManagerLayout() {
   if (role !== 'manager' && role !== 'admin') return <Navigate to="/" replace />
   
   const isInboxActive = location.pathname.startsWith('/manager/inbox') || location.pathname.startsWith('/manager/tickets')
+
+  useEffect(() => {
+    if (isInboxActive) {
+      setInboxExpanded(true)
+    }
+  }, [isInboxActive])
 
   return (
     <div className="flex h-screen bg-[#F6F7FC] overflow-hidden">
