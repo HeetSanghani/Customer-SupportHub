@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { ticketsApi } from '../../api/tickets'
-import { client } from '../../api/client'
+import client from '../../api/client'
 
 export default function ManagerAgentPerformance() {
   const { data: tickets = [], isLoading: loadingTickets } = useQuery({ queryKey: ['tickets', 'all'], queryFn: async () => (await ticketsApi.list()).data })
