@@ -1,0 +1,44 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&family=Inter:wght@400;500;600;700&display=swap');
+
+@import "tailwindcss";
+
+:root {
+  --bg: #F6F7FC;
+  --surface: #FFFFFF;
+  --surface-alt: #F0F1FA;
+  --border: #E5E7F3;
+  --text: #1C1B2E;
+  --text-muted: #6C7089;
+  --text-faint: #9598B0;
+  --primary: #4F46E5;
+  --primary-dark: #3730A3;
+  --primary-light: #EEF0FE;
+  --ai-grad: linear-gradient(135deg, #6366F1 0%, #A855F7 100%);
+  --radius: 12px;
+  --shadow-sm: 0 1px 2px rgba(28,27,46,0.06);
+  --shadow-md: 0 4px 16px rgba(28,27,46,0.08);
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  font-family: 'Inter', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3, h4 {
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  letter-spacing: -0.01em;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-thumb { background: #D7DAEA; border-radius: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+
+/* Selection */
+::selection { background: #DDD6FE; }

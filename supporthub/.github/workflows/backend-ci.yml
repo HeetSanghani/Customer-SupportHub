@@ -1,0 +1,49 @@
+name: Backend CI
+
+on:
+  push:
+    paths: ['supporthub/backend/**']
+  pull_request:
+    paths: ['supporthub/backend/**']
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: supporthub
+          POSTGRES_PASSWORD: supporthub_dev
+          POSTGRES_DB: supporthub_test
+        ports: ['5432:5432']
+        options: --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports: ['6379:6379']
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+        with:
+          version: 'latest'
+
+      - name: Install dependencies
+        working-directory: supporthub/backend
+        run: uv sync
+
+      - name: Lint (ruff)
+        working-directory: supporthub/backend
+        run: uv run ruff check app/
+
+      - name: Type check (mypy)
+        working-directory: supporthub/backend
+        run: uv run mypy app/ --ignore-missing-imports
+
+      - name: Run tests
+        working-directory: supporthub/backend
+        env:
+          DATABASE_URL: postgresql+asyncpg://supporthub:supporthub_dev@localhost:5432/supporthub_test
+          REDIS_URL: redis://localhost:6379/0
+          SECRET_KEY: test_secret_key_not_for_production
+        run: uv run pytest tests/ -v
