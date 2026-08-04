@@ -11,7 +11,7 @@ from slowapi.util import get_remote_address
 
 from app.config import get_settings
 from app.database import init_db
-from app.routers import auth, tickets, knowledge
+from app.routers import auth, tickets, knowledge, admin, webhooks
 from app.routers.ws import chat
 
 settings = get_settings()
@@ -72,7 +72,10 @@ API_PREFIX = "/api/v1"
 app.include_router(auth.router, prefix=API_PREFIX)
 app.include_router(tickets.router, prefix=API_PREFIX)
 app.include_router(knowledge.router, prefix=API_PREFIX)
+app.include_router(admin.router, prefix=API_PREFIX)
+app.include_router(webhooks.router, prefix=API_PREFIX)
 app.include_router(chat.router)           # WebSocket — no prefix
+
 
 # ─── Health check ─────────────────────────────────────────────────────────────
 @app.get("/health", tags=["health"])

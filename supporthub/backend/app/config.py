@@ -43,13 +43,29 @@ class Settings(BaseSettings):
     # Sentry
     sentry_dsn: str = ""
 
-    # Meta
+    # Mailgun Email
+    mailgun_api_key: str = ""
+    mailgun_domain: str = ""
+
+    # Meta (WhatsApp / Instagram / Facebook)
     meta_app_secret: str = ""
     meta_verify_token: str = "supporthub_verify"
+    meta_app_token: str = ""
+    whatsapp_phone_id: str = ""
+    page_access_token: str = ""
+    ig_page_id: str = ""
+    fb_page_id: str = ""
+
+    # OpenAI / LLM
+    openai_api_key: str = ""
 
     @property
     def is_production(self) -> bool:
-        return self.app_env == "production"
+        return self.app_env.lower() == "production"
+
+    @property
+    def mailgun_is_sandbox(self) -> bool:
+        return "sandbox" in (self.mailgun_domain or "").lower()
 
 
 @lru_cache

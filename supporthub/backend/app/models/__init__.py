@@ -150,6 +150,7 @@ class Message(SQLModel, table=True):
     sender_type: SenderType
     body: str = Field(sa_column=Column(Text))
     attachments: Optional[str] = Field(default=None, sa_column=Column(Text))  # JSON list
+    external_message_id: Optional[str] = Field(default=None, max_length=255, index=True)
     created_at: datetime = Field(default_factory=datetime.utcnow, index=True)
 
     ticket: Optional[Ticket] = Relationship(back_populates="messages")

@@ -13,6 +13,8 @@ export const useAuthStore = create(
       login: (token, userId, role, name) =>
         set({ token, userId, role, name, isAuthenticated: true }),
 
+      setRole: (role) => set({ role }),
+
       logout: () =>
         set({ token: null, userId: null, role: null, name: null, isAuthenticated: false }),
     }),
