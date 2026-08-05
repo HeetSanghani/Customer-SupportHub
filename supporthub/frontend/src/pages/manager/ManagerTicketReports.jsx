@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { ticketsApi } from '../../api/tickets'
 import { Download, FileText, Search, Filter, ArrowUpRight, Calendar, RotateCcw } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
+import { parseUTCDate, formatDate, formatDateTime } from '../../utils/dateUtils'
 
 export default function ManagerTicketReports() {
   const navigate = useNavigate()
@@ -75,7 +76,7 @@ export default function ManagerTicketReports() {
 
     // 3. Custom Date Range Filter
     if (t.created_at) {
-      const ticketDate = new Date(t.created_at)
+      const ticketDate = parseUTCDate(t.created_at)
       if (startDate) {
         const start = new Date(startDate)
         start.setHours(0, 0, 0, 0)
@@ -108,7 +109,7 @@ export default function ManagerTicketReports() {
       `"${t.status || ''}"`,
       `"${t.priority || ''}"`,
       `"${t.ai_resolved ? 'Yes' : 'No'}"`,
-      `"${t.created_at ? new Date(t.created_at).toLocaleString() : ''}"`
+      `"${t.created_at ? formatDateTime(t.created_at) : ''}"`
     ])
     const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map(e => e.join(','))].join('\n')
     const encodedUri = encodeURI(csvContent)
@@ -347,7 +348,7 @@ export default function ManagerTicketReports() {
                     </span>
                   </td>
                   <td className="px-6 py-4 text-xs font-mono text-[#1C1B2E]">
-                    {ticket.created_at ? new Date(ticket.created_at).toLocaleDateString([], { year: 'numeric', month: 'short', day: 'numeric' }) : 'N/A'}
+                    {ticket.created_at ? formatDate(ticket.created_at) : 'N/A'}
                   </td>
                   <td className="px-6 py-4 text-right">
                     <span className="text-xs font-bold text-indigo-600 opacity-0 group-hover:opacity-100 transition-opacity inline-flex items-center gap-0.5">

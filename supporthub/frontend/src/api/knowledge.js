@@ -14,5 +14,8 @@ export const knowledgeApi = {
     client.patch(`/knowledge/${id}`, data),
 
   delete: (id) =>
-    client.delete(`/knowledge/${id}`)
+    client.delete(`/knowledge/${id}`),
+
+  markHelpful: (id) =>
+    client.post(`/knowledge/${id}/helpful`)
 }

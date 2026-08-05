@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { ticketsApi } from '../../api/tickets'
 import client from '../../api/client'
-import { ArrowUpRight, Users, CheckCircle2, Star, ShieldCheck } from 'lucide-react'
+import { ArrowUpRight, Users, CheckCircle2, Star, ShieldCheck, Download } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 
 export default function ManagerAgentPerformance() {
@@ -45,11 +45,41 @@ export default function ManagerAgentPerformance() {
     return { ...agent, active, resolved, total: agentTickets.length, slaCompliance, csat }
   })
 
+  const handleExportCSV = () => {
+    if (!agentStats.length) return
+    const headers = ['Agent Name', 'Email', 'Active Tickets', 'Resolved Tickets', 'Total Tickets', 'SLA Compliance (%)', 'CSAT Score']
+    const rows = agentStats.map(s => [
+      `"${s.name}"`,
+      `"${s.email}"`,
+      s.active,
+      s.resolved,
+      s.total,
+      `"${s.slaCompliance}%"`,
+      s.csat
+    ])
+    const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map(e => e.join(','))].join('\n')
+    const encodedUri = encodeURI(csvContent)
+    const link = document.createElement('a')
+    link.setAttribute('href', encodedUri)
+    link.setAttribute('download', `agent_performance_report.csv`)
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+  }
+
   return (
     <div className="flex-1 overflow-auto bg-[#F6F7FC] p-8 text-[#1C1B2E]">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold font-['Plus_Jakarta_Sans']">Agent Performance</h1>
-        <p className="text-[#6C7089] text-sm mt-0.5">Track and evaluate support team volume, resolution speed, and CSAT scores.</p>
+      <div className="mb-6 flex justify-between items-center">
+        <div>
+          <h1 className="text-2xl font-bold font-['Plus_Jakarta_Sans']">Agent Performance</h1>
+          <p className="text-[#6C7089] text-sm mt-0.5">Track and evaluate support team volume, resolution speed, and CSAT scores.</p>
+        </div>
+        <button
+          onClick={handleExportCSV}
+          className="flex items-center gap-2 px-4 py-2 bg-[#6366F1] hover:bg-[#4F46E5] text-white text-xs font-bold rounded-xl transition-all shadow-sm"
+        >
+          <Download size={14} /> Export Performance CSV
+        </button>
       </div>
 
       {/* Summary Table */}

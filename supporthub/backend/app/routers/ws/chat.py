@@ -1,7 +1,7 @@
 """WebSocket chat endpoint — real-time messages per ticket room."""
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
@@ -39,7 +39,7 @@ async def websocket_chat(
         "user_id": str(user.id),
         "name": user.name,
         "role": user.role.value,
-        "joined_at": datetime.utcnow().isoformat(),
+        "joined_at": datetime.now(timezone.utc).isoformat(),
     })
 
     try:

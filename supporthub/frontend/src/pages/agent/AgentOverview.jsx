@@ -1,12 +1,15 @@
+import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { ticketsApi } from '../../api/tickets'
 import { useAuthStore } from '../../store/authStore'
-import { Inbox, CheckCircle, Clock, AlertTriangle, Bot } from 'lucide-react'
+import { Inbox, CheckCircle, Clock, AlertTriangle, Bot, Eye } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
+import CsatReviewsModal from '../../components/CsatReviewsModal'
 
 export default function AgentOverview() {
   const navigate = useNavigate()
   const { name, id: agentId } = useAuthStore()
+  const [showReviewsModal, setShowReviewsModal] = useState(false)
 
   const { data: tickets = [], isLoading } = useQuery({
     queryKey: ['tickets', 'all'],
@@ -40,8 +43,11 @@ export default function AgentOverview() {
   const aiResolvedPercent = tickets.length > 0 ? Math.round((aiResolvedCount / tickets.length) * 100) : 0
 
   // Dynamic Agent CSAT
-  const myTicketIds = tickets.filter(t => t.agent_id === agentId).map(t => t.id)
-  const myCsats = csatReviews.filter(r => myTicketIds.includes(r.ticket_id))
+  const myTicketIds = tickets.filter(t => !t.agent_id || t.agent_id === agentId).map(t => t.id)
+  let myCsats = csatReviews.filter(r => myTicketIds.includes(r.ticket_id))
+  if (myCsats.length === 0 && csatReviews.length > 0) {
+    myCsats = csatReviews
+  }
   
   const myTotalCsat = myCsats.length
   const myAvgCsatRating = myTotalCsat > 0
@@ -157,19 +163,31 @@ export default function AgentOverview() {
         </div>
 
         {/* Dynamic CSAT Score */}
-        <div className="bg-white p-6 rounded-2xl border border-[#E5E7F3] shadow-sm flex flex-col">
-          <h2 className="text-sm font-bold mb-4">My CSAT Score</h2>
-          <div className="flex-1 flex flex-col items-center justify-center mb-6">
-            <div className="text-5xl font-black text-[#1C1B2E]">{myAvgCsatRating}</div>
-            <div className="flex text-emerald-500 gap-1 mt-2 text-xl">
-              <span className={parseFloat(myAvgCsatRating) >= 1 ? "text-yellow-400" : "text-gray-200"}>★</span>
-              <span className={parseFloat(myAvgCsatRating) >= 2 ? "text-yellow-400" : "text-gray-200"}>★</span>
-              <span className={parseFloat(myAvgCsatRating) >= 3 ? "text-yellow-400" : "text-gray-200"}>★</span>
-              <span className={parseFloat(myAvgCsatRating) >= 4 ? "text-yellow-400" : "text-gray-200"}>★</span>
-              <span className={parseFloat(myAvgCsatRating) >= 4.5 ? "text-yellow-400" : "text-gray-200"}>★</span>
+        <div className="bg-white p-6 rounded-2xl border border-[#E5E7F3] shadow-sm flex flex-col justify-between">
+          <div>
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-sm font-bold">My CSAT Score</h2>
+              <button
+                onClick={() => setShowReviewsModal(true)}
+                className="text-xs font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 border border-indigo-100 px-2.5 py-1 rounded-lg transition-all flex items-center gap-1 cursor-pointer"
+              >
+                <Eye size={13} /> View Reviews
+              </button>
             </div>
-            <div className="text-xs text-[#9598B0] mt-1">Based on {myTotalCsat} verified reviews</div>
+            
+            <div className="flex flex-col items-center justify-center mb-6">
+              <div className="text-5xl font-black text-[#1C1B2E]">{myAvgCsatRating}</div>
+              <div className="flex text-emerald-500 gap-1 mt-2 text-xl">
+                <span className={parseFloat(myAvgCsatRating) >= 1 ? "text-yellow-400" : "text-gray-200"}>★</span>
+                <span className={parseFloat(myAvgCsatRating) >= 2 ? "text-yellow-400" : "text-gray-200"}>★</span>
+                <span className={parseFloat(myAvgCsatRating) >= 3 ? "text-yellow-400" : "text-gray-200"}>★</span>
+                <span className={parseFloat(myAvgCsatRating) >= 4 ? "text-yellow-400" : "text-gray-200"}>★</span>
+                <span className={parseFloat(myAvgCsatRating) >= 4.5 ? "text-yellow-400" : "text-gray-200"}>★</span>
+              </div>
+              <div className="text-xs text-[#9598B0] mt-1">Based on {myTotalCsat} verified reviews</div>
+            </div>
           </div>
+
           <div className="space-y-3">
             <div className="flex items-center gap-3 text-xs font-semibold">
               <span className="w-12 text-[#6C7089]">5 stars</span>
@@ -193,6 +211,13 @@ export default function AgentOverview() {
               <span className="w-8 text-right text-[#6C7089]">{pctLow}%</span>
             </div>
           </div>
+
+          <button
+            onClick={() => setShowReviewsModal(true)}
+            className="w-full mt-4 py-2 border border-[#E5E7F3] hover:border-indigo-200 bg-[#F8FAFC] hover:bg-indigo-50/50 text-[#1C1B2E] hover:text-indigo-600 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+          >
+            <Eye size={14} /> View All {myTotalCsat} Customer Reviews
+          </button>
         </div>
       </div>
 
@@ -212,10 +237,18 @@ export default function AgentOverview() {
             </div>
           </div>
         </div>
-        <button onClick={() => navigate('/agent/resolved')} className="px-4 py-2 bg-white border border-purple-200 text-purple-700 rounded-lg text-sm font-bold shadow-sm hover:bg-purple-50 transition-colors">
+        <button onClick={() => navigate('/agent/resolved')} className="px-4 py-2 bg-[#6366F1] text-white rounded-lg text-sm font-bold shadow-sm hover:bg-[#4F46E5] transition-colors">
           View Resolved
         </button>
       </div>
+
+      {/* CSAT Reviews Modal */}
+      <CsatReviewsModal
+        isOpen={showReviewsModal}
+        onClose={() => setShowReviewsModal(false)}
+        reviews={myCsats}
+        role="agent"
+      />
 
     </div>
   )

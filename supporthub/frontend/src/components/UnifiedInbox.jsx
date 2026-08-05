@@ -15,7 +15,7 @@ export default function UnifiedInbox({ filter, basePath }) {
   const { data: rawTickets = [], isLoading } = useQuery({
     queryKey: ['tickets', basePath, filter],
     queryFn: async () => {
-      const params = (filter !== 'all' && filter !== 'active' && filter !== 'closed') ? { status: filter } : {}
+      const params = (filter !== 'all' && filter !== 'active' && filter !== 'closed' && filter !== 'resolved') ? { status: filter } : {}
       const res = await ticketsApi.list(params)
       return res.data
     },
@@ -25,7 +25,7 @@ export default function UnifiedInbox({ filter, basePath }) {
   const tickets = rawTickets.filter(t => {
     // Status filter
     if (filter === 'active' && (t.status === 'resolved' || t.status === 'closed')) return false
-    if (filter === 'closed' && (t.status !== 'resolved' && t.status !== 'closed')) return false
+    if ((filter === 'closed' || filter === 'resolved') && (t.status !== 'resolved' && t.status !== 'closed')) return false
     
     // Channel filter
     if (selectedChannel !== 'all' && t.channel !== selectedChannel) return false
@@ -44,7 +44,11 @@ export default function UnifiedInbox({ filter, basePath }) {
 
   const channels = [
     { id: 'all', label: 'All Channels' },
+    { id: 'email', label: 'Email', icon: Mail },
     { id: 'website_chat', label: 'Website Chat', icon: MessageSquare },
+    { id: 'whatsapp', label: 'WhatsApp', icon: Smartphone },
+    { id: 'instagram', label: 'Instagram', icon: Instagram },
+    { id: 'facebook', label: 'Facebook', icon: Facebook },
   ]
 
   const getChannelBadge = (channel) => {

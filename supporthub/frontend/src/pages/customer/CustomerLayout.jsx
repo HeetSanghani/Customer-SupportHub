@@ -3,16 +3,19 @@ import { Routes, Route, Navigate, Link, useNavigate, useLocation } from 'react-r
 import { useQuery } from '@tanstack/react-query'
 import { ticketsApi } from '../../api/tickets'
 import { useAuthStore } from '../../store/authStore'
-import { MessageSquare, LogOut, User, Star } from 'lucide-react'
+import { MessageSquare, LogOut, User, Star, Mail, BookOpen } from 'lucide-react'
 
 import CustomerLiveChat from './CustomerLiveChat'
 import CustomerProfile from './CustomerProfile'
 import CustomerReviews from './CustomerReviews'
+import CustomerHelpCenter from './CustomerHelpCenter'
+import ContactEmailModal from '../../components/ContactEmailModal'
 
 // ─── Layout ──────────────────────────────────────────────────────────────────
 export default function CustomerLayout() {
   const { role, logout, name } = useAuthStore()
   const location = useLocation()
+  const [isEmailModalOpen, setIsEmailModalOpen] = useState(false)
 
   // Active tickets for notification badge calculation
   const { data: tickets = [] } = useQuery({
@@ -53,6 +56,15 @@ export default function CustomerLayout() {
                  </span>
                )}
              </Link>
+             <Link to="/customer/help" className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold transition-colors ${location.pathname === '/customer/help' ? 'bg-indigo-50 text-indigo-700' : 'text-[#6C7089] hover:bg-gray-50'}`}>
+               <BookOpen size={18} /> Help Center & FAQs
+             </Link>
+             <button
+               onClick={() => setIsEmailModalOpen(true)}
+               className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold text-[#6C7089] hover:bg-blue-50 hover:text-blue-600 transition-colors text-left"
+             >
+               <Mail size={18} /> Contact via Email
+             </button>
              <Link to="/customer/reviews" className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold transition-colors ${location.pathname === '/customer/reviews' ? 'bg-indigo-50 text-indigo-700' : 'text-[#6C7089] hover:bg-gray-50'}`}>
                <Star size={18} /> My Reviews
              </Link>
@@ -85,11 +97,14 @@ export default function CustomerLayout() {
         <Routes>
           <Route path="/" element={<CustomerLiveChat />} />
           <Route path="/chat/:id" element={<CustomerLiveChat />} />
+          <Route path="/help" element={<CustomerHelpCenter />} />
           <Route path="/reviews" element={<CustomerReviews />} />
           <Route path="/profile" element={<CustomerProfile />} />
           <Route path="*" element={<Navigate to="/customer" replace />} />
         </Routes>
       </main>
+
+      <ContactEmailModal isOpen={isEmailModalOpen} onClose={() => setIsEmailModalOpen(false)} />
     </div>
   )
 }

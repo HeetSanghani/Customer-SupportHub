@@ -4,6 +4,7 @@ import { ticketsApi } from '../../api/tickets'
 import { authApi } from '../../api/auth'
 import { CheckCircle2, Ticket as TicketIcon, Clock, Bot, AlertTriangle, Star, MessageSquare, X, ChevronRight, Filter } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
+import { formatDateTime } from '../../utils/dateUtils'
 
 export default function ManagerOverview() {
   const navigate = useNavigate()
@@ -61,11 +62,19 @@ export default function ManagerOverview() {
 
   // 1. Purely Dynamic Channels Breakdown from actual DB tickets
   const channelCounts = {
+    email: tickets.filter(t => t.channel === 'email').length,
     chat: tickets.filter(t => t.channel === 'website_chat' || t.channel === 'chat').length,
+    whatsapp: tickets.filter(t => t.channel === 'whatsapp').length,
+    instagram: tickets.filter(t => t.channel === 'instagram').length,
+    facebook: tickets.filter(t => t.channel === 'facebook').length,
   }
 
   const channelDisplayData = [
-    { id: 'website_chat', label: 'Website Chat', count: channelCounts.chat, color: '#6366F1' },
+    { id: 'email', label: 'Email', count: channelCounts.email, color: '#6366F1' },
+    { id: 'website_chat', label: 'Website Chat', count: channelCounts.chat, color: '#3B82F6' },
+    { id: 'whatsapp', label: 'WhatsApp', count: channelCounts.whatsapp, color: '#10B981' },
+    { id: 'instagram', label: 'Instagram', count: channelCounts.instagram, color: '#8B5CF6' },
+    { id: 'facebook', label: 'Facebook', count: channelCounts.facebook, color: '#2563EB' },
   ]
   const maxChannel = Math.max(...channelDisplayData.map(c => c.count), 1)
 
@@ -197,9 +206,9 @@ export default function ManagerOverview() {
                 <div
                   key={ch.id}
                   onClick={() => navigate('/manager/inbox/all')}
-                  className="flex-1 flex flex-col items-center gap-2 group cursor-pointer"
+                  className="flex-1 flex flex-col items-center gap-2 group cursor-pointer h-full justify-end"
                 >
-                  <div className="w-full bg-slate-100 rounded-t-lg h-full flex items-end p-1 relative overflow-hidden group-hover:bg-slate-200 transition-colors">
+                  <div className="w-full bg-slate-100 rounded-t-lg flex-1 flex items-end p-1 relative overflow-hidden group-hover:bg-slate-200 transition-colors">
                     <div
                       className="w-full rounded-t-md transition-all duration-500 relative flex items-center justify-center"
                       style={{
@@ -362,7 +371,7 @@ export default function ManagerOverview() {
                   </div>
                   <div className="text-xs text-[#6C7089] truncate max-w-md">{ticket.subject}</div>
                   <div className="text-[11px] text-[#9598B0] mt-1 font-medium">
-                    {new Date(ticket.created_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
+                    {formatDateTime(ticket.created_at)}
                   </div>
                 </div>
               </div>
@@ -452,7 +461,7 @@ export default function ManagerOverview() {
                       </p>
                     )}
                     <div className="text-[10px] text-slate-400 text-right mt-2">
-                      {new Date(rev.created_at).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}
+                      {formatDateTime(rev.created_at)}
                     </div>
                   </div>
                 ))

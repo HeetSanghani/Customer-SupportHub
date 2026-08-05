@@ -202,20 +202,22 @@ export default function AdminOverview() {
             </button>
           </div>
           <div className="space-y-4">
-            {channels.map(channel => {
-              const type = channel?.channel_type || 'website_chat'
+            {['email', 'website_chat', 'whatsapp', 'instagram', 'facebook'].map(type => {
+              const activeIntegration = channels.find(c => c.channel_type === type)
               const info = CHANNEL_ICONS[type] || { icon: MessageSquare, color: 'text-gray-500' }
               const IconComp = info.icon || MessageSquare
-              const isConn = channel?.status === 'connected'
-              const isAttn = channel?.status === 'needs_attention'
+              const isConn = activeIntegration?.status === 'connected'
+              const isAttn = activeIntegration?.status === 'needs_attention'
 
               return (
-                <div key={channel.id || Math.random()} className="flex items-center justify-between">
+                <div key={type} className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <IconComp size={16} className={info.color} />
                     <div>
                       <div className="text-sm font-semibold">{CHANNEL_NAMES[type] || type}</div>
-                      <div className="text-xs text-[#9598B0]">{channel?.display_name || ''}</div>
+                      <div className="text-xs text-[#9598B0]">
+                        {activeIntegration?.display_name || (isConn ? 'Connected' : 'Not configured')}
+                      </div>
                     </div>
                   </div>
                   <span className={`text-xs font-bold px-2 py-1 rounded-md ${

@@ -8,7 +8,7 @@ def nightly_rollup(self):
     Pre-compute daily stats: tickets by channel, CSAT avg, SLA compliance,
     resolution rate, AI vs human split. Stored to a stats table (Phase 10).
     """
-    from datetime import datetime, timedelta
+    from datetime import datetime, timedelta, timezone
     from sqlalchemy import create_engine, func
     from sqlmodel import Session, select
     from app.config import get_settings
@@ -17,7 +17,7 @@ def nightly_rollup(self):
     settings = get_settings()
     sync_url = settings.database_url.replace("postgresql+asyncpg", "postgresql+psycopg2")
     engine = create_engine(sync_url)
-    yesterday = datetime.utcnow().date() - timedelta(days=1)
+    yesterday = datetime.now(timezone.utc).date() - timedelta(days=1)
 
     with Session(engine) as session:
         total = session.exec(

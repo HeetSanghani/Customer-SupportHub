@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -134,7 +134,7 @@ async def update_article(
     if body.title is not None or body.body is not None:
         article.embedding = generate_embedding(article.title + " " + article.body)
 
-    article.updated_at = datetime.utcnow()
+    article.updated_at = datetime.now(timezone.utc)
     session.add(article)
     await session.commit()
     await session.refresh(article)
@@ -152,3 +152,17 @@ async def delete_article(
         
     await session.delete(article)
     await session.commit()
+
+@router.post("/{article_id}/helpful", response_model=KbArticleOut)
+async def mark_article_helpful(
+    article_id: uuid.UUID,
+    session: AsyncSession = Depends(get_session),
+):
+    article = await session.get(KbArticle, article_id)
+    if not article:
+        raise HTTPException(status_code=404, detail="Article not found")
+    article.helpful_count += 1
+    session.add(article)
+    await session.commit()
+    await session.refresh(article)
+    return KbArticleOut.from_orm(article)

@@ -45,7 +45,15 @@ export default function ChannelIntegrations() {
     status: 'connected',
     display_name: '',
     weekly_volume: 0,
+    smtp_host: 'smtp.mailgun.org',
+    smtp_port: '587',
+    api_key: '',
+    auto_reply_template: 'Thank you for reaching out! We received your ticket [TCK-REF] and our team will respond shortly.',
   })
+
+  const [activeTab, setActiveTab] = useState('general')
+  const [copySuccess, setCopySuccess] = useState(false)
+  const [testResult, setTestResult] = useState(null)
 
   // Fetch channels from backend
   const { data: channels = [], isLoading } = useQuery({
@@ -54,6 +62,18 @@ export default function ChannelIntegrations() {
       const res = await adminApi.listChannels()
       return res.data
     }
+  })
+
+  const { data: emailLogs = [] } = useQuery({
+    queryKey: ['admin-email-logs'],
+    queryFn: async () => (await adminApi.getEmailLogs()).data,
+    enabled: selectedChannel?.channel_type === 'email' && activeTab === 'logs'
+  })
+
+  const { data: emailTemplates = [] } = useQuery({
+    queryKey: ['admin-email-templates'],
+    queryFn: async () => (await adminApi.getEmailTemplates()).data,
+    enabled: selectedChannel?.channel_type === 'email' && activeTab === 'templates'
   })
 
   // Create channel mutation
@@ -88,6 +108,20 @@ export default function ChannelIntegrations() {
     }
   })
 
+  // Test Email mutation
+  const testEmailMutation = useMutation({
+    mutationFn: () => adminApi.testEmailConnection(),
+    onSuccess: (res) => {
+      queryClient.invalidateQueries(['admin-channels'])
+      queryClient.invalidateQueries(['tickets'])
+      setTestResult(res.data)
+      setTimeout(() => setTestResult(null), 6000)
+    },
+    onError: (err) => {
+      setTestResult({ status: 'error', message: err.response?.data?.detail || 'Test connection failed.' })
+    }
+  })
+
   const openConnectModal = () => {
     setConnectForm({ channel_type: 'email', display_name: '', credentials_encrypted: '' })
     setConnectError('')
@@ -96,10 +130,15 @@ export default function ChannelIntegrations() {
 
   const openManageModal = (channel) => {
     setSelectedChannel(channel)
+    setActiveTab('general')
     setManageForm({
       status: channel.status,
       display_name: channel.display_name || '',
       weekly_volume: channel.weekly_volume || 0,
+      smtp_host: 'smtp.mailgun.org',
+      smtp_port: '587',
+      api_key: '',
+      auto_reply_template: 'Thank you for reaching out! We received your ticket and our team will respond shortly.',
     })
   }
 
@@ -118,6 +157,13 @@ export default function ChannelIntegrations() {
     updateChannelMutation.mutate({ id: selectedChannel.id, data: manageForm })
   }
 
+  const copyWebhookUrl = () => {
+    const webhookUrl = `${window.location.origin}/api/v1/webhooks/email`
+    navigator.clipboard.writeText(webhookUrl)
+    setCopySuccess(true)
+    setTimeout(() => setCopySuccess(false), 3000)
+  }
+
   return (
     <div className="flex-1 overflow-auto bg-[#F6F7FC] p-8 text-[#1C1B2E]">
       {/* Page Header */}
@@ -126,13 +172,35 @@ export default function ChannelIntegrations() {
           <h1 className="text-2xl font-bold font-['Plus_Jakarta_Sans']">Channel Integrations</h1>
           <p className="text-[#6C7089] text-sm mt-1">Connect the real applications and platforms your customers use.</p>
         </div>
-        <button
-          onClick={openConnectModal}
-          className="flex items-center gap-2 bg-[#4F46E5] hover:bg-[#4338CA] text-white px-4 py-2.5 rounded-xl font-medium text-sm transition-colors shadow-sm"
-        >
-          <Plus size={16} /> + Connect App
-        </button>
+        <div className="flex gap-3">
+          <button
+            onClick={() => testEmailMutation.mutate()}
+            disabled={testEmailMutation.isPending}
+            className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2.5 rounded-xl font-medium text-sm transition-colors shadow-sm disabled:opacity-50"
+          >
+            <Key size={16} />
+            {testEmailMutation.isPending ? 'Testing...' : 'Test Email Connection'}
+          </button>
+          <button
+            onClick={openConnectModal}
+            className="flex items-center gap-2 bg-[#4F46E5] hover:bg-[#4338CA] text-white px-4 py-2.5 rounded-xl font-medium text-sm transition-colors shadow-sm"
+          >
+            <Plus size={16} /> + Connect App
+          </button>
+        </div>
       </div>
+
+      {testResult && (
+        <div className={`mb-6 p-4 rounded-2xl border flex items-center justify-between text-sm font-semibold animate-fadeIn ${
+          testResult.status === 'error' ? 'bg-red-50 text-red-700 border-red-200' : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+        }`}>
+          <div className="flex items-center gap-2">
+            <AlertCircle size={18} />
+            <span>{testResult.message} {testResult.ticket_ref ? `(Ticket Ref: ${testResult.ticket_ref})` : ''}</span>
+          </div>
+          <button onClick={() => setTestResult(null)} className="text-xs hover:underline">Dismiss</button>
+        </div>
+      )}
 
       {isLoading ? (
         <div className="flex justify-center py-16">
@@ -190,14 +258,23 @@ export default function ChannelIntegrations() {
                   <p className="text-xs text-[#6C7089] mt-2 font-medium">{channel.weekly_volume || 0} / week messages</p>
                 </div>
 
-                {/* Bottom Action Button */}
-                <div className="mt-6 pt-4 border-t border-[#F3F4F6]">
+                {/* Bottom Action Buttons */}
+                <div className="mt-6 pt-4 border-t border-[#F3F4F6] flex gap-2">
                   <button
                     onClick={() => openManageModal(channel)}
-                    className="w-full py-2 rounded-xl text-xs font-bold bg-gray-50 hover:bg-gray-100 text-[#1C1B2E] border border-[#E5E7F3] transition-colors"
+                    className="flex-1 py-2 rounded-xl text-xs font-bold bg-gray-50 hover:bg-gray-100 text-[#1C1B2E] border border-[#E5E7F3] transition-colors"
                   >
                     Manage Integration
                   </button>
+                  {channel.channel_type === 'email' && (
+                    <button
+                      onClick={() => testEmailMutation.mutate()}
+                      title="Test Email Connection"
+                      className="px-3 py-2 rounded-xl text-xs font-bold bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 transition-colors flex items-center gap-1"
+                    >
+                      <Key size={14} /> Test
+                    </button>
+                  )}
                 </div>
               </div>
             )
@@ -300,7 +377,7 @@ export default function ChannelIntegrations() {
       {/* Channel Management Modal */}
       {selectedChannel && (
         <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden border border-[#E5E7F3]">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden border border-[#E5E7F3]">
             <div className="flex justify-between items-center px-6 py-4 border-b border-[#E5E7F3]">
               <div className="flex items-center gap-2">
                 <Settings2 size={18} className="text-indigo-600" />
@@ -312,31 +389,196 @@ export default function ChannelIntegrations() {
                 <X size={18} />
               </button>
             </div>
-            <form onSubmit={handleSaveChannel} className="p-6 space-y-4">
-              <div>
-                <label className="block text-xs font-bold text-[#6C7089] uppercase mb-1">Display Identifier / Address</label>
-                <input
-                  type="text"
-                  value={manageForm.display_name}
-                  onChange={(e) => setManageForm({ ...manageForm, display_name: e.target.value })}
-                  placeholder="e.g. support@brand.com"
-                  className="w-full px-3.5 py-2 bg-[#F9FAFB] border border-[#E5E7F3] rounded-xl text-sm focus:outline-none focus:border-indigo-500"
-                  required
-                />
-              </div>
 
-              <div>
-                <label className="block text-xs font-bold text-[#6C7089] uppercase mb-1">Connection Status</label>
-                <select
-                  value={manageForm.status}
-                  onChange={(e) => setManageForm({ ...manageForm, status: e.target.value })}
-                  className="w-full px-3 py-2 bg-[#F9FAFB] border border-[#E5E7F3] rounded-xl text-sm focus:outline-none focus:border-indigo-500"
+            {/* Tabs for Email Integration */}
+            {selectedChannel.channel_type === 'email' && (
+              <div className="flex border-b border-[#E5E7F3] bg-gray-50 px-6 gap-6 text-xs font-bold">
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('general')}
+                  className={`py-3 border-b-2 transition-colors ${
+                    activeTab === 'general' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-[#6C7089]'
+                  }`}
                 >
-                  <option value="connected">Connected</option>
-                  <option value="needs_attention">Needs attention</option>
-                  <option value="disconnected">Disconnected</option>
-                </select>
+                  General
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('smtp')}
+                  className={`py-3 border-b-2 transition-colors ${
+                    activeTab === 'smtp' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-[#6C7089]'
+                  }`}
+                >
+                  SMTP / Mailgun Config
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('webhook')}
+                  className={`py-3 border-b-2 transition-colors ${
+                    activeTab === 'webhook' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-[#6C7089]'
+                  }`}
+                >
+                  Inbound Webhook
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('logs')}
+                  className={`py-3 border-b-2 transition-colors ${
+                    activeTab === 'logs' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-[#6C7089]'
+                  }`}
+                >
+                  Delivery Logs
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('templates')}
+                  className={`py-3 border-b-2 transition-colors ${
+                    activeTab === 'templates' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-[#6C7089]'
+                  }`}
+                >
+                  Templates
+                </button>
               </div>
+            )}
+
+            <form onSubmit={handleSaveChannel} className="p-6 space-y-4">
+              {activeTab === 'general' && (
+                <>
+                  <div>
+                    <label className="block text-xs font-bold text-[#6C7089] uppercase mb-1">Display Identifier / Address</label>
+                    <input
+                      type="text"
+                      value={manageForm.display_name}
+                      onChange={(e) => setManageForm({ ...manageForm, display_name: e.target.value })}
+                      placeholder="e.g. support@brand.com"
+                      className="w-full px-3.5 py-2 bg-[#F9FAFB] border border-[#E5E7F3] rounded-xl text-sm focus:outline-none focus:border-indigo-500"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-[#6C7089] uppercase mb-1">Connection Status</label>
+                    <select
+                      value={manageForm.status}
+                      onChange={(e) => setManageForm({ ...manageForm, status: e.target.value })}
+                      className="w-full px-3 py-2 bg-[#F9FAFB] border border-[#E5E7F3] rounded-xl text-sm focus:outline-none focus:border-indigo-500"
+                    >
+                      <option value="connected">Connected</option>
+                      <option value="needs_attention">Needs attention</option>
+                      <option value="disconnected">Disconnected</option>
+                    </select>
+                  </div>
+                </>
+              )}
+
+              {activeTab === 'smtp' && (
+                <>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-bold text-[#6C7089] uppercase mb-1">SMTP Host</label>
+                      <input
+                        type="text"
+                        value={manageForm.smtp_host}
+                        onChange={(e) => setManageForm({ ...manageForm, smtp_host: e.target.value })}
+                        className="w-full px-3 py-2 bg-[#F9FAFB] border border-[#E5E7F3] rounded-xl text-xs"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-[#6C7089] uppercase mb-1">SMTP Port</label>
+                      <input
+                        type="text"
+                        value={manageForm.smtp_port}
+                        onChange={(e) => setManageForm({ ...manageForm, smtp_port: e.target.value })}
+                        className="w-full px-3 py-2 bg-[#F9FAFB] border border-[#E5E7F3] rounded-xl text-xs"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-[#6C7089] uppercase mb-1">Mailgun / Postmark API Key</label>
+                    <input
+                      type="password"
+                      value={manageForm.api_key}
+                      onChange={(e) => setManageForm({ ...manageForm, api_key: e.target.value })}
+                      placeholder="key-xxxxxxxxxxxxxxxx"
+                      className="w-full px-3 py-2 bg-[#F9FAFB] border border-[#E5E7F3] rounded-xl text-xs"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-[#6C7089] uppercase mb-1">Auto-Acknowledgement Template</label>
+                    <textarea
+                      rows={3}
+                      value={manageForm.auto_reply_template}
+                      onChange={(e) => setManageForm({ ...manageForm, auto_reply_template: e.target.value })}
+                      className="w-full px-3 py-2 bg-[#F9FAFB] border border-[#E5E7F3] rounded-xl text-xs focus:outline-none focus:border-indigo-500"
+                    />
+                  </div>
+                </>
+              )}
+
+              {activeTab === 'webhook' && (
+                <div className="space-y-3">
+                  <label className="block text-xs font-bold text-[#6C7089] uppercase">Inbound Webhook URL</label>
+                  <p className="text-xs text-[#9598B0]">
+                    Configure this endpoint in your Mailgun, Postmark, or SendGrid dashboard to receive real emails directly into SupportHub.
+                  </p>
+                  <div className="flex items-center gap-2 p-3 bg-gray-50 border border-[#E5E7F3] rounded-xl font-mono text-xs text-indigo-600 break-all">
+                    <span>{`${window.location.origin}/api/v1/webhooks/email`}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={copyWebhookUrl}
+                    className="w-full py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-xs rounded-xl border border-indigo-200 transition-colors flex items-center justify-center gap-2"
+                  >
+                    <Link2 size={14} />
+                    {copySuccess ? 'Copied to Clipboard!' : 'Copy Inbound Webhook URL'}
+                  </button>
+                </div>
+              )}
+
+              {activeTab === 'logs' && (
+                <div className="space-y-3 max-h-60 overflow-y-auto">
+                  <h4 className="text-xs font-bold text-[#6C7089] uppercase">Outbound Email Audit Trail</h4>
+                  {emailLogs.length === 0 ? (
+                    <p className="text-xs text-gray-400 italic">No delivery logs recorded yet.</p>
+                  ) : (
+                    emailLogs.map((log, i) => (
+                      <div key={log.id || i} className="p-3 bg-gray-50 rounded-xl border border-gray-100 text-xs flex justify-between items-center">
+                        <div>
+                          <div className="font-bold text-[#1C1B2E]">{log.subject}</div>
+                          <div className="text-[11px] text-[#6C7089]">{log.recipient_email}</div>
+                        </div>
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+                          log.status === 'delivered' ? 'bg-emerald-100 text-emerald-700' : log.status === 'sent' ? 'bg-blue-100 text-blue-700' : 'bg-red-100 text-red-700'
+                        }`}>
+                          {log.status}
+                        </span>
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
+
+              {activeTab === 'templates' && (
+                <div className="space-y-3 max-h-64 overflow-y-auto">
+                  <h4 className="text-xs font-bold text-[#6C7089] uppercase mb-1">System Email Templates</h4>
+                  {emailTemplates.map(tmpl => (
+                    <div key={tmpl.id || tmpl.name} className="p-3 bg-[#F8FAFC] border border-[#E5E7F3] rounded-xl text-xs space-y-2">
+                      <div className="flex justify-between items-center">
+                        <span className="font-bold font-mono text-indigo-600 uppercase">{tmpl.name}</span>
+                        <span className="text-[10px] text-gray-400">Dynamic Template</span>
+                      </div>
+                      <div className="text-[11px] text-[#6C7089]">
+                        <strong>Subject Pattern:</strong> <code className="bg-white px-1 border rounded">{tmpl.subject_pattern}</code>
+                      </div>
+                      <div className="text-[11px] text-gray-500 font-mono bg-white p-2 rounded border max-h-20 overflow-hidden line-clamp-2">
+                        {tmpl.body_html}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
 
               <div className="flex justify-between items-center pt-4 border-t border-[#E5E7F3]">
                 <button

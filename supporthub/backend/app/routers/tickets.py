@@ -2,10 +2,11 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status, File, UploadFile
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlmodel import select, and_, or_
@@ -92,7 +93,7 @@ def _generate_ref(session_sync=None) -> str:
 
 def _compute_sla(priority: TicketPriority) -> datetime:
     hours = SLA_HOURS.get(priority, 8)
-    return datetime.utcnow() + timedelta(hours=hours)
+    return datetime.now() + timedelta(hours=hours)
 
 
 # ─── Routes ───────────────────────────────────────────────────────────────────
@@ -128,12 +129,20 @@ async def create_ticket(
         )
         session.add(initial_message)
         
-    # Always add a greeting from the AI
+    # Contextual professional response from AI / System
+    customer_name = current_user.name or 'there'
+    if ticket.channel == TicketChannel.email:
+        ai_reply_body = f"Hello {customer_name}! Thank you for reaching out to SupportHub Email Support regarding '{ticket.subject}'. We have received your inquiry (Ref: {ticket.ref}). Our support team will review your request and get back to you shortly."
+    elif body.body:
+        ai_reply_body = f"Hello {customer_name}! I have received your request regarding '{ticket.subject}'. Our support team and AI system are reviewing your inquiry."
+    else:
+        ai_reply_body = f"Hello {customer_name}! How can I assist you with your support request today?"
+
     greeting_message = Message(
         ticket_id=ticket.id,
         sender_id=None,
         sender_type=SenderType.ai,
-        body="Hello! I am your AI Assistant. How can I help you today?"
+        body=ai_reply_body
     )
     session.add(greeting_message)
     await session.commit()
@@ -196,7 +205,7 @@ async def update_ticket(
     if not ticket or ticket.deleted_at:
         raise HTTPException(status_code=404, detail="Ticket not found")
 
-    old_status = ticket.status
+    old_status_str = str(ticket.status.value if hasattr(ticket.status, 'value') else ticket.status)
 
     if body.status is not None:
         ticket.status = body.status
@@ -208,7 +217,35 @@ async def update_ticket(
     if body.category is not None:
         ticket.category = body.category
 
-    ticket.updated_at = datetime.utcnow()
+    # Auto-generate Resolution Email & 1-Click CSAT Survey if resolved
+    new_status_str = str(ticket.status.value if hasattr(ticket.status, 'value') else ticket.status)
+    if old_status_str not in ("resolved", "closed") and new_status_str in ("resolved", "closed"):
+        from app.models import Message, SenderType
+        csat_survey_html = f"""
+        <div style="font-family: 'Plus Jakarta Sans', sans-serif; background: #F9FAFB; border: 1px solid #E5E7F3; border-radius: 16px; padding: 20px; margin-top: 10px;">
+          <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+             <span style="background: #10B981; color: white; padding: 2px 8px; border-radius: 6px; font-weight: bold; font-size: 11px; text-transform: uppercase;">Ticket Resolved</span>
+             <strong style="color: #1C1B2E; font-size: 14px;">Resolution Notice for [{ticket.ref}]</strong>
+          </div>
+          <p style="color: #6C7089; font-size: 13px; margin: 4px 0 16px 0;">Your email support inquiry <strong>"{ticket.subject}"</strong> has been resolved. How would you rate your support experience today?</p>
+          <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+             <a href="http://localhost:8001/api/v1/tickets/{ticket.id}/rate-email?rating=5" target="_blank" style="background: #10B981; color: white; padding: 8px 14px; text-decoration: none; border-radius: 10px; font-weight: bold; font-size: 12px; display: inline-block;">⭐⭐⭐⭐⭐ 5 - Excellent</a>
+             <a href="http://localhost:8001/api/v1/tickets/{ticket.id}/rate-email?rating=4" target="_blank" style="background: #3B82F6; color: white; padding: 8px 14px; text-decoration: none; border-radius: 10px; font-weight: bold; font-size: 12px; display: inline-block;">⭐⭐⭐⭐ 4 - Good</a>
+             <a href="http://localhost:8001/api/v1/tickets/{ticket.id}/rate-email?rating=3" target="_blank" style="background: #F59E0B; color: white; padding: 8px 14px; text-decoration: none; border-radius: 10px; font-weight: bold; font-size: 12px; display: inline-block;">⭐⭐⭐ 3 - Neutral</a>
+             <a href="http://localhost:8001/api/v1/tickets/{ticket.id}/rate-email?rating=1" target="_blank" style="background: #EF4444; color: white; padding: 8px 14px; text-decoration: none; border-radius: 10px; font-weight: bold; font-size: 12px; display: inline-block;">⭐ 1 - Unsatisfied</a>
+          </div>
+          <p style="color: #9598B0; font-size: 11px; margin-top: 14px; margin-bottom: 0;">Need further assistance? Simply reply to this email thread to automatically reopen your ticket.</p>
+        </div>
+        """
+        session.add(Message(
+            ticket_id=ticket.id,
+            sender_id=None,
+            sender_type=SenderType.ai,
+            body=f"Your email inquiry [{ticket.ref}] has been marked as resolved. If your issue is not fully resolved, simply reply to this email to automatically reopen your ticket.",
+            body_html=csat_survey_html
+        ))
+
+    ticket.updated_at = datetime.now()
     session.add(ticket)
 
     # Audit log
@@ -233,6 +270,8 @@ class MessageOut(BaseModel):
     sender_role: Optional[str]
     sender_type: str
     body: str
+    body_html: Optional[str] = None
+    attachments: Optional[str] = None
     created_at: datetime
 
 
@@ -266,6 +305,8 @@ async def get_ticket_messages(
             sender_role=m.sender.role.value if m.sender else None,
             sender_type=m.sender_type.value,
             body=m.body,
+            body_html=m.body_html,
+            attachments=m.attachments,
             created_at=m.created_at
         ) for m in messages
     ]
@@ -280,7 +321,7 @@ async def soft_delete_ticket(
     ticket = await session.get(Ticket, ticket_id)
     if not ticket:
         raise HTTPException(status_code=404, detail="Ticket not found")
-    ticket.deleted_at = datetime.utcnow()
+    ticket.deleted_at = datetime.now()
     session.add(ticket)
     await session.commit()
 
@@ -397,5 +438,97 @@ async def get_csat_rating(
     if not rating:
         return None
     return {"id": str(rating.id), "rating": rating.rating, "comment": rating.comment}
+
+
+@router.get("/{ticket_id}/rate-email", response_class=HTMLResponse)
+async def rate_email_ticket(
+    ticket_id: uuid.UUID,
+    rating: int = Query(5, ge=1, le=5),
+    comment: Optional[str] = Query(None),
+    session: AsyncSession = Depends(get_session),
+):
+    from app.models import CsatRating
+    ticket = await session.get(Ticket, ticket_id)
+    if not ticket:
+        return HTMLResponse("<h2>Ticket not found</h2>", status_code=404)
+        
+    existing = await session.exec(select(CsatRating).where(CsatRating.ticket_id == ticket_id))
+    csat = existing.first()
+    if not csat:
+        csat = CsatRating(
+            ticket_id=ticket_id,
+            customer_id=ticket.customer_id,
+            rating=rating,
+            comment=comment or f"Submitted via 1-Click Email Survey ({rating}/5 stars)"
+        )
+        session.add(csat)
+        await session.commit()
+    else:
+        csat.rating = rating
+        if comment:
+            csat.comment = comment
+        session.add(csat)
+        await session.commit()
+
+    stars_rendered = "★" * rating + "☆" * (5 - rating)
+    return HTMLResponse(f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Thank You for Your Feedback - SupportHub</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <style>
+            body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #F6F7FC; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; padding: 20px; box-sizing: border-box; }}
+            .card {{ background: white; padding: 40px; border-radius: 24px; box-shadow: 0 10px 30px rgba(0,0,0,0.06); text-align: center; max-width: 440px; width: 100%; border: 1px solid #E5E7F3; }}
+            .icon-badge {{ width: 64px; height: 64px; background: #ECFDF5; color: #10B981; border-radius: 20px; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px; font-size: 32px; font-weight: bold; }}
+            .stars {{ color: #FBBF24; font-size: 36px; margin: 20px 0; letter-spacing: 4px; }}
+            .btn {{ display: inline-block; background: #6366F1; color: white; font-weight: 700; text-decoration: none; padding: 14px 28px; border-radius: 14px; margin-top: 24px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; transition: background 0.2s ease; }}
+            .btn:hover {{ background: #4F46E5; }}
+        </style>
+    </head>
+    <body>
+        <div class="card">
+            <div class="icon-badge">✓</div>
+            <h2 style="color: #1C1B2E; margin: 0 0 10px 0; font-size: 22px;">Thank You for Your Feedback!</h2>
+            <p style="color: #6C7089; font-size: 14px; line-height: 1.6; margin: 0;">Your rating of <strong>{rating} out of 5 stars</strong> has been successfully recorded for ticket <strong style="font-family: monospace; color: #4F46E5;">{ticket.ref}</strong>.</p>
+            <div class="stars">{stars_rendered}</div>
+            <p style="color: #9598B0; font-size: 12px; margin: 0;">Your feedback helps our team continuously improve our support experience.</p>
+            <a href="http://localhost:5173/customer" class="btn">Return to SupportHub</a>
+        </div>
+    </body>
+    </html>
+    """)
+
+
+import os
+
+@router.post("/{ticket_id}/upload")
+async def upload_ticket_attachment(
+    ticket_id: uuid.UUID,
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    ticket = await session.get(Ticket, ticket_id)
+    if not ticket or ticket.deleted_at:
+        raise HTTPException(status_code=404, detail="Ticket not found")
+
+    upload_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "uploads"))
+    os.makedirs(upload_dir, exist_ok=True)
+
+    file_filename = f"{uuid.uuid4().hex}_{file.filename}"
+    file_path = os.path.join(upload_dir, file_filename)
+
+    contents = await file.read()
+    with open(file_path, "wb") as f:
+        f.write(contents)
+
+    file_url = f"http://localhost:8001/static/uploads/{file_filename}"
+    return {
+        "filename": file.filename,
+        "url": file_url,
+        "size": len(contents),
+        "content_type": file.content_type
+    }
 
 

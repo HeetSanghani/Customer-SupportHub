@@ -4,7 +4,7 @@ import logging
 import random
 import re
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 from fastapi import APIRouter, BackgroundTasks, Depends, Form, Request
 from sqlmodel import select
@@ -134,11 +134,12 @@ async def receive_mailgun_email(
         email_address = (parsed_email or sender_raw).strip().lower()
         display_name = parsed_name.strip() if parsed_name else email_address.split("@")[0].replace(".", " ").title()
 
-        # 2. Extract body text (prefer stripped-text over body-plain) & clean signatures
+        # 2. Extract body text & HTML
+        body_html_raw = form_data.get("body-html") or form_data.get("stripped-html") or None
         raw_body = (stripped_text_raw or body_plain_raw).strip()
         cleaned_body = clean_email_body(raw_body)
 
-        if not cleaned_body:
+        if not cleaned_body and not body_html_raw:
             logger.warning(f"Mailgun webhook from {email_address} contained empty body.")
             return {"status": "ok", "message": "Empty body"}
 
@@ -179,14 +180,25 @@ async def receive_mailgun_email(
             await session.commit()
             await session.refresh(user)
 
-        # 5. Find open Ticket or create new Ticket
+        # 5. Email Threading Check (Subject regex e.g. TCK-10234 or In-Reply-To)
         email_subject = subject_raw.strip() or "Email Inquiry"
-        ticket_stmt = select(Ticket).where(
-            Ticket.customer_id == user.id,
-            Ticket.channel == TicketChannel.email,
-            Ticket.status.in_([TicketStatus.new, TicketStatus.open, TicketStatus.waiting])
-        )
-        ticket = (await session.exec(ticket_stmt)).first()
+        ticket = None
+        
+        # Check for ticket reference pattern TCK-XXXXX in subject
+        tck_match = re.search(r"TCK-\d{5}", email_subject, re.IGNORECASE)
+        if tck_match:
+            matched_ref = tck_match.group(0).upper()
+            ref_stmt = select(Ticket).where(Ticket.ref == matched_ref)
+            ticket = (await session.exec(ref_stmt)).first()
+
+        # Fallback to customer's open ticket if no ref in subject
+        if not ticket:
+            ticket_stmt = select(Ticket).where(
+                Ticket.customer_id == user.id,
+                Ticket.channel == TicketChannel.email,
+                Ticket.status.in_([TicketStatus.new, TicketStatus.open, TicketStatus.waiting])
+            )
+            ticket = (await session.exec(ticket_stmt)).first()
 
         if not ticket:
             ticket = Ticket(
@@ -203,7 +215,7 @@ async def receive_mailgun_email(
             await session.refresh(ticket)
         else:
             # Reopening / updating existing open ticket
-            ticket.updated_at = datetime.utcnow()
+            ticket.updated_at = datetime.now()
             if ticket.ai_resolved or ticket.status in (TicketStatus.resolved, TicketStatus.closed):
                 ticket.ai_resolved = False
                 ticket.status = TicketStatus.open
@@ -211,12 +223,13 @@ async def receive_mailgun_email(
             await session.commit()
             await session.refresh(ticket)
 
-        # 6. Save incoming customer Message record
+        # 6. Save incoming customer Message record (including body_html)
         cust_msg = Message(
             ticket_id=ticket.id,
             sender_id=user.id,
             sender_type=SenderType.customer,
-            body=cleaned_body,
+            body=cleaned_body or "HTML Content Email",
+            body_html=body_html_raw,
             external_message_id=ext_msg_id,
         )
         session.add(cust_msg)

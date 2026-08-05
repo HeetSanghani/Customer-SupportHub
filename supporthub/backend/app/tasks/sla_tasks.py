@@ -1,7 +1,7 @@
 """SLA breach detection — runs every 5 minutes via Celery Beat."""
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 from app.tasks.celery_app import celery_app
 
@@ -23,7 +23,7 @@ def check_sla_breaches(self):
     sync_url = settings.database_url.replace("postgresql+asyncpg", "postgresql+psycopg2")
 
     engine = create_engine(sync_url, pool_pre_ping=True)
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
 
     with Session(engine) as session:
         stmt = select(Ticket).where(

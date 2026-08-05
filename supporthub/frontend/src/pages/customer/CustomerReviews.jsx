@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { ticketsApi } from '../../api/tickets'
 import { Star, MessageSquare, ArrowRight, CheckCircle2 } from 'lucide-react'
+import { formatDate } from '../../utils/dateUtils'
 
 export default function CustomerReviews() {
   const navigate = useNavigate()
@@ -94,7 +95,7 @@ export default function CustomerReviews() {
                 <span className="flex items-center gap-1 text-emerald-600 font-semibold">
                   <CheckCircle2 size={13} /> Completed & Reviewed
                 </span>
-                <span>{new Date(rev.created_at).toLocaleDateString()}</span>
+                <span>{formatDate(rev.created_at)}</span>
               </div>
             </div>
           ))}

@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { knowledgeApi } from '../../api/knowledge'
 import { Search, Plus, Edit2, Trash2, X, BookOpen, AlertCircle, Eye, ThumbsUp } from 'lucide-react'
+import { formatDate } from '../../utils/dateUtils'
 
 export default function HelpCenterMgmt() {
   const queryClient = useQueryClient()
@@ -169,7 +170,7 @@ export default function HelpCenterMgmt() {
                       <td className="px-6 py-4 font-semibold text-[#1C1B2E]">{viewsFormatted}</td>
                       <td className="px-6 py-4 font-semibold text-emerald-600">{helpfulPct}</td>
                       <td className="px-6 py-4 text-xs text-[#9598B0]">
-                        {article.updated_at ? new Date(article.updated_at).toLocaleDateString() : 'Recently'}
+                        {article.updated_at ? formatDate(article.updated_at) : 'Recently'}
                       </td>
                       <td className="px-6 py-4 text-right">
                         <button

@@ -1,7 +1,7 @@
 import asyncio
 import uuid
 import random
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from sqlmodel import select
 from app.database import AsyncSessionLocal
 from app.models import User, UserRole, Ticket, TicketStatus, TicketPriority, TicketChannel, CsatRating
@@ -123,7 +123,7 @@ async def seed_data():
                 status=st["status"],
                 priority=st["priority"],
                 ai_resolved=st["ai_resolved"],
-                created_at=datetime.utcnow() - timedelta(hours=random.randint(1, 120))
+                created_at=datetime.now(timezone.utc) - timedelta(hours=random.randint(1, 120))
             )
             session.add(ticket)
             created_tickets.append(ticket)
@@ -167,6 +167,20 @@ async def seed_data():
 
         await session.commit()
         print(f"Created {csat_created} CSAT ratings with customer reviews.")
+
+        # 4. Seed Channel Integrations if empty
+        from app.models import ChannelIntegration, ChannelType, ChannelStatus
+        r_channels = await session.exec(select(ChannelIntegration))
+        if not r_channels.all():
+            now = datetime.now(timezone.utc).replace(tzinfo=None)
+            default_channels = [
+                ChannelIntegration(channel_type=ChannelType.email, display_name="support@supporthub.com", status=ChannelStatus.connected, weekly_volume=2, created_at=now, updated_at=now),
+                ChannelIntegration(channel_type=ChannelType.website_chat, display_name="chat.supporthub.com", status=ChannelStatus.connected, weekly_volume=12, created_at=now, updated_at=now),
+            ]
+            for ch in default_channels:
+                session.add(ch)
+            await session.commit()
+            print("Seeded real connected channel integrations (Email & Website Chat).")
 
 if __name__ == "__main__":
     asyncio.run(seed_data())

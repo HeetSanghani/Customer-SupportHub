@@ -3,7 +3,9 @@ import { useParams, Link, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { ticketsApi } from '../api/tickets'
 import { useAuthStore } from '../store/authStore'
-import { Send, ArrowLeft, Clock, CheckCircle, Zap, Search, X } from 'lucide-react'
+import { ArrowLeft, Send, User, Bot, Clock, AlertTriangle, MessageSquare, ShieldCheck, Zap, X, Search, Paperclip } from 'lucide-react'
+import client from '../api/client'
+import { formatDateTime, formatTime } from '../utils/dateUtils'
 
 export default function TicketDetail({ basePath }) {
   const { id } = useParams()
@@ -143,7 +145,7 @@ export default function TicketDetail({ basePath }) {
                 <h1 className="text-lg font-bold text-[#1C1B2E] truncate max-w-md">{ticket.subject}</h1>
                 <span className="px-2 py-0.5 border border-[#E5E7F3] rounded-md text-xs font-bold uppercase text-[#6C7089]">{ticket.status}</span>
               </div>
-              <p className="text-xs text-[#9598B0] font-mono">{ticket.ref} • {new Date(ticket.created_at).toLocaleString()}</p>
+              <p className="text-xs text-[#9598B0] font-mono">{ticket.ref} • {formatDateTime(ticket.created_at)}</p>
             </div>
           </div>
         </div>
@@ -179,10 +181,42 @@ export default function TicketDetail({ basePath }) {
                       {isCustomer ? (msg.sender_name || 'Customer User') : isAI ? '✨ AI Agent' : (msg.sender_name || 'Agent User')}
                     </span>
                     <span className="text-[10px] opacity-70">
-                      {new Date(msg.created_at || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      {formatTime(msg.created_at)}
                     </span>
                   </div>
-                  <p className="text-sm whitespace-pre-wrap leading-relaxed">{msg.body}</p>
+                  {(() => {
+                    const match = msg.body?.match(/📎\s*\[Attachment:\s*([^\]]+)\]\(([^)]+)\)/)
+                    if (match) {
+                      const filename = match[1]
+                      const url = match[2]
+                      const isImage = /\.(jpg|jpeg|png|gif|webp|svg)/i.test(filename) || /\.(jpg|jpeg|png|gif|webp|svg)/i.test(url)
+                      const textWithoutLink = msg.body.replace(match[0], '').trim()
+
+                      return (
+                        <div className="space-y-2">
+                          {textWithoutLink && <p className="text-sm whitespace-pre-wrap leading-relaxed">{textWithoutLink}</p>}
+                          {isImage ? (
+                            <a href={url} target="_blank" rel="noopener noreferrer" className="block mt-1 overflow-hidden rounded-xl border border-white/20 shadow-sm max-w-xs hover:opacity-95 transition-opacity">
+                              <img src={url} alt={filename} className="w-full h-auto max-h-48 object-cover rounded-xl" />
+                            </a>
+                          ) : (
+                            <a href={url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 px-3 py-1.5 bg-black/10 hover:bg-black/20 rounded-xl text-xs font-bold transition-colors underline">
+                              📎 {filename}
+                            </a>
+                          )}
+                        </div>
+                      )
+                    }
+                    if (msg.body_html) {
+                      return (
+                        <div
+                          className="text-sm leading-relaxed prose prose-sm max-w-none dark:prose-invert"
+                          dangerouslySetInnerHTML={{ __html: msg.body_html }}
+                        />
+                      )
+                    }
+                    return <p className="text-sm whitespace-pre-wrap leading-relaxed">{msg.body}</p>
+                  })()}
                 </div>
               </div>
             )
@@ -272,6 +306,34 @@ export default function TicketDetail({ basePath }) {
                 title="Insert Quick Reply (or type /)"
               >
                 <Zap size={18} className={showQuickReplies ? 'fill-white' : 'text-amber-500 fill-amber-500'} />
+              </button>
+
+              <button
+                type="button"
+                onClick={async () => {
+                  const input = document.createElement('input')
+                  input.type = 'file'
+                  input.onchange = async (e) => {
+                    const file = e.target.files[0]
+                    if (!file) return
+                    const formData = new FormData()
+                    formData.append('file', file)
+                    try {
+                      const res = await client.post(`/tickets/${ticketId}/upload`, formData, {
+                        headers: { 'Content-Type': 'multipart/form-data' }
+                      })
+                      setInputText(prev => prev + ` 📎 [Attachment: ${res.data.filename}](${res.data.url})`)
+                    } catch (err) {
+                      console.error('File upload failed:', err?.response?.data || err.message)
+                      alert(`Failed to upload file: ${err?.response?.data?.detail || err.message}`)
+                    }
+                  }
+                  input.click()
+                }}
+                className="p-3 rounded-xl border bg-[#F6F7FC] hover:bg-gray-100 text-[#6C7089] border-[#E5E7F3] transition-colors"
+                title="Attach file or screenshot"
+              >
+                <Paperclip size={18} />
               </button>
 
               <input 

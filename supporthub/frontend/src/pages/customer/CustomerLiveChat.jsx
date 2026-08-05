@@ -3,7 +3,9 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { ticketsApi } from '../../api/tickets'
 import { useAuthStore } from '../../store/authStore'
-import { Plus, Send, Star, CheckCircle, X, HelpCircle, CreditCard, Wrench, User as UserIcon } from 'lucide-react'
+import { Plus, Send, Star, CheckCircle, X, HelpCircle, CreditCard, Wrench, User as UserIcon, Paperclip } from 'lucide-react'
+import client from '../../api/client'
+import { formatTime, formatDate } from '../../utils/dateUtils'
 
 function CsatWidget({ ticketId }) {
   const navigate = useNavigate()
@@ -218,20 +220,31 @@ function ChatPane({ ticketId }) {
   return (
     <div className="flex-1 flex flex-col bg-white rounded-r-xl border border-l-0 border-[#E5E7F3]">
       {/* Header */}
-      <div className="h-16 px-6 border-b border-[#E5E7F3] flex items-center justify-between shrink-0">
+      <div className="px-6 py-3.5 border-b border-[#E5E7F3] flex items-center justify-between shrink-0 bg-white">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 bg-indigo-600 rounded-full flex items-center justify-center text-white text-xs font-bold">
-            ST
+          <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-white text-xs font-bold ${ticket?.channel === 'email' ? 'bg-blue-600' : 'bg-indigo-600'}`}>
+            {ticket?.channel === 'email' ? '✉️' : 'ST'}
           </div>
           <div>
-            <div className="font-bold text-sm text-[#1C1B2E]">Support Team</div>
-            <div className="text-[10px] text-emerald-500 font-bold uppercase flex items-center gap-1">
-              <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full"></div> Online
+            <div className="flex items-center gap-2">
+              <div className="font-bold text-sm text-[#1C1B2E]">{ticket?.subject || 'Support Conversation'}</div>
+              {ticket?.channel === 'email' && (
+                <span className="px-2 py-0.5 bg-blue-50 text-blue-700 font-bold text-[10px] rounded-md border border-blue-200 uppercase">
+                  Email Inquiry
+                </span>
+              )}
+            </div>
+            <div className="text-[10px] text-[#9598B0] flex items-center gap-2 mt-0.5">
+              <span>Category: <strong className="capitalize text-[#6C7089]">{ticket?.category || 'General'}</strong></span>
+              <span>•</span>
+              <div className="text-emerald-500 font-bold uppercase flex items-center gap-1">
+                <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full"></div> Active Support
+              </div>
             </div>
           </div>
         </div>
         <div className="text-right">
-          <div className="text-[10px] font-bold text-[#9598B0] uppercase">Linked Ticket</div>
+          <div className="text-[10px] font-bold text-[#9598B0] uppercase">Ticket Ref</div>
           <div className="text-xs font-mono font-bold bg-gray-100 px-2 py-0.5 rounded text-[#1C1B2E] mt-0.5">
             {ticket?.ref || '...'}
           </div>
@@ -244,11 +257,43 @@ function ChatPane({ ticketId }) {
           const isMe = msg.sender_type === 'customer'
           return (
             <div key={idx} className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
-              <div className={`max-w-[80%] rounded-2xl px-5 py-3 ${isMe ? 'bg-[#6366F1] text-white rounded-br-sm' : 'bg-[#F6F7FC] text-[#1C1B2E] rounded-bl-sm border border-[#E5E7F3]'}`}>
-                <div className="text-sm whitespace-pre-wrap">{msg.body}</div>
+              <div className={`max-w-[80%] rounded-2xl px-5 py-3 ${isMe ? 'bg-[#6366F1] text-white rounded-br-sm shadow-sm' : 'bg-[#F6F7FC] text-[#1C1B2E] rounded-bl-sm border border-[#E5E7F3] shadow-xs'}`}>
+                {(() => {
+                  const match = msg.body?.match(/📎\s*\[Attachment:\s*([^\]]+)\]\(([^)]+)\)/)
+                  if (match) {
+                    const filename = match[1]
+                    const url = match[2]
+                    const isImage = /\.(jpg|jpeg|png|gif|webp|svg)/i.test(filename) || /\.(jpg|jpeg|png|gif|webp|svg)/i.test(url)
+                    const textWithoutLink = msg.body.replace(match[0], '').trim()
+
+                    return (
+                      <div className="space-y-2">
+                        {textWithoutLink && <p className="text-sm whitespace-pre-wrap leading-relaxed">{textWithoutLink}</p>}
+                        {isImage ? (
+                          <a href={url} target="_blank" rel="noopener noreferrer" className="block mt-1 overflow-hidden rounded-xl border border-white/20 shadow-sm max-w-xs hover:opacity-95 transition-opacity">
+                            <img src={url} alt={filename} className="w-full h-auto max-h-48 object-cover rounded-xl" />
+                          </a>
+                        ) : (
+                          <a href={url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 px-3 py-1.5 bg-black/10 hover:bg-black/20 rounded-xl text-xs font-bold transition-colors underline">
+                            📎 {filename}
+                          </a>
+                        )}
+                      </div>
+                    )
+                  }
+                  if (msg.body_html) {
+                    return (
+                      <div
+                        className="text-sm leading-relaxed prose prose-sm max-w-none"
+                        dangerouslySetInnerHTML={{ __html: msg.body_html }}
+                      />
+                    )
+                  }
+                  return <div className="text-sm whitespace-pre-wrap leading-relaxed">{msg.body}</div>
+                })()}
               </div>
-              <div className="text-[10px] text-[#9598B0] mt-1.5 px-1 flex gap-2">
-                {isMe ? 'You' : (msg.sender_type === 'ai' ? 'AI Agent' : 'Agent')} · {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              <div className="text-[10px] text-[#9598B0] mt-1.5 px-1 flex gap-2 font-medium">
+                {isMe ? 'You' : (msg.sender_type === 'ai' ? '✨ SupportHub AI' : 'Agent User')} · {formatTime(msg.created_at)}
               </div>
             </div>
           )
@@ -283,6 +328,34 @@ function ChatPane({ ticketId }) {
           </>
         ) : (
           <form onSubmit={sendMessage} className="flex gap-2">
+            <button
+              type="button"
+              onClick={async () => {
+                const input = document.createElement('input')
+                input.type = 'file'
+                input.onchange = async (e) => {
+                  const file = e.target.files[0]
+                  if (!file) return
+                  const formData = new FormData()
+                  formData.append('file', file)
+                  try {
+                    const res = await client.post(`/tickets/${ticketId}/upload`, formData, {
+                      headers: { 'Content-Type': 'multipart/form-data' }
+                    })
+                    setInputText(prev => prev + ` 📎 [Attachment: ${res.data.filename}](${res.data.url})`)
+                  } catch (err) {
+                    console.error('File upload failed:', err?.response?.data || err.message)
+                    alert(`Failed to upload file: ${err?.response?.data?.detail || err.message}`)
+                  }
+                }
+                input.click()
+              }}
+              className="p-3 rounded-xl border bg-[#F6F7FC] hover:bg-gray-100 text-[#6C7089] border-[#E5E7F3] transition-colors"
+              title="Attach screenshot or file"
+            >
+              <Paperclip size={18} />
+            </button>
+
             <input 
               type="text" 
               placeholder="Type a message..." 
@@ -435,7 +508,7 @@ export default function CustomerLiveChat() {
                     </div>
                     <div className="flex justify-between items-center text-[10px] text-[#9598B0] font-semibold mt-2">
                       <div>Linked: <span className="font-mono">{t.ref}</span></div>
-                      <div>{new Date(t.created_at).toLocaleDateString()}</div>
+                      <div>{formatDate(t.created_at)}</div>
                     </div>
                   </div>
                 )

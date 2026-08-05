@@ -1,161 +1,165 @@
-# 🚀 SupportHub - New Machine Setup Guide
+# 🚀 SupportHub — New Machine Setup Guide
 
-This guide walks you through setting up **SupportHub** on a fresh/new desktop machine. Since Git only syncs source code — not secrets (`.env`), database state, Docker volumes, or ngrok tunnels — follow these instructions step-by-step.
-
----
-
-## 📥 1. Clone & Initial Setup
-
-**1. Clone the repository:**
-```bash
-git clone <your-repository-url>
-cd "ai powered customer"
-```
-
-**2. Verify folder structure:**
-```
-.
-├── supporthub/
-│   ├── backend/       # FastAPI application
-│   ├── frontend/      # React + Vite dashboard
-│   └── docker-compose.yml
-└── test.md
-```
+This guide sets up **SupportHub** on a fresh desktop in ~10 minutes. The database dump (`supporthub_dump.sql`) is committed to this repo so you get all users, tickets, KB articles, and settings automatically.
 
 ---
 
-## 🔐 2. Environment Variables (.env)
+## 📋 Prerequisites
 
-> ⚠️ **IMPORTANT**: `.env` files contain sensitive API keys and database credentials. They are intentionally excluded from Git control and **must NEVER be committed to GitHub**.
+Install these tools on the new machine before starting:
 
-To set up environment variables on the new machine:
+| Tool | Install | Notes |
+|---|---|---|
+| **Git** | `sudo apt install git` | To clone the repo |
+| **Docker & Docker Compose** | [docs.docker.com/get-docker](https://docs.docker.com/get-docker/) | Runs Postgres & Redis |
+| **uv** (Python runner) | `curl -LsSf https://astral.sh/uv/install.sh \| sh` | Runs FastAPI backend |
+| **Node.js v18+** | [nodejs.org](https://nodejs.org/) | Runs React frontend |
+| **ngrok** | `sudo snap install ngrok` | Exposes backend to webhooks |
 
-### Option A: Direct Copy from Old Machine (Recommended)
-Transfer your existing `.env` file via USB flash drive, a secure secret manager (1Password, Bitwarden), or SSH/SCP:
+---
+
+## 🗂️ 1. Clone the Repository
 
 ```bash
-# Example SSH/SCP command from your new machine:
-scp user@old-machine-ip:"/path/to/supporthub/backend/.env" ./supporthub/backend/.env
+git clone <your-github-repo-url>
+cd Customer-SupportHub
 ```
 
-### Option B: Create from `.env.example`
-Copy the template file in the backend directory and manually populate your API keys:
+> After cloning you will already have `supporthub_dump.sql` — **no manual database transfer needed**.
+
+---
+
+## 🔐 2. Set Up Environment Variables
+
+The `.env` file contains API keys and is **not committed to Git** (for security). Copy the template and fill in your credentials:
 
 ```bash
 cd supporthub/backend
 cp .env.example .env
-# Open .env and fill in your real credentials (OPENAI_API_KEY, MAILGUN_API_KEY, etc.)
 ```
+
+Then open `.env` and fill in:
+
+```env
+# ─── Required for core functionality ───────────────────
+DATABASE_URL=postgresql+asyncpg://supporthub:supporthub_dev@localhost:5433/supporthub
+REDIS_URL=redis://localhost:6381/0
+SECRET_KEY=your_random_secret_key_here   # generate with: openssl rand -hex 32
+
+# ─── AI (Claude) ───────────────────────────────────────
+ANTHROPIC_API_KEY=sk-ant-...
+
+# ─── Email (Mailgun) ───────────────────────────────────
+MAILGUN_DOMAIN=your_mailgun_domain
+MAILGUN_API_KEY=your_mailgun_api_key
+
+# ─── Optional (WhatsApp / Instagram / Facebook) ────────
+META_APP_ID=
+META_APP_SECRET=
+META_VERIFY_TOKEN=your_webhook_verify_token
+WHATSAPP_PHONE_ID=
+```
+
+> 💡 All other values can stay as their defaults for local development.
 
 ---
 
-## 🐳 3. Docker & Database Setup
+## 🐳 3. Start Docker Infrastructure
 
-When running Docker on a new machine, `docker compose up -d` initializes a **FRESH, EMPTY PostgreSQL database** because Docker volumes do not transfer via Git.
+This starts the PostgreSQL database and Redis cache:
 
-**Start Docker containers:**
 ```bash
 cd supporthub
 docker compose up -d
 ```
 
-Choose one of the following two paths to populate data:
-
-### Option A: Fresh Start (Seed Data)
-Run the seed scripts to populate database tables with initial system configurations, demo accounts, tickets, and CSAT records:
-
+Verify containers are running:
 ```bash
-cd supporthub/backend
-uv run python seed_db.py
-uv run python seed_admin.py
-uv run python seed_tickets_csat.py
-```
-
-### Option B: Migrate Existing Database Data
-To transfer all existing tickets, users, and customer messages from your old machine:
-
-**1. On your OLD machine (Export PostgreSQL dump):**
-```bash
-docker exec -t supporthub-db pg_dump -U supporthub -d supporthub > supporthub_dump.sql
-```
-
-**2. Transfer `supporthub_dump.sql` to your NEW machine** (via SCP, USB, etc.).
-
-**3. On your NEW machine (Import dump):**
-Using default credentials from `DATABASE_URL` (`postgresql+asyncpg://supporthub:supporthub_dev@localhost:5433/supporthub`):
-```bash
-cat supporthub_dump.sql | docker exec -i supporthub-db psql -U supporthub -d supporthub
+docker ps
+# You should see: supporthub_db (postgres) and supporthub_redis (redis)
 ```
 
 ---
 
-## 🌐 4. ngrok Setup & Webhook Re-configuration
+## 💾 4. Restore Database from Dump
 
-External webhook services (Mailgun, Meta WhatsApp/Messenger) cannot send requests directly to `localhost`. You must use `ngrok` to expose backend port `8001`.
+This loads all existing data (users, tickets, KB articles, templates, CSAT reviews) from the committed dump file:
 
-**1. Install & Authenticate ngrok on New Machine:**
 ```bash
-# Ubuntu/Linux Snap:
-sudo snap install ngrok
-
-# Authenticate with your existing ngrok token (works across multiple machines):
-ngrok config add-authtoken <your_ngrok_authtoken>
+# From the project root (Customer-SupportHub/)
+cat supporthub_dump.sql | docker exec -i supporthub_db psql -U supporthub -d supporthub
 ```
 
-**2. Start ngrok Tunnel:**
+> ✅ This gives you **all demo data** including:
+> - 4 user accounts (customer, agent, manager, admin)
+> - 22 support tickets across channels
+> - Knowledge base articles & FAQ content
+> - CSAT reviews and email templates
+
+---
+
+## ✅ 5. Start All Services
+
+Open **4 separate terminals** and run one command in each:
+
+### Terminal 1 — Backend API
 ```bash
+cd supporthub/backend
+uv run uvicorn app.main:app --reload --port 8001
+```
+
+### Terminal 2 — Frontend Dev Server
+```bash
+cd supporthub/frontend
+npm install        # only needed on first run
+npm run dev
+```
+
+### Terminal 3 — ngrok Tunnel (for Email/WhatsApp Webhooks)
+```bash
+ngrok config add-authtoken <your_ngrok_authtoken>   # first time only
 ngrok http 8001
 ```
 
-**3. Update Webhook URLs:**
-Because free ngrok accounts generate a **NEW random domain** on every restart, update your callback URLs in external dashboards:
-
-- **Mailgun**: Go to **Receiving → Routes → Destination** field:
-  `POST https://<new-ngrok-url>/api/v1/webhooks/email`
-- **Meta Developer Console**: Go to **Webhooks → Callback URL**:
-  `GET/POST https://<new-ngrok-url>/api/v1/webhooks/whatsapp`
-  `GET/POST https://<new-ngrok-url>/api/v1/webhooks/messenger`
+> After ngrok starts, copy the `https://xxxx.ngrok.io` URL and update:
+> - **Mailgun**: Receiving → Routes → Destination → `https://xxxx.ngrok.io/api/v1/webhooks/email`
+> - **Meta Console**: Webhooks → Callback URL → `https://xxxx.ngrok.io/api/v1/webhooks/whatsapp`
 
 ---
 
-## ✅ 5. Full Step-by-Step Checklist
+## 🔑 6. Login Credentials
 
-Follow these steps in order when setting up a fresh desktop:
+Once running, open **http://localhost:5173** in your browser:
 
-1. **Clone Repo**:
-   ```bash
-   git clone <repo-url> && cd "ai powered customer"
-   ```
-2. **Set Up `.env`**:
-   ```bash
-   cp supporthub/backend/.env.example supporthub/backend/.env
-   # Add your real API keys inside supporthub/backend/.env
-   ```
-3. **Start Infrastructure Containers (Terminal 1)**:
-   ```bash
-   cd supporthub && docker compose up -d
-   ```
-4. **Seed Database**:
-   ```bash
-   cd supporthub/backend
-   uv run python seed_db.py
-   uv run python seed_admin.py
-   uv run python seed_tickets_csat.py
-   ```
-5. **Start Backend Server (Terminal 2)**:
-   ```bash
-   cd supporthub/backend
-   uv run uvicorn app.main:app --reload --port 8001
-   ```
-6. **Start Frontend Dev Server (Terminal 3)**:
-   ```bash
-   cd supporthub/frontend
-   npm install
-   npm run dev
-   ```
-7. **Start ngrok Tunnel (Terminal 4)**:
-   ```bash
-   ngrok http 8001
-   ```
-8. **Update Webhook Provider Dashboards**:
-   Copy the new ngrok HTTPS URL to Mailgun Routes & Meta Webhook callback configuration.
+| Role | Email | Password |
+|---|---|---|
+| 👤 Customer | `customer@supporthub.com` | `Password123!` |
+| 🎧 Agent | `agent@supporthub.com` | `Password123!` |
+| 📊 Manager | `manager@supporthub.com` | `Password123!` |
+| ⚙️ Admin | `admin@supporthub.com` | `Password123!` |
+
+---
+
+## 🔄 7. Creating a New Database Dump (Before Pushing to GitHub)
+
+Whenever you want to push your latest database state to Git for others:
+
+```bash
+# From the project root
+docker exec supporthub_db pg_dump -U supporthub -d supporthub --no-owner --no-acl > supporthub_dump.sql
+git add supporthub_dump.sql
+git commit -m "chore: update database dump"
+git push
+```
+
+---
+
+## 🆘 Troubleshooting
+
+| Issue | Fix |
+|---|---|
+| `docker compose up` fails | Make sure Docker Desktop is running |
+| `psql: error: connection refused` | Wait 10s for the DB container to be healthy, then retry |
+| `npm run dev` fails | Run `npm install` first inside `supporthub/frontend/` |
+| `uv: command not found` | Run `curl -LsSf https://astral.sh/uv/install.sh \| sh` and re-open terminal |
+| Backend 500 errors | Check `.env` file exists and `ANTHROPIC_API_KEY` is set |

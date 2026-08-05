@@ -2,7 +2,7 @@
 
 import enum
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 from pgvector.sqlalchemy import Vector
@@ -84,8 +84,9 @@ class User(SQLModel, table=True):
     avatar_url: Optional[str] = Field(default=None, max_length=500)
     totp_secret: Optional[str] = Field(default=None)
     totp_enabled: bool = Field(default=False)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    email_signature: Optional[str] = Field(default=None, sa_column=Column(Text))
+    created_at: datetime = Field(default_factory=datetime.now)
+    updated_at: datetime = Field(default_factory=datetime.now)
 
     # Relationships
     submitted_tickets: list["Ticket"] = Relationship(
@@ -122,8 +123,8 @@ class Ticket(SQLModel, table=True):
     ai_resolved: bool = Field(default=False)
     ai_summary: Optional[str] = Field(default=None, sa_column=Column(Text))
     deleted_at: Optional[datetime] = Field(default=None)  # soft-delete
-    created_at: datetime = Field(default_factory=datetime.utcnow, index=True)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=datetime.now, index=True)
+    updated_at: datetime = Field(default_factory=datetime.now)
 
     # Relationships
     customer: Optional[User] = Relationship(
@@ -149,9 +150,10 @@ class Message(SQLModel, table=True):
     sender_id: Optional[uuid.UUID] = Field(default=None, foreign_key="users.id")
     sender_type: SenderType
     body: str = Field(sa_column=Column(Text))
+    body_html: Optional[str] = Field(default=None, sa_column=Column(Text))
     attachments: Optional[str] = Field(default=None, sa_column=Column(Text))  # JSON list
     external_message_id: Optional[str] = Field(default=None, max_length=255, index=True)
-    created_at: datetime = Field(default_factory=datetime.utcnow, index=True)
+    created_at: datetime = Field(default_factory=datetime.now, index=True)
 
     ticket: Optional[Ticket] = Relationship(back_populates="messages")
     sender: Optional[User] = Relationship(back_populates="messages")
@@ -173,8 +175,8 @@ class KbArticle(SQLModel, table=True):
     helpful_count: int = Field(default=0)
     published: bool = Field(default=True)
     created_by: Optional[uuid.UUID] = Field(default=None, foreign_key="users.id")
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=datetime.now)
+    updated_at: datetime = Field(default_factory=datetime.now)
 
 
 # ─── Channel Integration ──────────────────────────────────────────────────────
@@ -187,10 +189,11 @@ class ChannelIntegration(SQLModel, table=True):
     status: ChannelStatus = Field(default=ChannelStatus.disconnected)
     credentials_encrypted: Optional[str] = Field(default=None, sa_column=Column(Text))
     display_name: Optional[str] = Field(default=None, max_length=200)
+    config_json: Optional[str] = Field(default=None, sa_column=Column(Text))
     weekly_volume: int = Field(default=0)
     last_checked_at: Optional[datetime] = Field(default=None)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=datetime.now)
+    updated_at: datetime = Field(default_factory=datetime.now)
 
 
 # ─── Macro (Quick Reply) ──────────────────────────────────────────────────────
@@ -203,8 +206,8 @@ class Macro(SQLModel, table=True):
     body: str = Field(sa_column=Column(Text))
     category: Optional[str] = Field(default=None, max_length=100)
     created_by: uuid.UUID = Field(foreign_key="users.id")
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 # ─── CSAT Rating ──────────────────────────────────────────────────────────────
@@ -217,7 +220,7 @@ class CsatRating(SQLModel, table=True):
     customer_id: uuid.UUID = Field(foreign_key="users.id", index=True)
     rating: int = Field(ge=1, le=5)
     comment: Optional[str] = Field(default=None, sa_column=Column(Text))
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=datetime.now)
 
     ticket: Optional[Ticket] = Relationship(back_populates="csat_rating")
     customer: Optional[User] = Relationship(back_populates="csat_ratings")
@@ -235,8 +238,8 @@ class Automation(SQLModel, table=True):
     is_active: bool = Field(default=True)
     priority: int = Field(default=0)  # lower = evaluated first
     created_by: uuid.UUID = Field(foreign_key="users.id")
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 # ─── AI Settings (singleton row) ──────────────────────────────────────────────
@@ -252,7 +255,7 @@ class AiSettings(SQLModel, table=True):
     sentiment_detection: bool = Field(default=True)
     confidence_threshold: float = Field(default=0.75)
     model_name: str = Field(default="claude-sonnet-4-5", max_length=100)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 # ─── Audit Log (append-only) ─────────────────────────────────────────────────
@@ -268,7 +271,34 @@ class AuditLog(SQLModel, table=True):
     ticket_id: Optional[uuid.UUID] = Field(default=None, foreign_key="tickets.id", index=True)
     diff_json: Optional[str] = Field(default=None, sa_column=Column(Text))
     ip_address: Optional[str] = Field(default=None, max_length=45)
-    created_at: datetime = Field(default_factory=datetime.utcnow, index=True)
+    created_at: datetime = Field(default_factory=datetime.now, index=True)
 
     actor: Optional[User] = Relationship(back_populates="audit_logs")
     ticket: Optional[Ticket] = Relationship(back_populates="audit_logs")
+
+
+# ─── Email Delivery Log ───────────────────────────────────────────────────────
+
+class EmailLog(SQLModel, table=True):
+    __tablename__ = "email_logs"
+
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    ticket_id: Optional[uuid.UUID] = Field(default=None, foreign_key="tickets.id", index=True)
+    recipient_email: str = Field(max_length=255, index=True)
+    subject: str = Field(max_length=500)
+    status: str = Field(default="sent", max_length=50, index=True)  # sent, delivered, failed, bounced
+    error_detail: Optional[str] = Field(default=None, sa_column=Column(Text))
+    created_at: datetime = Field(default_factory=datetime.now, index=True)
+
+
+# ─── Email Template ──────────────────────────────────────────────────────────
+
+class EmailTemplate(SQLModel, table=True):
+    __tablename__ = "email_templates"
+
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    name: str = Field(max_length=100, unique=True, index=True)  # e.g. ticket_created, ticket_resolved
+    subject_pattern: str = Field(max_length=300)
+    body_html: str = Field(sa_column=Column(Text))
+    updated_at: datetime = Field(default_factory=datetime.now)
+
