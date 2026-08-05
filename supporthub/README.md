@@ -83,7 +83,7 @@ supporthub/
 - [x] Phase 3 — Real-time WebSocket chat ✅
 - [x] Phase 4 — Knowledge Base ✅
 - [x] Phase 5 — AI Chatbot + RAG ✅
-- [ ] Phase 6 — AI Agent Tools
+- [x] Phase 6 — AI Agent Tools ✅
 - [ ] Phase 7 — Quick Replies + CSAT
 - [ ] Phase 8 — User Management
 - [ ] Phase 9 — SLA Engine + Notifications

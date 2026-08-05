@@ -30,4 +30,14 @@ export const ticketsApi = {
 
   getAllCsat: () =>
     client.get('/tickets/csat/all'),
+
+  // Phase 6 — AI Agent Tools
+  suggestReply: (id) =>
+    client.post(`/tickets/${id}/suggest-reply`),
+
+  summarize: (id) =>
+    client.post(`/tickets/${id}/summarize`),
+
+  getSimilar: (id) =>
+    client.get(`/tickets/${id}/similar`),
 }

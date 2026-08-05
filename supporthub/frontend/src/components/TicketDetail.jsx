@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef } from 'react'
-import { useParams, Link, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { ticketsApi } from '../api/tickets'
 import { useAuthStore } from '../store/authStore'
-import { ArrowLeft, Send, User, Bot, Clock, AlertTriangle, MessageSquare, ShieldCheck, Zap, X, Search, Paperclip } from 'lucide-react'
+import { ArrowLeft, Send, Bot, Clock, Zap, X, Search, Paperclip, Sparkles, Copy, CheckCheck, FileText, Link2, RefreshCw, ChevronDown, ChevronUp, Lightbulb } from 'lucide-react'
 import client from '../api/client'
 import { formatDateTime, formatTime } from '../utils/dateUtils'
 
@@ -20,6 +20,16 @@ export default function TicketDetail({ basePath }) {
   const [ws, setWs] = useState(null)
   const [showQuickReplies, setShowQuickReplies] = useState(false)
   const [quickSearch, setQuickSearch] = useState('')
+
+  // Phase 6 — AI Agent Tools state
+  const [aiSuggestion, setAiSuggestion] = useState(null)
+  const [aiSummary, setAiSummary] = useState(null)
+  const [similarTickets, setSimilarTickets] = useState([])
+  const [loadingSuggest, setLoadingSuggest] = useState(false)
+  const [loadingSummary, setLoadingSummary] = useState(false)
+  const [loadingSimilar, setLoadingSimilar] = useState(false)
+  const [copiedSuggestion, setCopiedSuggestion] = useState(false)
+  const [aiPanelTab, setAiPanelTab] = useState('suggest') // 'suggest' | 'summary' | 'similar'
 
   const quickReplyTemplates = [
     {
@@ -126,6 +136,54 @@ export default function TicketDetail({ basePath }) {
       queryClient.setQueryData(['ticket', id], res.data)
     }
   })
+
+  // Phase 6 handlers
+  const handleSuggestReply = async () => {
+    setLoadingSuggest(true)
+    setAiSuggestion(null)
+    try {
+      const res = await ticketsApi.suggestReply(id)
+      setAiSuggestion(res.data.suggestion)
+    } catch (e) {
+      setAiSuggestion('Unable to generate suggestion right now.')
+    } finally {
+      setLoadingSuggest(false)
+    }
+  }
+
+  const handleSummarize = async () => {
+    setLoadingSummary(true)
+    setAiSummary(null)
+    try {
+      const res = await ticketsApi.summarize(id)
+      setAiSummary(res.data.summary)
+    } catch (e) {
+      setAiSummary('Unable to generate summary right now.')
+    } finally {
+      setLoadingSummary(false)
+    }
+  }
+
+  const handleSimilar = async () => {
+    setLoadingSimilar(true)
+    setSimilarTickets([])
+    try {
+      const res = await ticketsApi.getSimilar(id)
+      setSimilarTickets(res.data)
+    } catch (e) {
+      setSimilarTickets([])
+    } finally {
+      setLoadingSimilar(false)
+    }
+  }
+
+  const handleCopySuggestion = () => {
+    if (!aiSuggestion) return
+    navigator.clipboard.writeText(aiSuggestion)
+    setInputText(aiSuggestion)
+    setCopiedSuggestion(true)
+    setTimeout(() => setCopiedSuggestion(false), 2000)
+  }
 
   if (isLoading) return <div className="flex justify-center py-20"><div className="animate-spin w-8 h-8 border-4 border-indigo-500 border-t-transparent rounded-full"></div></div>
   if (!ticket) return <div className="p-8">Ticket not found</div>
@@ -363,27 +421,30 @@ export default function TicketDetail({ basePath }) {
         </div>
       </div>
 
-      {/* Right Sidebar (Details/Actions) */}
-      <div className="w-80 bg-white p-6 border-l border-[#E5E7F3] overflow-y-auto">
-        <h3 className="font-bold text-[#1C1B2E] mb-6 uppercase text-xs tracking-wider">Ticket Details</h3>
-        
-        <div className="space-y-6">
-          <div>
-            <div className="text-xs text-[#9598B0] mb-1">Customer</div>
-            <div className="font-semibold text-[#1C1B2E]">{role === 'customer' ? currentName : ticket.customer_id}</div>
-          </div>
-          
+      {/* Right Sidebar */}
+      <div className="w-80 bg-white border-l border-[#E5E7F3] flex flex-col overflow-hidden">
+        {/* Ticket Details */}
+        <div className="p-5 border-b border-[#E5E7F3] space-y-4">
+          <h3 className="font-bold text-[#1C1B2E] uppercase text-xs tracking-wider">Ticket Details</h3>
+
           <div>
             <div className="text-xs text-[#9598B0] mb-1">Category</div>
-            <div className="capitalize text-sm bg-gray-100 inline-block px-2 py-1 rounded font-medium">{ticket.category}</div>
+            <div className="capitalize text-xs bg-indigo-50 text-indigo-700 font-bold inline-block px-2.5 py-1 rounded-lg">{ticket.category}</div>
+            {ticket.sentiment && (
+              <span className={`ml-2 capitalize text-xs font-bold inline-block px-2.5 py-1 rounded-lg ${
+                ticket.sentiment === 'frustrated' || ticket.sentiment === 'negative' ? 'bg-red-50 text-red-600'
+                : ticket.sentiment === 'positive' ? 'bg-emerald-50 text-emerald-700'
+                : 'bg-gray-100 text-gray-600'
+              }`}>{ticket.sentiment}</span>
+            )}
           </div>
 
           <div>
             <div className="text-xs text-[#9598B0] mb-1">Priority</div>
             {role === 'customer' ? (
-               <div className="capitalize text-sm font-bold">{ticket.priority}</div>
+              <div className="capitalize text-sm font-bold">{ticket.priority}</div>
             ) : (
-              <select 
+              <select
                 className="w-full text-sm border border-[#E5E7F3] rounded-lg p-2 outline-none focus:border-indigo-500 capitalize font-bold"
                 value={ticket.priority}
                 onChange={e => updateMutation.mutate({ priority: e.target.value })}
@@ -398,30 +459,185 @@ export default function TicketDetail({ basePath }) {
 
           {(role === 'agent' || role === 'admin') && (
             <div>
-              <div className="text-xs text-[#9598B0] mb-1">Status</div>
+              <div className="text-xs text-[#9598B0] mb-2">Status</div>
               <div className="flex flex-wrap gap-2">
-                <button 
-                  onClick={() => updateMutation.mutate({ status: 'open' })}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-colors ${ticket.status === 'open' ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-white border-[#E5E7F3] text-[#6C7089] hover:bg-gray-50'}`}
-                >
-                  Open
-                </button>
-                <button 
-                  onClick={() => updateMutation.mutate({ status: 'waiting' })}
-                  className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold border transition-colors ${ticket.status === 'waiting' ? 'bg-orange-50 border-orange-200 text-orange-700' : 'bg-white border-[#E5E7F3] text-[#6C7089] hover:bg-gray-50'}`}
-                >
-                  <Clock size={14} /> Snooze
-                </button>
-                <button 
-                  onClick={() => updateMutation.mutate({ status: 'resolved' })}
-                  className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold border transition-colors ${ticket.status === 'resolved' ? 'bg-green-50 border-green-200 text-green-700' : 'bg-white border-[#E5E7F3] text-[#6C7089] hover:bg-gray-50'}`}
-                >
-                  <CheckCircle size={14} /> Resolve
-                </button>
+                <button onClick={() => updateMutation.mutate({ status: 'open' })} className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-colors ${ticket.status === 'open' ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-white border-[#E5E7F3] text-[#6C7089] hover:bg-gray-50'}`}>Open</button>
+                <button onClick={() => updateMutation.mutate({ status: 'waiting' })} className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold border transition-colors ${ticket.status === 'waiting' ? 'bg-orange-50 border-orange-200 text-orange-700' : 'bg-white border-[#E5E7F3] text-[#6C7089] hover:bg-gray-50'}`}><Clock size={12} /> Snooze</button>
+                <button onClick={() => updateMutation.mutate({ status: 'resolved' })} className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold border transition-colors ${ticket.status === 'resolved' ? 'bg-green-50 border-green-200 text-green-700' : 'bg-white border-[#E5E7F3] text-[#6C7089] hover:bg-gray-50'}`}>✓ Resolve</button>
               </div>
             </div>
           )}
         </div>
+
+        {/* Phase 6 — AI Agent Panel (agents/managers only) */}
+        {(role === 'agent' || role === 'manager' || role === 'admin') && (
+          <div className="flex-1 flex flex-col overflow-hidden">
+            {/* Tab Switcher */}
+            <div className="flex border-b border-[#E5E7F3] bg-[#F8FAFC]">
+              {[
+                { id: 'suggest', icon: Sparkles, label: 'Reply' },
+                { id: 'summary', icon: FileText, label: 'Summary' },
+                { id: 'similar', icon: Link2, label: 'Similar' },
+              ].map(tab => (
+                <button
+                  key={tab.id}
+                  onClick={() => setAiPanelTab(tab.id)}
+                  className={`flex-1 flex items-center justify-center gap-1.5 py-3 text-[10px] font-bold uppercase tracking-wide transition-colors ${
+                    aiPanelTab === tab.id
+                      ? 'text-indigo-600 border-b-2 border-indigo-500 bg-white'
+                      : 'text-[#9598B0] hover:text-[#6C7089]'
+                  }`}
+                >
+                  <tab.icon size={13} /> {tab.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Tab Content */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-3">
+
+              {/* ── Suggest Reply Tab ── */}
+              {aiPanelTab === 'suggest' && (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <div className="p-1.5 bg-indigo-100 rounded-lg"><Sparkles size={14} className="text-indigo-600" /></div>
+                    <div>
+                      <div className="text-xs font-bold text-[#1C1B2E]">AI Suggested Reply</div>
+                      <div className="text-[10px] text-[#9598B0]">Drafts a reply based on the conversation</div>
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={handleSuggestReply}
+                    disabled={loadingSuggest}
+                    className="w-full flex items-center justify-center gap-2 py-2.5 px-3 bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600 text-white text-xs font-bold rounded-xl transition-all shadow-sm disabled:opacity-60"
+                  >
+                    {loadingSuggest ? (
+                      <><RefreshCw size={13} className="animate-spin" /> Generating...</>
+                    ) : (
+                      <><Sparkles size={13} /> Generate AI Reply</>  
+                    )}
+                  </button>
+
+                  {aiSuggestion && (
+                    <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-3 space-y-2">
+                      <p className="text-xs text-[#1C1B2E] leading-relaxed whitespace-pre-wrap">{aiSuggestion}</p>
+                      <div className="flex gap-2 pt-1">
+                        <button
+                          onClick={handleCopySuggestion}
+                          className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-[10px] font-bold rounded-lg transition-all ${
+                            copiedSuggestion
+                              ? 'bg-emerald-500 text-white'
+                              : 'bg-white border border-indigo-200 text-indigo-700 hover:bg-indigo-100'
+                          }`}
+                        >
+                          {copiedSuggestion ? <><CheckCheck size={12} /> Copied to composer!</> : <><Copy size={12} /> Use this reply</>}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="bg-amber-50 border border-amber-100 rounded-xl p-3">
+                    <div className="flex items-center gap-1.5 mb-1">
+                      <Lightbulb size={12} className="text-amber-500" />
+                      <span className="text-[10px] font-bold text-amber-700">Pro Tip</span>
+                    </div>
+                    <p className="text-[10px] text-amber-700 leading-relaxed">Click <strong>"Use this reply"</strong> to paste the AI suggestion directly into the message composer. You can edit it before sending.</p>
+                  </div>
+                </div>
+              )}
+
+              {/* ── Summary Tab ── */}
+              {aiPanelTab === 'summary' && (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <div className="p-1.5 bg-blue-100 rounded-lg"><FileText size={14} className="text-blue-600" /></div>
+                    <div>
+                      <div className="text-xs font-bold text-[#1C1B2E]">AI Ticket Summary</div>
+                      <div className="text-[10px] text-[#9598B0]">Condenses the full conversation</div>
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={handleSummarize}
+                    disabled={loadingSummary}
+                    className="w-full flex items-center justify-center gap-2 py-2.5 px-3 bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 text-white text-xs font-bold rounded-xl transition-all shadow-sm disabled:opacity-60"
+                  >
+                    {loadingSummary ? (
+                      <><RefreshCw size={13} className="animate-spin" /> Summarizing...</>
+                    ) : (
+                      <><FileText size={13} /> Generate Summary</>
+                    )}
+                  </button>
+
+                  {aiSummary && (
+                    <div className="bg-blue-50 border border-blue-200 rounded-xl p-3">
+                      <p className="text-xs text-[#1C1B2E] leading-relaxed">{aiSummary}</p>
+                    </div>
+                  )}
+
+                  {!aiSummary && !loadingSummary && (
+                    <div className="text-center py-6 text-[#9598B0] text-[10px]">
+                      <Bot size={28} className="mx-auto mb-2 opacity-30" />
+                      Click the button above to generate an AI summary of this ticket.
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* ── Similar Tickets Tab ── */}
+              {aiPanelTab === 'similar' && (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <div className="p-1.5 bg-emerald-100 rounded-lg"><Link2 size={14} className="text-emerald-600" /></div>
+                    <div>
+                      <div className="text-xs font-bold text-[#1C1B2E]">Similar Past Cases</div>
+                      <div className="text-[10px] text-[#9598B0]">Find resolved tickets with similar issues</div>
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={handleSimilar}
+                    disabled={loadingSimilar}
+                    className="w-full flex items-center justify-center gap-2 py-2.5 px-3 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white text-xs font-bold rounded-xl transition-all shadow-sm disabled:opacity-60"
+                  >
+                    {loadingSimilar ? (
+                      <><RefreshCw size={13} className="animate-spin" /> Searching...</>
+                    ) : (
+                      <><Link2 size={13} /> Find Similar Cases</>
+                    )}
+                  </button>
+
+                  {similarTickets.length > 0 && (
+                    <div className="space-y-2">
+                      {similarTickets.map(t => (
+                        <div key={t.id} className="bg-emerald-50 border border-emerald-100 rounded-xl p-3 space-y-1.5">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] font-bold text-emerald-700 font-mono">{t.ref}</span>
+                            <span className="text-[10px] bg-emerald-200 text-emerald-800 px-2 py-0.5 rounded-full font-bold">{Math.round(t.similarity * 100)}% match</span>
+                          </div>
+                          <p className="text-xs font-semibold text-[#1C1B2E] line-clamp-2">{t.subject}</p>
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-[9px] bg-gray-100 text-gray-600 px-2 py-0.5 rounded-md font-semibold uppercase">{t.category}</span>
+                            <span className="text-[9px] bg-green-100 text-green-700 px-2 py-0.5 rounded-md font-semibold capitalize">✓ {t.status}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {similarTickets.length === 0 && !loadingSimilar && (
+                    <div className="text-center py-6 text-[#9598B0] text-[10px]">
+                      <Link2 size={28} className="mx-auto mb-2 opacity-30" />
+                      Click above to search for similar resolved cases that may contain useful solutions.
+                    </div>
+                  )}
+                </div>
+              )}
+
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )
