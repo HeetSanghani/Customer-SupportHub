@@ -88,6 +88,26 @@ class User(SQLModel, table=True):
     created_at: datetime = Field(default_factory=datetime.now)
     updated_at: datetime = Field(default_factory=datetime.now)
 
+    # ── Channel Identity (for omnichannel customers) ──────────────────────────
+    # WHY: A WhatsApp customer has no email. Rather than creating a separate
+    # Customer table, we store the channel-specific ID here. This keeps all
+    # customer records in one table and preserves all existing FK relationships
+    # (tickets, messages, audit logs, CSAT) without schema duplication.
+    #
+    # channel_customer_id examples:
+    #   WhatsApp  → "919876543210"  (phone number, no + prefix)
+    #   Instagram → "17841234567"   (Instagram-scoped user ID / IGSID)
+    #   Facebook  → "1234567890"    (Page-scoped User ID / PSID)
+    #   Email     → stored in email field directly
+    channel: Optional[ChannelType] = Field(default=None, index=True)
+    channel_customer_id: Optional[str] = Field(
+        default=None,
+        max_length=255,
+        index=True,
+        # Unique per channel enforced at the service layer via compound lookup
+    )
+    phone: Optional[str] = Field(default=None, max_length=30, index=True)
+
     # Relationships
     submitted_tickets: list["Ticket"] = Relationship(
         back_populates="customer",
@@ -301,4 +321,62 @@ class EmailTemplate(SQLModel, table=True):
     subject_pattern: str = Field(max_length=300)
     body_html: str = Field(sa_column=Column(Text))
     updated_at: datetime = Field(default_factory=datetime.now)
+
+
+# ─── Webhook Event (Idempotency Log) ─────────────────────────────────────────
+#
+# WHY THIS TABLE EXISTS:
+#   Meta retries webhook delivery when your server doesn't respond within 20s,
+#   or if it gets a non-2xx response. This means the exact same message can
+#   arrive 2, 3, or even 5+ times.
+#
+#   Without an idempotency log:
+#     - Same customer message → 3 AI replies sent to the customer
+#     - 3 duplicate Message rows in the database
+#     - 3 separate Ticket rows if the ticket finder has a race condition
+#
+#   With WebhookEvent:
+#     - First arrival: create record (processed=False), process, mark processed=True
+#     - Second arrival: find existing record → skip immediately
+#     - Result: exactly-once processing, regardless of how many times Meta sends it
+#
+#   This is the same pattern used by Stripe (idempotency keys), Twilio
+#   (X-Twilio-Signature), and all production webhook-driven platforms.
+#
+# FIELDS:
+#   event_id   — the channel's unique message ID (wamid.XXX for WhatsApp)
+#                This is the PRIMARY idempotency key.
+#   channel    — which channel sent this event
+#   processed  — False on arrival, True after full pipeline completion
+#   error      — if processing failed, stores the error message for retry logic
+
+class WebhookEvent(SQLModel, table=True):
+    __tablename__ = "webhook_events"
+
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+
+    # The channel-specific unique message ID — idempotency key
+    # For WhatsApp: "wamid.HBgM..." from messages[0].id
+    # UNIQUE constraint: one DB row per channel_message_id across all channels
+    event_id: str = Field(
+        max_length=500,
+        index=True,
+        sa_column_kwargs={"unique": True},
+    )
+
+    channel: ChannelType = Field(index=True)
+
+    # Processing state
+    processed: bool = Field(default=False, index=True)
+    error: Optional[str] = Field(default=None, sa_column=Column(Text))
+    processing_ms: Optional[int] = Field(default=None)  # processing time in milliseconds
+
+    # The full raw payload stored for audit, debugging, and potential replay
+    raw_payload: Optional[str] = Field(default=None, sa_column=Column(Text))  # JSON string
+
+    received_at: datetime = Field(
+        default_factory=datetime.utcnow,  # naive UTC — PostgreSQL TIMESTAMP WITHOUT TIME ZONE
+        index=True,
+    )
+    processed_at: Optional[datetime] = Field(default=None)
 

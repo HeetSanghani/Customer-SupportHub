@@ -5,13 +5,14 @@ import { LogOut, LayoutDashboard, Settings, BookOpen, Inbox, Clock, CheckCircle,
 import KnowledgeBase from './KnowledgeBase'
 import ManagerOverview from './ManagerOverview'
 import UnifiedInbox from '../../components/UnifiedInbox'
+import WhatsAppInbox from '../../components/WhatsAppInbox'
 import TicketDetail from '../../components/TicketDetail'
 import ManagerAnalytics from './ManagerAnalytics'
 import ManagerAgentPerformance from './ManagerAgentPerformance'
 import ManagerSLADashboard from './ManagerSLADashboard'
 import ManagerTicketReports from './ManagerTicketReports'
 import ManagerWorkflowAutomation from './ManagerWorkflowAutomation'
-import { BarChart3, Users, ShieldAlert, FileText, GitBranch } from 'lucide-react'
+import { BarChart3, Users, ShieldAlert, FileText, GitBranch, Smartphone } from 'lucide-react'
 export default function ManagerLayout() {
   const { role, logout, name } = useAuthStore()
   const location = useLocation()
@@ -68,6 +69,10 @@ export default function ManagerLayout() {
           <div className="pt-2 pb-1 px-3 text-xs font-bold text-[#6C7089] uppercase tracking-wider">
             Operations
           </div>
+
+          <Link to="/manager/whatsapp" className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold transition-colors ${location.pathname === '/manager/whatsapp' ? 'bg-emerald-600 text-white shadow-sm' : 'text-[#9598B0] hover:bg-white/5'}`}>
+            <Smartphone size={18} className="text-emerald-400" /> WhatsApp Inbox
+          </Link>
 
           {/* Team Inbox Accordion */}
           <div>
@@ -129,6 +134,7 @@ export default function ManagerLayout() {
       <main className="flex-1 flex flex-col min-w-0">
         <Routes>
           <Route path="/" element={<ManagerOverview />} />
+          <Route path="/whatsapp" element={<WhatsAppInbox basePath="/manager" />} />
           <Route path="/inbox" element={<UnifiedInbox filter="all" basePath="/manager" />} />
           <Route path="/inbox/all" element={<UnifiedInbox filter="all" basePath="/manager" />} />
           <Route path="/inbox/active" element={<UnifiedInbox filter="active" basePath="/manager" />} />

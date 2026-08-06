@@ -1,154 +1,167 @@
+"""
+app/routers/webhooks/whatsapp.py
+
+HTTP layer for Meta WhatsApp Cloud API webhook endpoints.
+
+This router is intentionally thin — it handles ONLY:
+  - HTTP routing
+  - Query parameter / header extraction
+  - Delegating to services (auth, webhook orchestration)
+
+It does NOT contain business logic. That lives in:
+  app/services/whatsapp/auth.py       ← security
+  app/services/whatsapp/parser.py     ← payload parsing
+  app/services/whatsapp/webhook.py    ← orchestration
+  app/services/whatsapp/sender.py     ← outbound messages
+
+WHY THIS SEPARATION MATTERS:
+  In a production SaaS, routers change frequently (versioning, new fields,
+  auth changes). Services are stable. Keeping them separate means you can
+  add a v2 router or a CLI trigger without duplicating business logic.
+"""
+
+from __future__ import annotations
+
+import json
 import logging
-import random
-from fastapi import APIRouter, Depends, Query, Request, Response
-from sqlmodel import select
+from typing import Annotated, Optional
+
+from fastapi import APIRouter, BackgroundTasks, Depends, Query, Request, Response, status
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.config import get_settings
 from app.database import get_session
-from app.models import Ticket, User, Message, TicketChannel, TicketStatus, TicketPriority, SenderType, UserRole, UserStatus
-from app.services.ai_reply import generate_ai_reply
-from app.services.senders import send_whatsapp_reply
+from app.services.whatsapp.auth import validate_verify_token, verify_whatsapp_signature
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
+
 router = APIRouter(prefix="/whatsapp", tags=["webhooks-whatsapp"])
 
 
-def generate_ticket_ref() -> str:
-    return f"TCK-{random.randint(10000, 99999)}"
+# ─── GET /webhooks/whatsapp — Webhook Verification Handshake ─────────────────
 
-
-@router.get("")
+@router.get(
+    "",
+    summary="Meta WhatsApp Webhook Verification",
+    description=(
+        "One-time handshake endpoint called by Meta when you register your webhook URL. "
+        "Returns hub.challenge as plain text if the verify token matches."
+    ),
+    response_class=Response,
+)
 async def verify_whatsapp_webhook(
-    hub_mode: str = Query(None, alias="hub.mode"),
-    hub_challenge: str = Query(None, alias="hub.challenge"),
-    hub_verify_token: str = Query(None, alias="hub.verify_token"),
-):
-    """Handshake verification endpoint for Meta WhatsApp Cloud API."""
-    expected_token = settings.meta_verify_token or "supporthub_verify"
-    if hub_mode == "subscribe" and hub_verify_token == expected_token:
-        logger.info("WhatsApp webhook verified successfully.")
-        return Response(content=str(hub_challenge or ""), media_type="text/plain")
-    logger.warning("WhatsApp webhook verification failed.")
-    return Response(content="Forbidden", status_code=403)
+    hub_mode: Optional[str] = Query(default=None, alias="hub.mode"),
+    hub_challenge: Optional[str] = Query(default=None, alias="hub.challenge"),
+    hub_verify_token: Optional[str] = Query(default=None, alias="hub.verify_token"),
+) -> Response:
+    """
+    Meta Webhook Verification Endpoint.
+
+    Meta calls this endpoint when you:
+      1. Add/edit your webhook URL in the Meta App Dashboard
+      2. Subscribe to new webhook fields
+
+    The flow:
+      - Meta sends GET with hub.mode, hub.challenge, hub.verify_token
+      - We verify the token matches our META_VERIFY_TOKEN secret
+      - If valid: respond with hub.challenge as plain text → Meta confirms webhook
+      - If invalid: respond with 403 → Meta will show an error in the Dashboard
+
+    PRODUCTION TIP:
+      hub.challenge is a random integer as a string. Meta compares it with
+      what you echo back. Return it as plain text, NOT as JSON.
+      Returning {"challenge": "..."} will FAIL the verification.
+    """
+    is_valid = validate_verify_token(
+        hub_mode=hub_mode,
+        hub_verify_token=hub_verify_token,
+    )
+
+    if not is_valid:
+        logger.warning(
+            "WhatsApp webhook verification FAILED | mode=%s | token_prefix=%s",
+            hub_mode,
+            (hub_verify_token or "")[:4],
+        )
+        return Response(
+            content="Forbidden: invalid verify token or mode.",
+            status_code=status.HTTP_403_FORBIDDEN,
+            media_type="text/plain",
+        )
+
+    logger.info(
+        "WhatsApp webhook verification SUCCEEDED | challenge=%s",
+        hub_challenge,
+    )
+
+    # CRITICAL: Return the challenge as plain text exactly as Meta sent it.
+    return Response(
+        content=str(hub_challenge or ""),
+        status_code=status.HTTP_200_OK,
+        media_type="text/plain",
+    )
 
 
-@router.post("")
+# ─── POST /webhooks/whatsapp — Receive Incoming Messages ─────────────────────
+
+@router.post(
+    "",
+    summary="Receive WhatsApp Messages from Meta",
+    status_code=status.HTTP_200_OK,
+    description=(
+        "Receives inbound WhatsApp messages from Meta Cloud API. "
+        "Validates HMAC-SHA256 signature, parses payload, and processes "
+        "the conversation in the background."
+    ),
+)
 async def receive_whatsapp_webhook(
     request: Request,
+    background_tasks: BackgroundTasks,
+    raw_body: Annotated[bytes, Depends(verify_whatsapp_signature)],
     session: AsyncSession = Depends(get_session),
-):
-    """Receives inbound messages from Meta Cloud API WhatsApp webhook."""
+) -> dict:
+    """
+    Meta Webhook POST — Incoming Messages.
+
+    IMPORTANT — Always return 200 immediately:
+      Meta expects a 200 OK within 20 seconds. If your server takes longer
+      (e.g., AI is slow, DB is under load), Meta will retry the webhook.
+      Retries cause duplicate message processing.
+
+      Solution: Use BackgroundTasks to process the message AFTER returning 200.
+      This decouples the Meta HTTP contract from your processing time.
+
+    The signature is validated by the `verify_whatsapp_signature` dependency
+    before this function body even runs. If the signature is invalid, FastAPI
+    returns 403 automatically.
+
+    Processing pipeline (runs in background):
+      1. Parse raw payload → IncomingMessage (normalized internal model)
+      2. Find or create Customer record
+      3. Find or create Ticket (open conversation thread)
+      4. Store customer message in DB
+      5. Send to AI Agent → get reply
+      6. Store AI reply in DB
+      7. Send reply back to customer via WhatsApp Send API
+    """
+    # Import here to avoid circular imports (webhook.py imports models/session)
+    from app.services.whatsapp.webhook import process_whatsapp_payload
+
+    # Parse JSON from already-read raw body (avoid reading request.body() again)
     try:
-        payload = await request.json()
-        entries = payload.get("entry", [])
-        if not entries:
-            return {"status": "ok"}
+        payload = json.loads(raw_body)
+    except (json.JSONDecodeError, ValueError) as exc:
+        logger.error("WhatsApp webhook received invalid JSON: %s", exc)
+        # Still return 200 to prevent Meta from retrying a bad payload
+        return {"status": "ok", "note": "invalid_json_skipped"}
 
-        for entry in entries:
-            changes = entry.get("changes", [])
-            for change in changes:
-                value = change.get("value", {})
-                messages = value.get("messages", [])
-                contacts = value.get("contacts", [])
+    # Enqueue processing as a background task.
+    # The HTTP response is returned to Meta BEFORE the processing begins.
+    background_tasks.add_task(
+        process_whatsapp_payload,
+        payload=payload,
+    )
 
-                if not messages:
-                    continue
-
-                for msg in messages:
-                    if msg.get("type") != "text":
-                        continue
-
-                    from_phone = msg.get("from")  # e.g. "15551234567"
-                    text_body = msg.get("text", {}).get("body", "").strip()
-
-                    if not from_phone or not text_body:
-                        continue
-
-                    # Extract contact profile name if available
-                    contact_name = f"WhatsApp User ({from_phone})"
-                    if contacts:
-                        contact_name = contacts[0].get("profile", {}).get("name", contact_name)
-
-                    synthetic_email = f"whatsapp_{from_phone}@supporthub.local"
-
-                    # 1. Find or Create User
-                    user_stmt = select(User).where(User.email == synthetic_email)
-                    user = (await session.exec(user_stmt)).first()
-
-                    if not user:
-                        user = User(
-                            email=synthetic_email,
-                            name=contact_name,
-                            password_hash="external_whatsapp_user",
-                            role=UserRole.customer,
-                            status=UserStatus.active,
-                        )
-                        session.add(user)
-                        await session.commit()
-                        await session.refresh(user)
-
-                    # 2. Find or Create Ticket
-                    ticket_stmt = select(Ticket).where(
-                        Ticket.customer_id == user.id,
-                        Ticket.channel == TicketChannel.whatsapp,
-                        Ticket.status.in_([TicketStatus.new, TicketStatus.open, TicketStatus.waiting])
-                    )
-                    ticket = (await session.exec(ticket_stmt)).first()
-
-                    if not ticket:
-                        ticket = Ticket(
-                            ref=generate_ticket_ref(),
-                            customer_id=user.id,
-                            subject=f"WhatsApp Chat from {from_phone}",
-                            category="whatsapp",
-                            channel=TicketChannel.whatsapp,
-                            status=TicketStatus.new,
-                            priority=TicketPriority.medium,
-                        )
-                        session.add(ticket)
-                        await session.commit()
-                        await session.refresh(ticket)
-
-                    # 3. Save incoming customer Message
-                    cust_msg = Message(
-                        ticket_id=ticket.id,
-                        sender_id=user.id,
-                        sender_type=SenderType.customer,
-                        body=text_body,
-                    )
-                    session.add(cust_msg)
-                    await session.commit()
-
-                    # 4. Fetch history & generate AI reply
-                    history_stmt = select(Message).where(Message.ticket_id == ticket.id).order_by(Message.created_at.asc())
-                    history_msgs = (await session.exec(history_stmt)).all()
-                    conversation_history = [
-                        {
-                            "role": "user" if m.sender_type == SenderType.customer else "assistant",
-                            "content": m.body
-                        }
-                        for m in history_msgs
-                    ]
-
-                    ai_reply_text = await generate_ai_reply(conversation_history)
-
-                    # 5. Outbound WhatsApp send
-                    await send_whatsapp_reply(to_phone=from_phone, text=ai_reply_text)
-
-                    # 6. Save AI reply Message
-                    ai_msg = Message(
-                        ticket_id=ticket.id,
-                        sender_id=None,
-                        sender_type=SenderType.ai,
-                        body=ai_reply_text,
-                    )
-                    session.add(ai_msg)
-                    await session.commit()
-
-        return {"status": "ok"}
-
-    except Exception as exc:
-        logger.error(f"Error handling WhatsApp webhook: {exc}", exc_info=True)
-        return {"status": "ok", "error": str(exc)}
+    # Meta only cares that we return 200. The body content is ignored by Meta.
+    return {"status": "ok"}

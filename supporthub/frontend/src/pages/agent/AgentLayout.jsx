@@ -6,11 +6,13 @@ import { ticketsApi } from '../../api/tickets'
 import { Inbox, CheckCircle, Clock, LogOut, Search, Filter, LayoutDashboard, ListFilter, Zap, BookOpen, MessageSquare } from 'lucide-react'
 
 import UnifiedInbox from '../../components/UnifiedInbox'
+import WhatsAppInbox from '../../components/WhatsAppInbox'
 import AgentOverview from './AgentOverview'
 import AgentTicketQueue from './AgentTicketQueue'
 import AgentQuickReplies from './AgentQuickReplies'
 import AgentHelpCenter from './AgentHelpCenter'
 import TicketDetail from '../../components/TicketDetail'
+import { Smartphone } from 'lucide-react'
 
 export default function AgentLayout() {
   const { role, logout, name } = useAuthStore()
@@ -90,6 +92,10 @@ export default function AgentLayout() {
           <Link to="/agent" className={`flex items-center justify-between px-3 py-2 rounded-lg text-xs font-semibold transition-colors ${location.pathname === '/agent' ? 'bg-[#6366F1] text-white shadow-sm' : 'text-[#9598B0] hover:bg-white/5'}`}>
             <div className="flex items-center gap-2.5"><LayoutDashboard size={16} /> Dashboard</div>
           </Link>
+
+          <Link to="/agent/whatsapp" className={`flex items-center justify-between px-3 py-2 rounded-lg text-xs font-semibold transition-colors ${location.pathname === '/agent/whatsapp' ? 'bg-emerald-600 text-white shadow-sm' : 'text-[#9598B0] hover:bg-white/5'}`}>
+            <div className="flex items-center gap-2.5"><Smartphone size={16} className="text-emerald-400" /> WhatsApp Inbox</div>
+          </Link>
           
           <Link to="/agent/inbox" className={`flex items-center justify-between px-3 py-2 rounded-lg text-xs font-semibold transition-colors ${location.pathname === '/agent/inbox' ? 'bg-[#6366F1] text-white shadow-sm' : 'text-[#9598B0] hover:bg-white/5'}`}>
             <div className="flex items-center gap-2.5"><MessageSquare size={16} /> All Tickets</div>
@@ -140,6 +146,7 @@ export default function AgentLayout() {
       <main className="flex-1 flex flex-col min-w-0">
         <Routes>
           <Route path="/" element={<AgentOverview />} />
+          <Route path="/whatsapp" element={<WhatsAppInbox basePath="/agent" />} />
           <Route path="/inbox" element={<UnifiedInbox filter="all" basePath="/agent" />} />
           <Route path="/active" element={<UnifiedInbox filter="active" basePath="/agent" />} />
           <Route path="/queue" element={<AgentTicketQueue />} />

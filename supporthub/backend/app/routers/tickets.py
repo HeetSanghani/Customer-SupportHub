@@ -10,6 +10,7 @@ from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlmodel import select, and_, or_
+from sqlalchemy.orm import selectinload
 
 from app.database import get_session
 from app.dependencies import get_current_user, require_role
@@ -45,6 +46,14 @@ class TicketUpdate(BaseModel):
     category: Optional[str] = None
 
 
+class CustomerOut(BaseModel):
+    id: str
+    name: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    channel_customer_id: Optional[str] = None
+
+
 class TicketOut(BaseModel):
     id: str
     ref: str
@@ -60,19 +69,30 @@ class TicketOut(BaseModel):
     ai_confidence: Optional[float]
     customer_id: str
     agent_id: Optional[str]
+    customer: Optional[CustomerOut] = None
     created_at: datetime
     updated_at: datetime
 
     @classmethod
-    def from_orm(cls, t: Ticket) -> "TicketOut":
+    def from_orm(cls, t: Ticket, customer_obj: Optional[User] = None) -> "TicketOut":
+        cust_out = None
+        cust = customer_obj or getattr(t, 'customer', None)
+        if cust:
+            cust_out = CustomerOut(
+                id=str(cust.id),
+                name=cust.name,
+                email=cust.email,
+                phone=cust.phone,
+                channel_customer_id=cust.channel_customer_id
+            )
         return cls(
             id=str(t.id),
             ref=t.ref,
             subject=t.subject,
             category=t.category,
-            channel=t.channel.value,
-            status=t.status.value,
-            priority=t.priority.value,
+            channel=t.channel.value if hasattr(t.channel, 'value') else str(t.channel),
+            status=t.status.value if hasattr(t.status, 'value') else str(t.status),
+            priority=t.priority.value if hasattr(t.priority, 'value') else str(t.priority),
             sla_due_at=t.sla_due_at,
             sla_breached=t.sla_breached,
             ai_resolved=t.ai_resolved,
@@ -80,6 +100,7 @@ class TicketOut(BaseModel):
             ai_confidence=t.ai_confidence,
             customer_id=str(t.customer_id),
             agent_id=str(t.agent_id) if t.agent_id else None,
+            customer=cust_out,
             created_at=t.created_at,
             updated_at=t.updated_at,
         )
@@ -210,7 +231,7 @@ async def list_tickets(
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ):
-    stmt = select(Ticket).where(Ticket.deleted_at.is_(None))
+    stmt = select(Ticket).where(Ticket.deleted_at.is_(None)).options(selectinload(Ticket.customer))
 
     # Ownership: customers only see their own tickets
     if current_user.role == UserRole.customer:
@@ -235,7 +256,9 @@ async def get_ticket(
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ):
-    ticket = await session.get(Ticket, ticket_id)
+    stmt = select(Ticket).where(Ticket.id == ticket_id).options(selectinload(Ticket.customer))
+    result = await session.exec(stmt)
+    ticket = result.first()
     if not ticket or ticket.deleted_at:
         raise HTTPException(status_code=404, detail="Ticket not found")
     # Customers can only see their own tickets

@@ -13,6 +13,7 @@ import {
 } from 'lucide-react'
 
 import UnifiedInbox from '../../components/UnifiedInbox'
+import WhatsAppInbox from '../../components/WhatsAppInbox'
 import TicketDetail from '../../components/TicketDetail'
 import AdminOverview from './AdminOverview'
 import UserManagement from './UserManagement'
@@ -21,6 +22,7 @@ import HelpCenterMgmt from './HelpCenterMgmt'
 import AISettings from './AISettings'
 import RolesPermissions from './RolesPermissions'
 import SystemSettings from './SystemSettings'
+import { Smartphone } from 'lucide-react'
 
 export default function AdminLayout() {
   const { role, logout, name, setRole, isAuthenticated } = useAuthStore()
@@ -40,6 +42,7 @@ export default function AdminLayout() {
 
   const navItems = [
     { label: 'Dashboard', path: '/admin', icon: LayoutDashboard, exact: true },
+    { label: 'WhatsApp Inbox', path: '/admin/whatsapp', icon: Smartphone },
     { label: 'User Management', path: '/admin/users', icon: Users },
     { label: 'Channel Integrations', path: '/admin/channels', icon: Link2 },
     { label: 'Help Center Mgmt', path: '/admin/help-center', icon: BookOpen },
@@ -141,6 +144,7 @@ export default function AdminLayout() {
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <Routes>
           <Route path="/" element={<AdminOverview />} />
+          <Route path="/whatsapp" element={<WhatsAppInbox basePath="/admin" />} />
           <Route path="/users" element={<UserManagement />} />
           <Route path="/directory" element={<UserManagement />} />
           <Route path="/channels" element={<ChannelIntegrations />} />

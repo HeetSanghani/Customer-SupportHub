@@ -52,6 +52,7 @@ class Settings(BaseSettings):
     meta_verify_token: str = "supporthub_verify"
     meta_app_token: str = ""
     whatsapp_phone_id: str = ""
+    whatsapp_access_token: str = ""
     page_access_token: str = ""
     ig_page_id: str = ""
     fb_page_id: str = ""

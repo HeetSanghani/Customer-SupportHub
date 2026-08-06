@@ -179,3 +179,51 @@ User Question: {user_query}
                 
     return res.text
 
+
+async def generate_ai_ticket_subject(session, ticket_id) -> str:
+    """Analyzes the conversation transcript of a ticket and generates a concise, descriptive subject (3-6 words) using Gemini."""
+    from sqlalchemy import select
+    from app.models import Ticket, Message
+    import uuid
+
+    try:
+        ticket_uuid = uuid.UUID(ticket_id) if isinstance(ticket_id, str) else ticket_id
+        ticket = await session.get(Ticket, ticket_uuid)
+        if not ticket:
+            return ""
+
+        stmt = select(Message).where(Message.ticket_id == ticket_uuid).order_by(Message.created_at.asc())
+        messages = (await session.execute(stmt)).scalars().all()
+        if not messages:
+            return ""
+
+        conversation_lines = []
+        for m in messages:
+            sender = m.sender_type.value if hasattr(m.sender_type, "value") else str(m.sender_type)
+            if m.body and m.body.strip():
+                conversation_lines.append(f"{sender.capitalize()}: {m.body.strip()}")
+
+        if not conversation_lines:
+            return ""
+
+        transcript = "\n".join(conversation_lines[-12:])
+
+        prompt = f"""Analyze the following customer support conversation and generate a concise, highly descriptive subject line (3 to 6 words maximum) that accurately summarizes the main topic of the conversation.
+Do NOT use quotes, markdown, or trailing periods. Respond ONLY with the subject title.
+
+Conversation:
+{transcript}
+"""
+        model = genai.GenerativeModel("gemini-flash-lite-latest")
+        res = await model.generate_content_async(prompt)
+        ai_subject = res.text.strip().replace('"', '').replace('*', '').strip()
+        if ai_subject and len(ai_subject) >= 3:
+            ticket.subject = ai_subject
+            session.add(ticket)
+            await session.commit()
+            return ai_subject
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning("Failed to auto-generate AI ticket subject: %s", e)
+    return ""
+
