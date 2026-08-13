@@ -123,13 +123,45 @@ async def seed_data():
                 status=st["status"],
                 priority=st["priority"],
                 ai_resolved=st["ai_resolved"],
-                created_at=datetime.now(timezone.utc) - timedelta(hours=random.randint(1, 120))
+                created_at=datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=random.randint(1, 120))
             )
             session.add(ticket)
+            await session.flush()
+            await session.refresh(ticket)
             created_tickets.append(ticket)
 
+            # Also create realistic conversation messages so tickets are never empty
+            from app.models import Message, SenderType
+            cust_msg = Message(
+                ticket_id=ticket.id,
+                sender_id=cust.id,
+                sender_type=SenderType.customer,
+                body=f"Hi, I need help with: {st['subject']}. Could you please assist?",
+                created_at=ticket.created_at
+            )
+            session.add(cust_msg)
+
+            if st["status"] in (TicketStatus.resolved, TicketStatus.closed):
+                agent_msg = Message(
+                    ticket_id=ticket.id,
+                    sender_id=ag.id if ag else None,
+                    sender_type=SenderType.ai if st["ai_resolved"] else SenderType.agent,
+                    body=f"Hello {cust.name}! I have reviewed your request regarding '{st['subject']}' and applied the necessary resolution.",
+                    created_at=ticket.created_at + timedelta(minutes=15)
+                )
+                session.add(agent_msg)
+            elif st["status"] == TicketStatus.waiting:
+                agent_msg = Message(
+                    ticket_id=ticket.id,
+                    sender_id=ag.id if ag else None,
+                    sender_type=SenderType.agent,
+                    body=f"Hello {cust.name}, we are looking into this for you. Could you provide a bit more detail?",
+                    created_at=ticket.created_at + timedelta(minutes=10)
+                )
+                session.add(agent_msg)
+
         await session.commit()
-        print(f"Created {len(created_tickets)} sample tickets across channels.")
+        print(f"Created {len(created_tickets)} sample tickets across channels with conversation messages.")
 
         # 3. Add CSAT Ratings for resolved/closed tickets
         r_all_tickets = await session.exec(select(Ticket))

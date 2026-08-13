@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { adminApi } from '../../api/admin'
-import { Mail, MessageSquare, Phone, Instagram, Facebook, Plus, X, AlertCircle, Settings2, Trash2, Key, Link2 } from 'lucide-react'
+import { Mail, MessageSquare, Phone, Instagram, Facebook, Plus, X, AlertCircle, Settings2, Trash2, Key, Link2, ShieldCheck, CheckCircle2, ShieldAlert, RefreshCw, Check } from 'lucide-react'
 
 const CHANNEL_ICONS = {
   email: { icon: Mail, color: 'bg-blue-50 text-blue-500' },
@@ -54,6 +54,126 @@ export default function ChannelIntegrations() {
   const [activeTab, setActiveTab] = useState('general')
   const [copySuccess, setCopySuccess] = useState(false)
   const [testResult, setTestResult] = useState(null)
+
+  // WhatsApp Access Token Modal State
+  const [isWaTokenModalOpen, setIsWaTokenModalOpen] = useState(false)
+  const [waConfigForm, setWaConfigForm] = useState({
+    whatsapp_access_token: '',
+    whatsapp_phone_id: '',
+    whatsapp_verify_token: '',
+  })
+  const [isTestingWaToken, setIsTestingWaToken] = useState(false)
+  const [isSavingWaToken, setIsSavingWaToken] = useState(false)
+  const [waTokenTestResult, setWaTokenTestResult] = useState(null)
+  const [waTokenSaveResult, setWaTokenSaveResult] = useState(null)
+
+  const openWhatsAppTokenModal = async () => {
+    setIsWaTokenModalOpen(true)
+    setWaTokenTestResult(null)
+    setWaTokenSaveResult(null)
+    try {
+      const res = await adminApi.getWhatsAppConfig()
+      setWaConfigForm({
+        whatsapp_access_token: res.data.whatsapp_access_token || '',
+        whatsapp_phone_id: res.data.whatsapp_phone_id || '',
+        whatsapp_verify_token: res.data.whatsapp_verify_token || '',
+      })
+    } catch (e) {
+      console.error('Failed to fetch WhatsApp config:', e)
+    }
+  }
+
+  const handleSaveWaToken = async (e) => {
+    e.preventDefault()
+    setIsSavingWaToken(true)
+    setWaTokenSaveResult(null)
+    try {
+      const res = await adminApi.updateWhatsAppConfig(waConfigForm)
+      setWaTokenSaveResult({ status: 'success', message: res.data.message })
+      queryClient.invalidateQueries(['admin-channels'])
+    } catch (err) {
+      setWaTokenSaveResult({ status: 'error', message: err.response?.data?.detail || 'Failed to update WhatsApp Access Token.' })
+    } finally {
+      setIsSavingWaToken(false)
+    }
+  }
+
+  const handleTestWaToken = async () => {
+    setIsTestingWaToken(true)
+    setWaTokenTestResult(null)
+    try {
+      const res = await adminApi.testWhatsAppConfig(waConfigForm)
+      setWaTokenTestResult(res.data)
+    } catch (err) {
+      setWaTokenTestResult({
+        status: 'error',
+        connected: false,
+        message: err.response?.data?.detail || 'Token testing failed. Please verify credentials.'
+      })
+    } finally {
+      setIsTestingWaToken(false)
+    }
+  }
+
+  // Instagram Access Token Modal State
+  const [isIgTokenModalOpen, setIsIgTokenModalOpen] = useState(false)
+  const [igConfigForm, setIgConfigForm] = useState({
+    instagram_access_token: '',
+    instagram_account_id: '',
+    instagram_verify_token: '',
+  })
+  const [isTestingIgToken, setIsTestingIgToken] = useState(false)
+  const [isSavingIgToken, setIsSavingIgToken] = useState(false)
+  const [igTokenTestResult, setIgTokenTestResult] = useState(null)
+  const [igTokenSaveResult, setIgTokenSaveResult] = useState(null)
+
+  const openInstagramTokenModal = async () => {
+    setIsIgTokenModalOpen(true)
+    setIgTokenTestResult(null)
+    setIgTokenSaveResult(null)
+    try {
+      const res = await adminApi.getInstagramConfig()
+      setIgConfigForm({
+        instagram_access_token: res.data.instagram_access_token || '',
+        instagram_account_id: res.data.instagram_account_id || '',
+        instagram_verify_token: res.data.instagram_verify_token || '',
+      })
+    } catch (e) {
+      console.error('Failed to fetch Instagram config:', e)
+    }
+  }
+
+  const handleSaveIgToken = async (e) => {
+    e.preventDefault()
+    setIsSavingIgToken(true)
+    setIgTokenSaveResult(null)
+    try {
+      const res = await adminApi.updateInstagramConfig(igConfigForm)
+      setIgTokenSaveResult({ status: 'success', message: res.data.message })
+      queryClient.invalidateQueries(['admin-channels'])
+    } catch (err) {
+      setIgTokenSaveResult({ status: 'error', message: err.response?.data?.detail || 'Failed to update Instagram Access Token.' })
+    } finally {
+      setIsSavingIgToken(false)
+    }
+  }
+
+  const handleTestIgToken = async () => {
+    setIsTestingIgToken(true)
+    setIgTokenTestResult(null)
+    try {
+      const res = await adminApi.testInstagramConfig(igConfigForm)
+      setIgTokenTestResult(res.data)
+    } catch (err) {
+      setIgTokenTestResult({
+        status: 'error',
+        connected: false,
+        message: err.response?.data?.detail || 'Token testing failed. Please verify credentials.'
+      })
+    } finally {
+      setIsTestingIgToken(false)
+    }
+  }
 
   // Fetch channels from backend
   const { data: channels = [], isLoading } = useQuery({
@@ -273,6 +393,24 @@ export default function ChannelIntegrations() {
                       className="px-3 py-2 rounded-xl text-xs font-bold bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 transition-colors flex items-center gap-1"
                     >
                       <Key size={14} /> Test
+                    </button>
+                  )}
+                  {channel.channel_type === 'whatsapp' && (
+                    <button
+                      onClick={() => openWhatsAppTokenModal()}
+                      title="Update & Test WhatsApp Access Token"
+                      className="px-3 py-2 rounded-xl text-xs font-bold bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 transition-colors flex items-center gap-1"
+                    >
+                      <Key size={14} /> Token & Test
+                    </button>
+                  )}
+                  {channel.channel_type === 'instagram' && (
+                    <button
+                      onClick={() => openInstagramTokenModal()}
+                      title="Update & Test Instagram Access Token"
+                      className="px-3 py-2 rounded-xl text-xs font-bold bg-pink-50 hover:bg-pink-100 text-pink-700 border border-pink-200 transition-colors flex items-center gap-1"
+                    >
+                      <Key size={14} /> Token & Test
                     </button>
                   )}
                 </div>
@@ -606,6 +744,286 @@ export default function ChannelIntegrations() {
                     className="px-4 py-2 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl disabled:opacity-50"
                   >
                     {updateChannelMutation.isPending ? 'Saving...' : 'Save Settings'}
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* WHATSAPP ACCESS TOKEN & CREDENTIALS MANAGEMENT MODAL */}
+      {isWaTokenModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden border border-[#E5E7F3] animate-fadeIn">
+            <div className="px-6 py-4 bg-emerald-600 text-white flex justify-between items-center">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-white/20 flex items-center justify-center">
+                  <Key size={18} />
+                </div>
+                <div>
+                  <h3 className="font-bold text-base font-['Plus_Jakarta_Sans']">Meta WhatsApp Access Token</h3>
+                  <p className="text-[11px] text-emerald-100 font-medium">Auto-updates backend .env file & database</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setIsWaTokenModalOpen(false)}
+                className="text-emerald-100 hover:text-white p-1 rounded-lg hover:bg-white/10 transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveWaToken} className="p-6 space-y-4 text-xs">
+              {waTokenSaveResult && (
+                <div className={`p-3.5 rounded-xl border flex items-start gap-2.5 font-semibold text-xs ${
+                  waTokenSaveResult.status === 'success' 
+                    ? 'bg-emerald-50 text-emerald-800 border-emerald-200' 
+                    : 'bg-rose-50 text-rose-800 border-rose-200'
+                }`}>
+                  {waTokenSaveResult.status === 'success' ? <CheckCircle2 size={18} className="text-emerald-600 shrink-0 mt-0.5" /> : <AlertCircle size={18} className="text-rose-600 shrink-0 mt-0.5" />}
+                  <div>
+                    <div>{waTokenSaveResult.message}</div>
+                    {waTokenSaveResult.status === 'success' && (
+                      <div className="text-[10px] text-emerald-700 font-normal mt-0.5">
+                        Runtime environment & backend .env file updated. Changes applied immediately.
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {waTokenTestResult && (
+                <div className={`p-3.5 rounded-xl border flex items-start gap-2.5 font-semibold text-xs ${
+                  waTokenTestResult.connected 
+                    ? 'bg-emerald-50 text-emerald-900 border-emerald-300' 
+                    : 'bg-rose-50 text-rose-900 border-rose-300'
+                }`}>
+                  {waTokenTestResult.connected ? <CheckCircle2 size={18} className="text-emerald-600 shrink-0 mt-0.5" /> : <ShieldAlert size={18} className="text-rose-600 shrink-0 mt-0.5" />}
+                  <div className="space-y-1">
+                    <div className="font-bold">{waTokenTestResult.message}</div>
+                    {waTokenTestResult.details && (
+                      <div className="text-[11px] font-mono text-emerald-800 bg-white/70 p-2 rounded-lg border border-emerald-200 space-y-0.5">
+                        <div>Account ID: {waTokenTestResult.details.id}</div>
+                        <div>Display Phone: {waTokenTestResult.details.display_phone_number}</div>
+                        <div>Verified Name: {waTokenTestResult.details.verified_name}</div>
+                        <div>Quality Rating: <span className="font-bold text-emerald-700">{waTokenTestResult.details.quality_rating}</span></div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              <div>
+                <label className="block font-bold text-[#6C7089] uppercase tracking-wider text-[10px] mb-1">
+                  WhatsApp Access Token
+                </label>
+                <textarea
+                  rows={3}
+                  value={waConfigForm.whatsapp_access_token}
+                  onChange={e => setWaConfigForm({ ...waConfigForm, whatsapp_access_token: e.target.value })}
+                  placeholder="EAAPcP..."
+                  className="w-full bg-[#F6F7FC] border border-[#E5E7F3] rounded-xl p-3 font-mono text-xs outline-none focus:border-emerald-500 focus:bg-white transition-all"
+                  required
+                />
+                <p className="text-[10px] text-[#9598B0] mt-1">
+                  Get token from Meta Developer Portal &gt; WhatsApp &gt; API Setup.
+                </p>
+              </div>
+
+              <div>
+                <label className="block font-bold text-[#6C7089] uppercase tracking-wider text-[10px] mb-1">
+                  WhatsApp Phone Number ID
+                </label>
+                <input
+                  type="text"
+                  value={waConfigForm.whatsapp_phone_id}
+                  onChange={e => setWaConfigForm({ ...waConfigForm, whatsapp_phone_id: e.target.value })}
+                  placeholder="e.g. 1296854793505632"
+                  className="w-full bg-[#F6F7FC] border border-[#E5E7F3] rounded-xl px-3 py-2 font-mono text-xs outline-none focus:border-emerald-500 focus:bg-white transition-all"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-[#6C7089] uppercase tracking-wider text-[10px] mb-1">
+                  Webhook Verify Token (Optional)
+                </label>
+                <input
+                  type="text"
+                  value={waConfigForm.whatsapp_verify_token}
+                  onChange={e => setWaConfigForm({ ...waConfigForm, whatsapp_verify_token: e.target.value })}
+                  placeholder="your_webhook_verify_token"
+                  className="w-full bg-[#F6F7FC] border border-[#E5E7F3] rounded-xl px-3 py-2 font-mono text-xs outline-none focus:border-emerald-500 focus:bg-white transition-all"
+                />
+              </div>
+
+              <div className="flex justify-between items-center pt-4 border-t border-[#E5E7F3] gap-2">
+                <button
+                  type="button"
+                  onClick={handleTestWaToken}
+                  disabled={isTestingWaToken || !waConfigForm.whatsapp_access_token.trim()}
+                  className="px-4 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-bold rounded-xl border border-emerald-300 transition-all flex items-center gap-1.5 disabled:opacity-50"
+                >
+                  {isTestingWaToken ? <RefreshCw size={14} className="animate-spin" /> : <ShieldCheck size={14} />}
+                  <span>{isTestingWaToken ? 'Testing Meta Token...' : 'Test Connection'}</span>
+                </button>
+
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsWaTokenModalOpen(false)}
+                    className="px-4 py-2 text-xs font-semibold text-gray-600 hover:bg-gray-100 rounded-xl"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSavingWaToken || !waConfigForm.whatsapp_access_token.trim()}
+                    className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl transition-all shadow-xs flex items-center gap-1.5 disabled:opacity-50"
+                  >
+                    {isSavingWaToken ? <RefreshCw size={14} className="animate-spin" /> : <Check size={14} />}
+                    <span>{isSavingWaToken ? 'Updating .env...' : 'Save & Update .env'}</span>
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+      {/* Instagram Access Token & Credentials Modal */}
+      {isIgTokenModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden border border-[#E5E7F3] animate-fadeIn">
+            {/* Modal Header */}
+            <div className="px-6 py-4 bg-gradient-to-r from-rose-500 via-pink-600 to-purple-600 text-white flex justify-between items-center">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-white/20 flex items-center justify-center">
+                  <Instagram size={18} />
+                </div>
+                <div>
+                  <h3 className="font-bold text-base font-['Plus_Jakarta_Sans']">Meta Instagram Access Token</h3>
+                  <p className="text-[11px] text-pink-100 font-medium">Updates .env file & database automatically</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setIsIgTokenModalOpen(false)}
+                className="text-pink-100 hover:text-white p-1 rounded-lg hover:bg-white/10 transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveIgToken} className="p-6 space-y-4 text-xs">
+              {/* Save Alert Status */}
+              {igTokenSaveResult && (
+                <div className={`p-3.5 rounded-xl border flex items-start gap-2.5 font-semibold text-xs ${
+                  igTokenSaveResult.status === 'success' 
+                    ? 'bg-emerald-50 text-emerald-800 border-emerald-200' 
+                    : 'bg-rose-50 text-rose-800 border-rose-200'
+                }`}>
+                  {igTokenSaveResult.status === 'success' ? <CheckCircle2 size={18} className="text-emerald-600 shrink-0 mt-0.5" /> : <AlertCircle size={18} className="text-rose-600 shrink-0 mt-0.5" />}
+                  <div>
+                    <div>{igTokenSaveResult.message}</div>
+                    {igTokenSaveResult.status === 'success' && (
+                      <div className="text-[10px] text-emerald-700 font-normal mt-0.5">
+                        Runtime environment & backend .env file updated. Changes applied immediately.
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Test Connection Alert Status */}
+              {igTokenTestResult && (
+                <div className={`p-3.5 rounded-xl border flex items-start gap-2.5 font-semibold text-xs ${
+                  igTokenTestResult.connected 
+                    ? 'bg-pink-50 text-pink-900 border-pink-300' 
+                    : 'bg-rose-50 text-rose-900 border-rose-300'
+                }`}>
+                  {igTokenTestResult.connected ? <CheckCircle2 size={18} className="text-pink-600 shrink-0 mt-0.5" /> : <ShieldAlert size={18} className="text-rose-600 shrink-0 mt-0.5" />}
+                  <div className="space-y-1">
+                    <div className="font-bold">{igTokenTestResult.message}</div>
+                    {igTokenTestResult.details && (
+                      <div className="text-[11px] font-mono text-pink-800 bg-white/70 p-2 rounded-lg border border-pink-200 space-y-0.5">
+                        <div>Account ID: {igTokenTestResult.details.id}</div>
+                        <div>Username: @{igTokenTestResult.details.username}</div>
+                        <div>Account Type: <span className="font-bold text-pink-700">{igTokenTestResult.details.account_type}</span></div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              <div>
+                <label className="block font-bold text-[#6C7089] uppercase tracking-wider text-[10px] mb-1">
+                  Instagram Access Token
+                </label>
+                <textarea
+                  rows={3}
+                  value={igConfigForm.instagram_access_token}
+                  onChange={e => setIgConfigForm({ ...igConfigForm, instagram_access_token: e.target.value })}
+                  placeholder="EAAPcP..."
+                  className="w-full bg-[#F6F7FC] border border-[#E5E7F3] rounded-xl p-3 font-mono text-xs outline-none focus:border-pink-500 focus:bg-white transition-all"
+                  required
+                />
+                <p className="text-[10px] text-[#9598B0] mt-1">
+                  From Meta Developer Portal &gt; Instagram API &gt; User Token.
+                </p>
+              </div>
+
+              <div>
+                <label className="block font-bold text-[#6C7089] uppercase tracking-wider text-[10px] mb-1">
+                  Instagram Professional Account ID
+                </label>
+                <input
+                  type="text"
+                  value={igConfigForm.instagram_account_id}
+                  onChange={e => setIgConfigForm({ ...igConfigForm, instagram_account_id: e.target.value })}
+                  placeholder="e.g. 17841400000000000"
+                  className="w-full bg-[#F6F7FC] border border-[#E5E7F3] rounded-xl px-3 py-2 font-mono text-xs outline-none focus:border-pink-500 focus:bg-white transition-all"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-[#6C7089] uppercase tracking-wider text-[10px] mb-1">
+                  Webhook Verify Token (Optional)
+                </label>
+                <input
+                  type="text"
+                  value={igConfigForm.instagram_verify_token}
+                  onChange={e => setIgConfigForm({ ...igConfigForm, instagram_verify_token: e.target.value })}
+                  placeholder="your_webhook_verify_token"
+                  className="w-full bg-[#F6F7FC] border border-[#E5E7F3] rounded-xl px-3 py-2 font-mono text-xs outline-none focus:border-pink-500 focus:bg-white transition-all"
+                />
+              </div>
+
+              <div className="flex justify-between items-center pt-4 border-t border-[#E5E7F3] gap-2">
+                <button
+                  type="button"
+                  onClick={handleTestIgToken}
+                  disabled={isTestingIgToken || !igConfigForm.instagram_access_token.trim()}
+                  className="px-4 py-2 bg-pink-50 hover:bg-pink-100 text-pink-800 font-bold rounded-xl border border-pink-300 transition-all flex items-center gap-1.5 disabled:opacity-50"
+                >
+                  {isTestingIgToken ? <RefreshCw size={14} className="animate-spin" /> : <ShieldCheck size={14} />}
+                  <span>{isTestingIgToken ? 'Testing Meta Token...' : 'Test Connection'}</span>
+                </button>
+
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsIgTokenModalOpen(false)}
+                    className="px-4 py-2 text-xs font-semibold text-gray-600 hover:bg-gray-100 rounded-xl"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSavingIgToken || !igConfigForm.instagram_access_token.trim()}
+                    className="px-5 py-2 bg-gradient-to-r from-rose-500 to-purple-600 hover:opacity-90 text-white font-bold rounded-xl transition-all shadow-xs flex items-center gap-1.5 disabled:opacity-50"
+                  >
+                    {isSavingIgToken ? <RefreshCw size={14} className="animate-spin" /> : <Check size={14} />}
+                    <span>{isSavingIgToken ? 'Updating .env...' : 'Save & Update .env'}</span>
                   </button>
                 </div>
               </div>

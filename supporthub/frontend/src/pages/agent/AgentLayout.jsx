@@ -3,24 +3,33 @@ import { Routes, Route, Navigate, Link, useNavigate, useLocation } from 'react-r
 import { useAuthStore } from '../../store/authStore'
 import { useQuery } from '@tanstack/react-query'
 import { ticketsApi } from '../../api/tickets'
-import { Inbox, CheckCircle, Clock, LogOut, Search, Filter, LayoutDashboard, ListFilter, Zap, BookOpen, MessageSquare } from 'lucide-react'
+import { Inbox, CheckCircle, Clock, LogOut, Search, Filter, LayoutDashboard, ListFilter, Zap, BookOpen, MessageSquare, Mail, Smartphone, Instagram } from 'lucide-react'
 
 import UnifiedInbox from '../../components/UnifiedInbox'
 import WhatsAppInbox from '../../components/WhatsAppInbox'
+import EmailInbox from '../../components/EmailInbox'
+import InstagramInbox from '../../components/InstagramInbox'
 import AgentOverview from './AgentOverview'
 import AgentTicketQueue from './AgentTicketQueue'
 import AgentQuickReplies from './AgentQuickReplies'
 import AgentHelpCenter from './AgentHelpCenter'
 import TicketDetail from '../../components/TicketDetail'
-import { Smartphone } from 'lucide-react'
 
 export default function AgentLayout() {
-  const { role, logout, name } = useAuthStore()
+  const { role, logout, name, isAuthenticated } = useAuthStore()
   const location = useLocation()
+  const navigate = useNavigate()
   const [agentStatus, setAgentStatus] = useState('online') // 'online' | 'away' | 'offline'
   const [showStatusDropdown, setShowStatusDropdown] = useState(false)
 
-  if (role !== 'agent' && role !== 'admin' && role !== 'manager') return <Navigate to="/" replace />
+  if (!isAuthenticated || (role !== 'agent' && role !== 'admin' && role !== 'manager')) {
+    return <Navigate to="/login" replace />
+  }
+
+  const handleLogout = () => {
+    logout()
+    navigate('/login', { replace: true })
+  }
 
   const getStatusBadge = () => {
     switch (agentStatus) {
@@ -96,6 +105,14 @@ export default function AgentLayout() {
           <Link to="/agent/whatsapp" className={`flex items-center justify-between px-3 py-2 rounded-lg text-xs font-semibold transition-colors ${location.pathname === '/agent/whatsapp' ? 'bg-emerald-600 text-white shadow-sm' : 'text-[#9598B0] hover:bg-white/5'}`}>
             <div className="flex items-center gap-2.5"><Smartphone size={16} className="text-emerald-400" /> WhatsApp Inbox</div>
           </Link>
+
+          <Link to="/agent/instagram" className={`flex items-center justify-between px-3 py-2 rounded-lg text-xs font-semibold transition-colors ${location.pathname === '/agent/instagram' ? 'bg-gradient-to-r from-rose-500 to-purple-600 text-white shadow-sm' : 'text-[#9598B0] hover:bg-white/5'}`}>
+            <div className="flex items-center gap-2.5"><Instagram size={16} className="text-pink-400" /> Instagram Inbox</div>
+          </Link>
+
+          <Link to="/agent/email" className={`flex items-center justify-between px-3 py-2 rounded-lg text-xs font-semibold transition-colors ${location.pathname === '/agent/email' ? 'bg-indigo-600 text-white shadow-sm' : 'text-[#9598B0] hover:bg-white/5'}`}>
+            <div className="flex items-center gap-2.5"><Mail size={16} className="text-indigo-400" /> Email Inbox</div>
+          </Link>
           
           <Link to="/agent/inbox" className={`flex items-center justify-between px-3 py-2 rounded-lg text-xs font-semibold transition-colors ${location.pathname === '/agent/inbox' ? 'bg-[#6366F1] text-white shadow-sm' : 'text-[#9598B0] hover:bg-white/5'}`}>
             <div className="flex items-center gap-2.5"><MessageSquare size={16} /> All Tickets</div>
@@ -135,7 +152,7 @@ export default function AgentLayout() {
                 <div className="text-[9px] text-[#9598B0]">Support Agent</div>
               </div>
             </div>
-            <button onClick={logout} className="text-[#9598B0] hover:text-white p-1.5 rounded-md hover:bg-white/10 transition-colors" title="Log out">
+            <button onClick={handleLogout} className="text-[#9598B0] hover:text-white p-1.5 rounded-md hover:bg-white/10 transition-colors" title="Log out">
               <LogOut size={16} />
             </button>
           </div>
@@ -147,6 +164,8 @@ export default function AgentLayout() {
         <Routes>
           <Route path="/" element={<AgentOverview />} />
           <Route path="/whatsapp" element={<WhatsAppInbox basePath="/agent" />} />
+          <Route path="/instagram" element={<InstagramInbox basePath="/agent" />} />
+          <Route path="/email" element={<EmailInbox basePath="/agent" />} />
           <Route path="/inbox" element={<UnifiedInbox filter="all" basePath="/agent" />} />
           <Route path="/active" element={<UnifiedInbox filter="active" basePath="/agent" />} />
           <Route path="/queue" element={<AgentTicketQueue />} />

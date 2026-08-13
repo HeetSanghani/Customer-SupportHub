@@ -1,24 +1,35 @@
 import { useState, useEffect } from 'react'
-import { Routes, Route, Navigate, Link, useLocation } from 'react-router-dom'
+import { Routes, Route, Navigate, Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../../store/authStore'
 import { LogOut, LayoutDashboard, Settings, BookOpen, Inbox, Clock, CheckCircle, ChevronDown } from 'lucide-react'
 import KnowledgeBase from './KnowledgeBase'
 import ManagerOverview from './ManagerOverview'
 import UnifiedInbox from '../../components/UnifiedInbox'
 import WhatsAppInbox from '../../components/WhatsAppInbox'
+import EmailInbox from '../../components/EmailInbox'
+import InstagramInbox from '../../components/InstagramInbox'
 import TicketDetail from '../../components/TicketDetail'
 import ManagerAnalytics from './ManagerAnalytics'
 import ManagerAgentPerformance from './ManagerAgentPerformance'
 import ManagerSLADashboard from './ManagerSLADashboard'
 import ManagerTicketReports from './ManagerTicketReports'
 import ManagerWorkflowAutomation from './ManagerWorkflowAutomation'
-import { BarChart3, Users, ShieldAlert, FileText, GitBranch, Smartphone } from 'lucide-react'
+import { BarChart3, Users, ShieldAlert, FileText, GitBranch, Smartphone, Mail, Instagram } from 'lucide-react'
+
 export default function ManagerLayout() {
-  const { role, logout, name } = useAuthStore()
+  const { role, logout, name, isAuthenticated } = useAuthStore()
   const location = useLocation()
+  const navigate = useNavigate()
   const [inboxExpanded, setInboxExpanded] = useState(false)
   
-  if (role !== 'manager' && role !== 'admin') return <Navigate to="/" replace />
+  if (!isAuthenticated || (role !== 'manager' && role !== 'admin')) {
+    return <Navigate to="/login" replace />
+  }
+
+  const handleLogout = () => {
+    logout()
+    navigate('/login', { replace: true })
+  }
   
   const isInboxActive = location.pathname.startsWith('/manager/inbox') || location.pathname.startsWith('/manager/tickets')
 
@@ -74,6 +85,14 @@ export default function ManagerLayout() {
             <Smartphone size={18} className="text-emerald-400" /> WhatsApp Inbox
           </Link>
 
+          <Link to="/manager/instagram" className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold transition-colors ${location.pathname === '/manager/instagram' ? 'bg-gradient-to-r from-rose-500 to-purple-600 text-white shadow-sm' : 'text-[#9598B0] hover:bg-white/5'}`}>
+            <Instagram size={18} className="text-pink-400" /> Instagram Inbox
+          </Link>
+
+          <Link to="/manager/email" className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold transition-colors ${location.pathname === '/manager/email' ? 'bg-indigo-600 text-white shadow-sm' : 'text-[#9598B0] hover:bg-white/5'}`}>
+            <Mail size={18} className="text-indigo-400" /> Email Inbox
+          </Link>
+
           {/* Team Inbox Accordion */}
           <div>
             <button
@@ -123,7 +142,7 @@ export default function ManagerLayout() {
         <div className="p-4 border-t border-white/10">
           <div className="flex items-center justify-between">
             <div className="text-sm font-semibold truncate">{name}</div>
-            <button onClick={logout} className="text-[#9598B0] hover:text-white p-1.5 rounded-md hover:bg-white/10 transition-colors" title="Log out">
+            <button onClick={handleLogout} className="text-[#9598B0] hover:text-white p-1.5 rounded-md hover:bg-white/10 transition-colors" title="Log out">
               <LogOut size={16} />
             </button>
           </div>
@@ -135,6 +154,8 @@ export default function ManagerLayout() {
         <Routes>
           <Route path="/" element={<ManagerOverview />} />
           <Route path="/whatsapp" element={<WhatsAppInbox basePath="/manager" />} />
+          <Route path="/instagram" element={<InstagramInbox basePath="/manager" />} />
+          <Route path="/email" element={<EmailInbox basePath="/manager" />} />
           <Route path="/inbox" element={<UnifiedInbox filter="all" basePath="/manager" />} />
           <Route path="/inbox/all" element={<UnifiedInbox filter="all" basePath="/manager" />} />
           <Route path="/inbox/active" element={<UnifiedInbox filter="active" basePath="/manager" />} />

@@ -55,7 +55,36 @@ async def process_whatsapp_payload(
         ai_orchestrator = AIOrchestrator(session=db_session)
         whatsapp_sender = WhatsAppSender(session=db_session)
 
+        # Download media attachments before processing
+        from app.services.whatsapp.client import MetaWhatsAppClient
+        whatsapp_client = MetaWhatsAppClient()
+
+        from dataclasses import replace
+
         for incoming in parse_result.messages:
+            if incoming.attachments:
+                new_attachments = []
+                new_text = incoming.text or ""
+                
+                for attachment in incoming.attachments:
+                    if attachment.media_id:
+                        local_url, filename = await whatsapp_client.download_media(attachment.media_id, attachment.mime_type)
+                        if local_url and filename:
+                            new_attachment = replace(
+                                attachment,
+                                url=local_url,
+                                filename=attachment.filename or filename
+                            )
+                            markdown = f" 📎 [Attachment: {filename}]({local_url})"
+                            new_text += markdown
+                            new_attachments.append(new_attachment)
+                        else:
+                            new_attachments.append(attachment)
+                    else:
+                        new_attachments.append(attachment)
+                        
+                incoming = replace(incoming, text=new_text, attachments=new_attachments)
+
             await _process_single_message(db_session, conv_service, ai_orchestrator, whatsapp_sender, incoming)
 
 

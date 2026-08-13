@@ -253,7 +253,7 @@ export default function UnifiedInbox({ filter, basePath }) {
                       onClick={() => navigate(`${basePath}/tickets/${ticket.id}`)}
                       className="hover:bg-indigo-50/40 transition-colors cursor-pointer"
                     >
-                      <td className="py-4 px-6 font-mono text-[#9598B0] font-medium whitespace-nowrap">
+                      <td className="py-4 px-6 font-mono text-xs font-bold text-slate-800 whitespace-nowrap">
                         {ticket.ref}
                       </td>
                       <td className="py-4 px-6 max-w-xs">

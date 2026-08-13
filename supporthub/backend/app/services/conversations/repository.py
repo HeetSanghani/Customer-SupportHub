@@ -268,6 +268,7 @@ class CustomerRepository:
             password_hash="__channel_customer__",  # not a real password; login not possible
             role=UserRole.customer,
             status=UserStatus.active,
+            avatar_url=None,  # WhatsApp Cloud API does not expose user DP; keep isolated
             channel=channel_type,
             channel_customer_id=incoming.customer_channel_id,
             phone=incoming.customer_channel_id if incoming.channel == Channel.whatsapp else None,
@@ -284,9 +285,6 @@ class CustomerRepository:
     ) -> None:
         """
         Update the customer's display name if WhatsApp provides a new one.
-
-        WHY: WhatsApp users can change their display name. If they do,
-        subsequent messages will carry the new name. We keep the DB in sync.
         """
         if new_name and new_name != customer.name:
             customer.name = new_name

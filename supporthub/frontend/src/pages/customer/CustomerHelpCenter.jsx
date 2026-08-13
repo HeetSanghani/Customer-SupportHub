@@ -254,25 +254,51 @@ export default function CustomerHelpCenter() {
           )}
         </div>
 
-        {/* Live Chat CTA Banner */}
-        <div className="bg-gradient-to-r from-slate-900 to-indigo-950 text-white rounded-3xl p-8 shadow-xl flex flex-col md:flex-row items-center justify-between gap-6 border border-slate-800">
-          <div className="space-y-1.5 text-center md:text-left">
-            <div className="inline-flex items-center gap-1.5 text-xs font-bold text-[#818CF8] bg-indigo-500/10 border border-indigo-500/20 px-3 py-1 rounded-full">
-              <Sparkles size={14} /> 24/7 AI & Human Live Support
+        {/* Support Banners: Live Chat & WhatsApp */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Live Chat Banner */}
+          <div className="bg-gradient-to-r from-slate-900 to-indigo-950 text-white rounded-3xl p-6 shadow-xl flex flex-col justify-between space-y-4 border border-slate-800">
+            <div className="space-y-1.5">
+              <div className="inline-flex items-center gap-1.5 text-[10px] font-bold text-[#818CF8] bg-indigo-500/10 border border-indigo-500/20 px-2.5 py-0.5 rounded-full uppercase tracking-wider">
+                <Sparkles size={12} /> Live Web Chat
+              </div>
+              <h3 className="text-lg font-extrabold tracking-tight">
+                Didn't find your answer?
+              </h3>
+              <p className="text-slate-300 text-xs leading-relaxed">
+                Chat directly with our web AI Assistant and live support agent team in real time.
+              </p>
             </div>
-            <h3 className="text-xl font-extrabold tracking-tight">
-              Didn't find what you were looking for?
-            </h3>
-            <p className="text-slate-300 text-xs max-w-lg">
-              Our AI Assistant and live support team are available 24/7 to resolve your inquiries instantly.
-            </p>
+            <button
+              onClick={() => navigate('/customer/chat')}
+              className="bg-[#6366F1] hover:bg-[#4F46E5] text-white px-5 py-2.5 rounded-xl text-xs font-bold shadow-md hover:shadow-indigo-500/30 transition-all flex items-center justify-center gap-2"
+            >
+              <MessageSquare size={16} /> Open Web Live Chat
+            </button>
           </div>
-          <button
-            onClick={() => navigate('/customer/chat')}
-            className="bg-[#6366F1] hover:bg-[#4F46E5] text-white px-6 py-3 rounded-2xl text-xs font-bold shadow-lg hover:shadow-indigo-500/30 transition-all flex items-center gap-2 whitespace-nowrap"
-          >
-            <MessageSquare size={16} /> Open Live Support Chat
-          </button>
+
+          {/* WhatsApp Support Banner */}
+          <div className="bg-gradient-to-r from-emerald-900 via-teal-950 to-emerald-950 text-white rounded-3xl p-6 shadow-xl flex flex-col justify-between space-y-4 border border-emerald-800/50">
+            <div className="space-y-1.5">
+              <div className="inline-flex items-center gap-1.5 text-[10px] font-bold text-emerald-300 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-0.5 rounded-full uppercase tracking-wider">
+                <Sparkles size={12} /> WhatsApp 24/7 Bot
+              </div>
+              <h3 className="text-lg font-extrabold tracking-tight">
+                Prefer WhatsApp on Mobile?
+              </h3>
+              <p className="text-emerald-100 text-xs leading-relaxed">
+                Send a message to <span className="font-mono font-bold text-emerald-300">+1 555-204-1051</span> to chat with our automated WhatsApp Support Assistant.
+              </p>
+            </div>
+            <a
+              href="https://wa.me/15552041051?text=Hi%20SupportHub%20AI%20Assistant,%20I%20need%20help."
+              target="_blank"
+              rel="noopener noreferrer"
+              className="bg-emerald-500 hover:bg-emerald-600 text-white px-5 py-2.5 rounded-xl text-xs font-bold shadow-md hover:shadow-emerald-500/30 transition-all flex items-center justify-center gap-2"
+            >
+              <span>Launch WhatsApp Chat</span>
+            </a>
+          </div>
         </div>
 
       </div>

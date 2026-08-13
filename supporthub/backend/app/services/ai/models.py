@@ -72,6 +72,11 @@ class LLMContext:
     history: list[dict]           # [{"role": "user"|"assistant", "content": "..."}]
     current_message: str          # The current customer message text
     current_message_type: str     # MessageType value
+    kb_context: Optional[str] = None
+    ticket_subject: Optional[str] = None
+    ticket_category: Optional[str] = None
+    tone: Optional[str] = None
+    image_paths: list[str] = field(default_factory=list)
 
 
 # ─── Prompt ───────────────────────────────────────────────────────────────────
@@ -105,6 +110,7 @@ class Prompt:
     temperature: float = 0.4
     max_tokens: int = 500
     model_name: str = "gemini-flash-lite-latest"
+    image_paths: list[str] = field(default_factory=list)
 
     @property
     def system_hash(self) -> str:

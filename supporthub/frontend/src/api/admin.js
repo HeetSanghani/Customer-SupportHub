@@ -16,4 +16,10 @@ export const adminApi = {
   updateEmailTemplate: (name, data) => client.put(`/admin/email-templates/${name}`, data),
   exportCsatCsv: () => client.get('/admin/reports/csat/export', { responseType: 'blob' }),
   exportPerformanceCsv: () => client.get('/admin/reports/performance/export', { responseType: 'blob' }),
+  getWhatsAppConfig: () => client.get('/admin/whatsapp-config'),
+  updateWhatsAppConfig: (data) => client.post('/admin/whatsapp-config', data),
+  testWhatsAppConfig: (data) => client.post('/admin/whatsapp-config/test', data),
+  getInstagramConfig: () => client.get('/admin/instagram-config'),
+  updateInstagramConfig: (data) => client.post('/admin/instagram-config', data),
+  testInstagramConfig: (data) => client.post('/admin/instagram-config/test', data),
 }

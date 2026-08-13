@@ -17,6 +17,7 @@ from app.dependencies import get_current_user, require_role
 from app.models import (
     AuditLog, Ticket, TicketChannel, TicketPriority, TicketStatus, User, UserRole
 )
+from app.services.ai.orchestrator import AIOrchestrator
 
 router = APIRouter(prefix="/tickets", tags=["tickets"])
 
@@ -52,6 +53,7 @@ class CustomerOut(BaseModel):
     email: Optional[str] = None
     phone: Optional[str] = None
     channel_customer_id: Optional[str] = None
+    avatar_url: Optional[str] = None
 
 
 class TicketOut(BaseModel):
@@ -83,7 +85,8 @@ class TicketOut(BaseModel):
                 name=cust.name,
                 email=cust.email,
                 phone=cust.phone,
-                channel_customer_id=cust.channel_customer_id
+                channel_customer_id=cust.channel_customer_id,
+                avatar_url=cust.avatar_url,
             )
         return cls(
             id=str(t.id),
@@ -293,30 +296,11 @@ async def update_ticket(
     # Auto-generate Resolution Email & 1-Click CSAT Survey if resolved
     new_status_str = str(ticket.status.value if hasattr(ticket.status, 'value') else ticket.status)
     if old_status_str not in ("resolved", "closed") and new_status_str in ("resolved", "closed"):
-        from app.models import Message, SenderType
-        csat_survey_html = f"""
-        <div style="font-family: 'Plus Jakarta Sans', sans-serif; background: #F9FAFB; border: 1px solid #E5E7F3; border-radius: 16px; padding: 20px; margin-top: 10px;">
-          <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
-             <span style="background: #10B981; color: white; padding: 2px 8px; border-radius: 6px; font-weight: bold; font-size: 11px; text-transform: uppercase;">Ticket Resolved</span>
-             <strong style="color: #1C1B2E; font-size: 14px;">Resolution Notice for [{ticket.ref}]</strong>
-          </div>
-          <p style="color: #6C7089; font-size: 13px; margin: 4px 0 16px 0;">Your email support inquiry <strong>"{ticket.subject}"</strong> has been resolved. How would you rate your support experience today?</p>
-          <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-             <a href="http://localhost:8001/api/v1/tickets/{ticket.id}/rate-email?rating=5" target="_blank" style="background: #10B981; color: white; padding: 8px 14px; text-decoration: none; border-radius: 10px; font-weight: bold; font-size: 12px; display: inline-block;">⭐⭐⭐⭐⭐ 5 - Excellent</a>
-             <a href="http://localhost:8001/api/v1/tickets/{ticket.id}/rate-email?rating=4" target="_blank" style="background: #3B82F6; color: white; padding: 8px 14px; text-decoration: none; border-radius: 10px; font-weight: bold; font-size: 12px; display: inline-block;">⭐⭐⭐⭐ 4 - Good</a>
-             <a href="http://localhost:8001/api/v1/tickets/{ticket.id}/rate-email?rating=3" target="_blank" style="background: #F59E0B; color: white; padding: 8px 14px; text-decoration: none; border-radius: 10px; font-weight: bold; font-size: 12px; display: inline-block;">⭐⭐⭐ 3 - Neutral</a>
-             <a href="http://localhost:8001/api/v1/tickets/{ticket.id}/rate-email?rating=1" target="_blank" style="background: #EF4444; color: white; padding: 8px 14px; text-decoration: none; border-radius: 10px; font-weight: bold; font-size: 12px; display: inline-block;">⭐ 1 - Unsatisfied</a>
-          </div>
-          <p style="color: #9598B0; font-size: 11px; margin-top: 14px; margin-bottom: 0;">Need further assistance? Simply reply to this email thread to automatically reopen your ticket.</p>
-        </div>
-        """
-        session.add(Message(
-            ticket_id=ticket.id,
-            sender_id=None,
-            sender_type=SenderType.ai,
-            body=f"Your email inquiry [{ticket.ref}] has been marked as resolved. If your issue is not fully resolved, simply reply to this email to automatically reopen your ticket.",
-            body_html=csat_survey_html
-        ))
+        from app.services.csat_delivery import deliver_csat_survey
+        from app.models import User
+        customer = await session.get(User, ticket.customer_id)
+        if customer:
+            await deliver_csat_survey(session, ticket, customer)
 
     ticket.updated_at = datetime.now()
     session.add(ticket)
@@ -328,7 +312,7 @@ async def update_ticket(
         entity_type="ticket",
         entity_id=str(ticket.id),
         ticket_id=ticket.id,
-        diff_json=f'{{"old_status": "{old_status}", "new_status": "{ticket.status}"}}',
+        diff_json=f'{{"old_status": "{old_status_str}", "new_status": "{ticket.status}"}}',
     ))
     await session.commit()
     await session.refresh(ticket)
@@ -609,6 +593,11 @@ async def upload_ticket_attachment(
 
 class SuggestReplyOut(BaseModel):
     suggestion: str
+    suggested_reply: Optional[str] = None
+    success: bool = True
+    is_fallback: bool = False
+    confidence: float = 1.0
+    latency_ms: int = 0
 
 class SummarizeOut(BaseModel):
     summary: str
@@ -625,6 +614,7 @@ class SimilarTicketOut(BaseModel):
 @router.post("/{ticket_id}/suggest-reply", response_model=SuggestReplyOut)
 async def suggest_reply(
     ticket_id: uuid.UUID,
+    tone: Optional[str] = Query(None),
     current_user: User = Depends(require_role(UserRole.agent)),
     session: AsyncSession = Depends(get_session),
 ):
@@ -635,47 +625,46 @@ async def suggest_reply(
 
     from app.models import Message
     from sqlmodel import select as sql_select
+    from app.services.ai.knowledge_rag import get_relevant_kb_context
+
     msgs_result = await session.exec(
         sql_select(Message)
         .where(Message.ticket_id == ticket_id)
         .order_by(Message.created_at.asc())
-        .limit(20)
+        .limit(30)
     )
-    messages = msgs_result.all()
+    messages = list(msgs_result.all())
 
-    thread_text = "\n".join([
-        f"[{m.sender_type.value.upper()}]: {m.body}"
-        for m in messages if m.body
-    ])
+    customer = None
+    if ticket.customer_id:
+        customer = await session.get(User, ticket.customer_id)
 
-    prompt = f"""You are an expert customer support agent for SupportHub.
-Review this support conversation thread and write a professional, empathetic, concise reply from the agent's perspective.
-The reply should:
-- Directly address the customer's most recent concern
-- Be warm and helpful, not robotic
-- Be 2-4 sentences max
-- NOT start with "I" — start with the customer's concern acknowledgment
-- Do NOT include placeholders like [Agent Name]
+    search_query = f"{ticket.subject} {ticket.category or ''}"
+    if messages:
+        for m in reversed(messages):
+            if m.body and m.body.strip():
+                search_query += f" {m.body.strip()[:100]}"
+                break
 
-Ticket Subject: {ticket.subject}
-Category: {ticket.category}
-Priority: {ticket.priority.value}
+    kb_context = await get_relevant_kb_context(session, search_query)
 
-Conversation Thread:
-{thread_text}
+    orchestrator = AIOrchestrator(session=session)
+    ai_response = await orchestrator.generate_for_ticket(
+        ticket=ticket,
+        messages=messages,
+        customer=customer,
+        kb_context=kb_context,
+        tone=tone or "standard",
+    )
 
-Agent Reply (write only the reply text, nothing else):"""
-
-    try:
-        import asyncio
-        import google.generativeai as genai
-        model = genai.GenerativeModel("gemini-flash-lite-latest")
-        response = await asyncio.to_thread(model.generate_content, prompt)
-        suggestion = response.text.strip()
-    except Exception as e:
-        suggestion = f"Thank you for reaching out regarding '{ticket.subject}'. I'm reviewing your case and will get back to you with a resolution shortly."
-
-    return SuggestReplyOut(suggestion=suggestion)
+    return SuggestReplyOut(
+        suggestion=ai_response.response_text,
+        suggested_reply=ai_response.response_text,
+        success=True,
+        is_fallback=ai_response.is_fallback,
+        confidence=ai_response.confidence,
+        latency_ms=ai_response.latency_ms,
+    )
 
 
 @router.post("/{ticket_id}/summarize", response_model=SummarizeOut)
@@ -797,6 +786,7 @@ async def find_similar_tickets(
         )
         for i, t in enumerate(similar_tickets[:limit])
     ]
+
 
 
 

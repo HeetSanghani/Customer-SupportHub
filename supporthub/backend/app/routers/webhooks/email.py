@@ -58,29 +58,48 @@ async def process_ai_email_reply(ticket_id: uuid.UUID, email_address: str, email
     """
     try:
         async with AsyncSessionLocal() as session:
-            # 1. Fetch conversation history for AI reply
+            # 1. Fetch ticket, user, and conversation history
+            ticket = await session.get(Ticket, ticket_id)
+            if not ticket:
+                return
+            user = await session.get(User, ticket.customer_id)
+            
             history_stmt = select(Message).where(Message.ticket_id == ticket_id).order_by(Message.created_at.asc())
             history_msgs = (await session.exec(history_stmt)).all()
-            conversation_history = [
-                {
-                    "role": "user" if m.sender_type == SenderType.customer else "assistant",
-                    "content": m.body
-                }
-                for m in history_msgs
-            ]
 
-            # 2. Generate AI reply
-            ai_reply_text = await generate_ai_reply(conversation_history)
+            # 2. Generate AI reply using unified orchestrator
+            from app.services.ai.orchestrator import AIOrchestrator
+            from app.services.ai.knowledge_rag import get_relevant_kb_context
 
-            # 3. Save AI reply Message record to database
-            ai_msg = Message(
-                ticket_id=ticket_id,
-                sender_id=None,
-                sender_type=SenderType.ai,
-                body=ai_reply_text,
+            latest_customer_msg = next((m for m in reversed(history_msgs) if m.sender_type == SenderType.customer), None)
+            search_query = latest_customer_msg.body if latest_customer_msg else email_subject
+            kb_context = await get_relevant_kb_context(session, search_query)
+
+            orchestrator = AIOrchestrator(session=session)
+            ai_out = await orchestrator.generate_for_ticket(
+                ticket=ticket,
+                messages=history_msgs,
+                customer=user,
+                kb_context=kb_context,
+                tone="professional",
             )
-            session.add(ai_msg)
-            await session.commit()
+            
+            if isinstance(ai_out, dict):
+                ai_reply_text = ai_out.get("suggested_reply") or ai_out.get("response_text") or ""
+            else:
+                ai_reply_text = getattr(ai_out, "suggested_reply", None) or getattr(ai_out, "response_text", "")
+
+            if ai_reply_text:
+                # 3. Save AI reply Message record to database
+                ai_msg = Message(
+                    ticket_id=ticket_id,
+                    sender_id=None,
+                    sender_type=SenderType.ai,
+                    body=ai_reply_text,
+                )
+                session.add(ai_msg)
+                await session.commit()
+
 
             # 4. Deliver reply back to original sender via Mailgun API
             try:
@@ -138,6 +157,31 @@ async def receive_mailgun_email(
         body_html_raw = form_data.get("body-html") or form_data.get("stripped-html") or None
         raw_body = (stripped_text_raw or body_plain_raw).strip()
         cleaned_body = clean_email_body(raw_body)
+
+        # 2.5 Extract attachments from form_data
+        import os
+        from starlette.datastructures import UploadFile
+        
+        upload_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "uploads"))
+        os.makedirs(upload_dir, exist_ok=True)
+        
+        for key, value in form_data.multi_items():
+            if isinstance(value, UploadFile):
+                try:
+                    content = await value.read()
+                    if content:
+                        ext = os.path.splitext(value.filename)[1] if value.filename else ""
+                        file_uuid = uuid.uuid4().hex
+                        filename = f"{file_uuid}{ext}"
+                        file_path = os.path.join(upload_dir, filename)
+                        with open(file_path, "wb") as f:
+                            f.write(content)
+                        local_url = f"http://localhost:8001/static/uploads/{filename}"
+                        display_name = value.filename or filename
+                        markdown = f" 📎 [Attachment: {display_name}]({local_url})"
+                        cleaned_body = (cleaned_body + markdown).strip()
+                except Exception as e:
+                    logger.error(f"Failed to save email attachment: {e}")
 
         if not cleaned_body and not body_html_raw:
             logger.warning(f"Mailgun webhook from {email_address} contained empty body.")

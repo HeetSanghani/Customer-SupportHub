@@ -17,7 +17,8 @@ export default function TicketDetail({ basePath }) {
   
   const [messages, setMessages] = useState([])
   const [inputText, setInputText] = useState('')
-  const [ws, setWs] = useState(null)
+  const [wsConnected, setWsConnected] = useState(false)
+  const wsRef = useRef(null)
   const [showQuickReplies, setShowQuickReplies] = useState(false)
   const [quickSearch, setQuickSearch] = useState('')
 
@@ -94,39 +95,100 @@ export default function TicketDetail({ basePath }) {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
-  // WebSocket Connection
+  // WebSocket Connection Lifecycle
   useEffect(() => {
-    if (!token) return
+    if (!token || !id) return
+
+    let isSubscribed = true
+
+    // Close any previous socket if id changed or existing socket is open
+    if (wsRef.current) {
+      if (
+        wsRef.current.readyState === WebSocket.OPEN ||
+        wsRef.current.readyState === WebSocket.CONNECTING
+      ) {
+        console.log('[WS CLIENT] Closing previous WebSocket before opening new connection | ticketId:', id)
+        wsRef.current.close()
+      }
+      wsRef.current = null
+      setWsConnected(false)
+    }
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    // Assume backend is on the Vite proxy host (which doesn't proxy WS well if not configured)
-    // Actually Vite proxies WS if configured, but let's connect directly to backend for safety.
-    // Wait, let's use the standard WS proxy or direct backend URL.
-    // We'll connect directly to 8001 to avoid Vite proxy issues for websockets in dev.
-    const wsUrl = `ws://localhost:8001/ws/chat/${id}?token=${token}`
+    const host = window.location.host // works with Vite proxy and direct dev server
+    const wsUrl = `${protocol}//${host}/ws/chat/${id}?token=${token}`
     
+    console.log('[WS CLIENT] Connecting | ticketId:', id)
     const socket = new WebSocket(wsUrl)
-    
-    socket.onopen = () => console.log('WS Connected to room:', id)
+    wsRef.current = socket
+
+    socket.onopen = () => {
+      if (!isSubscribed) {
+        socket.close()
+        return
+      }
+      console.log(`[WS CLIENT] OPEN\nticketId=${id}`)
+      setWsConnected(true)
+    }
     
     socket.onmessage = (event) => {
-      const data = JSON.parse(event.data)
-      if (data.type === 'message') {
-        setMessages(prev => [...prev, data])
+      if (!isSubscribed) return
+      try {
+        const data = JSON.parse(event.data)
+        if (data.type === 'message') {
+          console.log(`[WS CLIENT] MESSAGE event received\nticketId=${id}\nmessageId=${data.id}`)
+          console.log('[WS CLIENT] Appending message to state:', data)
+          setMessages(prev => {
+            const exists = prev.some(m => (m.id && m.id === data.id) || (m.external_message_id && m.external_message_id === data.external_message_id))
+            if (exists) {
+              console.log('[WS CLIENT] Duplicate message ignored:', data.id || data.external_message_id)
+              return prev
+            }
+            return [...prev, data]
+          })
+        } else if (data.type === 'ticket_update' || data.type === 'inbox_update') {
+          console.log('[WS CLIENT] Invalidating ticket queries due to event:', data.type)
+          queryClient.invalidateQueries({ queryKey: ['ticket', id] })
+          queryClient.invalidateQueries({ queryKey: ['tickets'] })
+        }
+      } catch (err) {
+        console.error('[WS CLIENT] Error parsing WebSocket message:', err)
       }
     }
     
-    socket.onclose = () => console.log('WS Disconnected')
-    setWs(socket)
+    socket.onclose = (event) => {
+      console.log('[WS CLIENT] CLOSE | code:', event.code, 'reason:', event.reason)
+      if (wsRef.current === socket) {
+        wsRef.current = null
+        setWsConnected(false)
+      }
+    }
+
+    socket.onerror = (event) => {
+      console.error('[WS CLIENT] ERROR', event)
+    }
     
-    return () => socket.close()
-  }, [id, token])
+    return () => {
+      isSubscribed = false
+      if (wsRef.current === socket) {
+        console.log('[WS CLIENT] Cleanup closing socket for ticketId:', id)
+        socket.close()
+        wsRef.current = null
+        setWsConnected(false)
+      }
+    }
+  }, [id, token, queryClient])
 
   const sendMessage = (e) => {
     e.preventDefault()
-    if (!inputText.trim() || !ws) return
+    if (!inputText.trim()) return
+    const socket = wsRef.current
+    if (!socket || socket.readyState !== WebSocket.OPEN) {
+      console.warn('[WS CLIENT] Cannot send message, socket is not connected')
+      return
+    }
     
-    ws.send(JSON.stringify({ type: 'message', body: inputText }))
+    socket.send(JSON.stringify({ type: 'message', body: inputText }))
     setInputText('')
   }
 
@@ -203,7 +265,13 @@ export default function TicketDetail({ basePath }) {
                 <h1 className="text-lg font-bold text-[#1C1B2E] truncate max-w-md">{ticket.subject}</h1>
                 <span className="px-2 py-0.5 border border-[#E5E7F3] rounded-md text-xs font-bold uppercase text-[#6C7089]">{ticket.status}</span>
               </div>
-              <p className="text-xs text-[#9598B0] font-mono">{ticket.ref} • {formatDateTime(ticket.created_at)}</p>
+              <p className="text-xs text-[#9598B0] flex items-center gap-2 mt-0.5">
+                <span className="font-bold text-slate-800 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200 font-mono text-[11px]">ID: #{ticket.id}</span>
+                <span>•</span>
+                <span className="font-mono text-indigo-600 font-semibold">{ticket.ref}</span>
+                <span>•</span>
+                <span>{formatDateTime(ticket.created_at)}</span>
+              </p>
             </div>
           </div>
         </div>
@@ -377,7 +445,7 @@ export default function TicketDetail({ basePath }) {
                     const formData = new FormData()
                     formData.append('file', file)
                     try {
-                      const res = await client.post(`/tickets/${ticketId}/upload`, formData, {
+                      const res = await client.post(`/tickets/${id}/upload`, formData, {
                         headers: { 'Content-Type': 'multipart/form-data' }
                       })
                       setInputText(prev => prev + ` 📎 [Attachment: ${res.data.filename}](${res.data.url})`)
@@ -411,7 +479,7 @@ export default function TicketDetail({ basePath }) {
 
               <button 
                 type="submit" 
-                disabled={!inputText.trim() || !ws}
+                disabled={!inputText.trim() || !wsConnected}
                 className="bg-indigo-600 hover:bg-indigo-700 text-white p-3 rounded-xl transition-colors disabled:opacity-50"
               >
                 <Send size={20} />

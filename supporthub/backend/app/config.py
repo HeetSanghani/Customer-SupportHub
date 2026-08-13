@@ -34,6 +34,7 @@ class Settings(BaseSettings):
     # Email
     postmark_server_token: str = ""
     postmark_from_email: str = "support@yourdomain.com"
+    support_contact_email: str = "support@yourdomain.com"
 
     # Storage
     supabase_url: str = ""
@@ -56,6 +57,9 @@ class Settings(BaseSettings):
     page_access_token: str = ""
     ig_page_id: str = ""
     fb_page_id: str = ""
+    instagram_access_token: str = ""
+    instagram_account_id: str = ""
+    instagram_app_secret: str = ""
 
     # OpenAI / LLM
     openai_api_key: str = ""

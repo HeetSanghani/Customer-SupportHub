@@ -225,53 +225,88 @@ class GeminiAdapter(AIModelAdapter):
             if settings.gemini_api_key:
                 genai.configure(api_key=settings.gemini_api_key)
 
-            # Build Gemini-compatible content list (system + messages)
-            # Gemini Flash supports system_instruction parameter
-            model = genai.GenerativeModel(
-                model_name=self._model_name,
-                system_instruction=prompt.system,
-                generation_config={
-                    "temperature": prompt.temperature,
-                    "max_output_tokens": prompt.max_tokens,
-                }
-            )
+            # Models to attempt in order of preference
+            candidate_models = [self._model_name]
+            fallback_models = ["gemini-flash-lite-latest", "gemini-flash-latest", "gemini-3.5-flash-lite", "gemini-3.5-flash"]
+            for m in fallback_models:
+                if m not in candidate_models:
+                    candidate_models.append(m)
 
-            # Convert messages to Gemini format
-            # Gemini uses "user" and "model" roles (not "assistant")
-            gemini_messages = []
-            for msg in prompt.messages:
-                role = "user" if msg["role"] == "user" else "model"
-                gemini_messages.append({"role": role, "parts": [msg["content"]]})
+            last_exc = None
+            for model_to_use in candidate_models:
+                try:
+                    # Build Gemini-compatible content list (system + messages)
+                    model = genai.GenerativeModel(
+                        model_name=model_to_use,
+                        system_instruction=prompt.system,
+                        generation_config={
+                            "temperature": prompt.temperature,
+                            "max_output_tokens": prompt.max_tokens,
+                        }
+                    )
 
-            # Make the API call
-            chat = model.start_chat(history=gemini_messages[:-1] if len(gemini_messages) > 1 else [])
-            response = await chat.send_message_async(
-                gemini_messages[-1]["parts"][0] if gemini_messages else ""
-            )
+                    # Convert messages to Gemini format
+                    gemini_messages = []
+                    for i, msg in enumerate(prompt.messages):
+                        role = "user" if msg["role"] == "user" else "model"
+                        parts = [msg["content"]]
+                        # Append images to the last message if available
+                        if i == len(prompt.messages) - 1 and role == "user" and getattr(prompt, "image_paths", None):
+                            import PIL.Image
+                            for p in prompt.image_paths:
+                                try:
+                                    img = PIL.Image.open(p)
+                                    parts.append(img)
+                                except Exception as e:
+                                    logger.error(f"Failed to load image {p} for Gemini: {e}")
+                        gemini_messages.append({"role": role, "parts": parts})
 
-            # Extract token usage (Gemini provides this in usage_metadata)
-            usage_meta = getattr(response, "usage_metadata", None)
-            input_tokens = getattr(usage_meta, "prompt_token_count", 0) or 0
-            output_tokens = getattr(usage_meta, "candidates_token_count", 0) or 0
+                    # Make the API call
+                    chat = model.start_chat(history=gemini_messages[:-1] if len(gemini_messages) > 1 else [])
+                    response = await chat.send_message_async(
+                        gemini_messages[-1]["parts"] if gemini_messages else ""
+                    )
 
-            # Extract finish reason
-            finish_reason = "stop"
-            if hasattr(response, "candidates") and response.candidates:
-                candidate = response.candidates[0]
-                fr = getattr(candidate, "finish_reason", None)
-                if fr:
-                    fr_name = getattr(fr, "name", str(fr)).lower()
-                    if "max" in fr_name or "length" in fr_name:
-                        finish_reason = "length"
-                    elif "safety" in fr_name or "filter" in fr_name:
-                        finish_reason = "content_filter"
+                    # Extract token usage (Gemini provides this in usage_metadata)
+                    usage_meta = getattr(response, "usage_metadata", None)
+                    input_tokens = getattr(usage_meta, "prompt_token_count", 0) or 0
+                    output_tokens = getattr(usage_meta, "candidates_token_count", 0) or 0
 
-            return {
-                "text": response.text,
-                "input_tokens": input_tokens,
-                "output_tokens": output_tokens,
-                "finish_reason": finish_reason,
-            }
+                    # Extract finish reason
+                    finish_reason = "stop"
+                    if hasattr(response, "candidates") and response.candidates:
+                        candidate = response.candidates[0]
+                        fr = getattr(candidate, "finish_reason", None)
+                        if fr:
+                            fr_name = getattr(fr, "name", str(fr)).lower()
+                            if "max" in fr_name or "length" in fr_name:
+                                finish_reason = "length"
+                            elif "safety" in fr_name or "filter" in fr_name:
+                                finish_reason = "content_filter"
+
+                    return {
+                        "text": response.text,
+                        "input_tokens": input_tokens,
+                        "output_tokens": output_tokens,
+                        "finish_reason": finish_reason,
+                    }
+
+                except Exception as m_exc:
+                    last_exc = m_exc
+                    err_text = str(m_exc).lower()
+                    if "429" in err_text or "quota" in err_text or "404" in err_text or "not found" in err_text or "no longer available" in err_text:
+                        logger.warning(
+                            "Gemini model '%s' failed (%s) — trying fallback candidate.",
+                            model_to_use,
+                            m_exc,
+                        )
+                        continue
+                    raise m_exc
+
+            if last_exc:
+                raise last_exc
+
+            raise AIProviderError(provider="gemini", message="All candidate Gemini models failed.")
 
         except Exception as exc:
             error_str = str(exc).lower()
@@ -319,10 +354,36 @@ class ClaudeAdapter(AIModelAdapter):
 
             client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
 
+            import base64
+            import mimetypes
+            
+            claude_messages = list(prompt.messages)
+            
+            if getattr(prompt, "image_paths", None) and claude_messages:
+                last_msg = claude_messages[-1]
+                if last_msg["role"] == "user":
+                    content_blocks = [{"type": "text", "text": last_msg["content"]}]
+                    for p in prompt.image_paths:
+                        try:
+                            with open(p, "rb") as f:
+                                b64_data = base64.b64encode(f.read()).decode("utf-8")
+                            mime_type = mimetypes.guess_type(p)[0] or "image/jpeg"
+                            content_blocks.append({
+                                "type": "image",
+                                "source": {
+                                    "type": "base64",
+                                    "media_type": mime_type,
+                                    "data": b64_data,
+                                }
+                            })
+                        except Exception as e:
+                            logger.error(f"Failed to load image {p} for Claude: {e}")
+                    claude_messages[-1] = {"role": "user", "content": content_blocks}
+
             response = await client.messages.create(
                 model=self._model_name,
                 system=prompt.system,
-                messages=prompt.messages,
+                messages=claude_messages,
                 temperature=prompt.temperature,
                 max_tokens=prompt.max_tokens,
             )

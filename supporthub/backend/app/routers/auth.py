@@ -48,6 +48,11 @@ class MeResponse(BaseModel):
     avatar_url: Optional[str]
 
 
+class UpdateMeRequest(BaseModel):
+    name: Optional[str] = None
+    email: Optional[EmailStr] = None
+
+
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 
 def hash_password(password: str) -> str:
@@ -126,6 +131,36 @@ async def login(
 
 @router.get("/me", response_model=MeResponse)
 async def me(current_user: User = Depends(get_current_user)):
+    return MeResponse(
+        id=str(current_user.id),
+        email=current_user.email,
+        name=current_user.name,
+        role=current_user.role.value,
+        status=current_user.status.value,
+        avatar_url=current_user.avatar_url,
+    )
+
+
+@router.patch("/me", response_model=MeResponse)
+async def update_me(
+    body: UpdateMeRequest,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    if body.name is not None:
+        current_user.name = body.name
+    if body.email is not None:
+        # Check if email is already taken by another user
+        if body.email != current_user.email:
+            existing = await session.exec(select(User).where(User.email == body.email))
+            if existing.first():
+                raise HTTPException(status_code=400, detail="Email already in use")
+        current_user.email = body.email
+
+    session.add(current_user)
+    await session.commit()
+    await session.refresh(current_user)
+
     return MeResponse(
         id=str(current_user.id),
         email=current_user.email,

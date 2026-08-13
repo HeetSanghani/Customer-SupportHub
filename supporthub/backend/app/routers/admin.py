@@ -474,3 +474,367 @@ async def export_performance_csv(
         headers={"Content-Disposition": "attachment; filename=performance_report.csv"}
     )
 
+
+# ─── WhatsApp Access Token & Credentials Management ─────────────────────────
+
+class WhatsAppConfigRequest(BaseModel):
+    whatsapp_access_token: Optional[str] = None
+    whatsapp_phone_id: Optional[str] = None
+    whatsapp_verify_token: Optional[str] = None
+
+
+def _update_env_file(key_values: dict[str, str]):
+    import os
+    env_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../.env"))
+    if not os.path.exists(env_path):
+        env_path = os.path.abspath(".env")
+    
+    if os.path.exists(env_path):
+        try:
+            with open(env_path, "r", encoding="utf-8") as f:
+                lines = f.readlines()
+            
+            new_lines = []
+            updated_keys = set()
+            for line in lines:
+                stripped = line.strip()
+                if stripped and not stripped.startswith("#") and "=" in stripped:
+                    key = stripped.split("=", 1)[0].strip()
+                    if key in key_values:
+                        new_lines.append(f"{key}={key_values[key]}\n")
+                        updated_keys.add(key)
+                        continue
+                new_lines.append(line)
+            
+            for key, val in key_values.items():
+                if key not in updated_keys and val:
+                    new_lines.append(f"{key}={val}\n")
+            
+            with open(env_path, "w", encoding="utf-8") as f:
+                f.writelines(new_lines)
+        except Exception as e:
+            print(f"Warning: Could not write to .env file: {e}")
+
+    for key, val in key_values.items():
+        if val is not None:
+            os.environ[key] = val
+
+
+@router.get("/whatsapp-config")
+async def get_whatsapp_config(
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    if current_user.role not in (UserRole.admin, UserRole.manager):
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    import os
+    token = os.environ.get("WHATSAPP_ACCESS_TOKEN", "")
+    phone_id = os.environ.get("WHATSAPP_PHONE_ID", "")
+    verify_token = os.environ.get("META_VERIFY_TOKEN", "") or os.environ.get("WHATSAPP_VERIFY_TOKEN", "")
+
+    stmt = select(ChannelIntegration).where(ChannelIntegration.channel_type == ChannelType.whatsapp)
+    ch = (await session.exec(stmt)).first()
+
+    return {
+        "whatsapp_access_token": token,
+        "whatsapp_phone_id": phone_id,
+        "whatsapp_verify_token": verify_token,
+        "status": ch.status.value if (ch and hasattr(ch.status, 'value')) else (ch.status if ch else "connected"),
+        "channel_id": str(ch.id) if ch else None
+    }
+
+
+@router.post("/whatsapp-config")
+async def update_whatsapp_config(
+    body: WhatsAppConfigRequest,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    if current_user.role != UserRole.admin:
+        raise HTTPException(status_code=403, detail="Only admins can update WhatsApp credentials")
+
+    import os
+    env_updates = {}
+    if body.whatsapp_access_token is not None:
+        env_updates["WHATSAPP_ACCESS_TOKEN"] = body.whatsapp_access_token.strip()
+    if body.whatsapp_phone_id is not None:
+        env_updates["WHATSAPP_PHONE_ID"] = body.whatsapp_phone_id.strip()
+    if body.whatsapp_verify_token is not None:
+        env_updates["META_VERIFY_TOKEN"] = body.whatsapp_verify_token.strip()
+        env_updates["WHATSAPP_VERIFY_TOKEN"] = body.whatsapp_verify_token.strip()
+
+    if env_updates:
+        _update_env_file(env_updates)
+
+    stmt = select(ChannelIntegration).where(ChannelIntegration.channel_type == ChannelType.whatsapp)
+    ch = (await session.exec(stmt)).first()
+    if not ch:
+        ch = ChannelIntegration(
+            channel_type=ChannelType.whatsapp,
+            display_name=env_updates.get("WHATSAPP_PHONE_ID") or os.environ.get("WHATSAPP_PHONE_ID", "WhatsApp Business API"),
+            status=ChannelStatus.connected,
+            credentials_encrypted=env_updates.get("WHATSAPP_ACCESS_TOKEN"),
+            weekly_volume=0
+        )
+        session.add(ch)
+    else:
+        if "WHATSAPP_ACCESS_TOKEN" in env_updates:
+            ch.credentials_encrypted = env_updates["WHATSAPP_ACCESS_TOKEN"]
+        if "WHATSAPP_PHONE_ID" in env_updates:
+            ch.display_name = env_updates["WHATSAPP_PHONE_ID"]
+        ch.status = ChannelStatus.connected
+        session.add(ch)
+    
+    await session.commit()
+    await session.refresh(ch)
+
+    return {
+        "status": "success",
+        "message": "WhatsApp Access Token and credentials updated successfully in .env and database!",
+        "whatsapp_phone_id": os.environ.get("WHATSAPP_PHONE_ID"),
+        "whatsapp_access_token": os.environ.get("WHATSAPP_ACCESS_TOKEN"),
+    }
+
+
+@router.post("/whatsapp-config/test")
+async def test_whatsapp_config(
+    body: Optional[WhatsAppConfigRequest] = None,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    if current_user.role not in (UserRole.admin, UserRole.manager):
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    import os
+    import httpx
+
+    token = (body.whatsapp_access_token if (body and body.whatsapp_access_token) else os.environ.get("WHATSAPP_ACCESS_TOKEN", "")).strip()
+    phone_id = (body.whatsapp_phone_id if (body and body.whatsapp_phone_id) else os.environ.get("WHATSAPP_PHONE_ID", "")).strip()
+
+    if not token:
+        raise HTTPException(status_code=400, detail="WhatsApp Access Token is required to run connection test.")
+    if not phone_id:
+        raise HTTPException(status_code=400, detail="WhatsApp Phone ID is required to run connection test.")
+
+    url = f"https://graph.facebook.com/v20.0/{phone_id}"
+    headers = {"Authorization": f"Bearer {token}"}
+
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as http_client:
+            res = await http_client.get(url, headers=headers)
+            data = res.json()
+
+        if res.status_code == 200:
+            display_phone = data.get("display_phone_number") or data.get("phone_number") or phone_id
+            verified_name = data.get("verified_name") or data.get("name") or "WhatsApp Business Account"
+            quality_rating = data.get("quality_rating", "GREEN")
+
+            stmt = select(ChannelIntegration).where(ChannelIntegration.channel_type == ChannelType.whatsapp)
+            ch = (await session.exec(stmt)).first()
+            if ch:
+                ch.status = ChannelStatus.connected
+                session.add(ch)
+                await session.commit()
+
+            return {
+                "status": "success",
+                "connected": True,
+                "message": f"✅ WhatsApp Access Token Verified! Connected to Meta WhatsApp Account: '{verified_name}' ({display_phone})",
+                "details": {
+                    "id": data.get("id"),
+                    "display_phone_number": display_phone,
+                    "verified_name": verified_name,
+                    "quality_rating": quality_rating,
+                    "code_verification_status": data.get("code_verification_status", "VERIFIED")
+                }
+            }
+        else:
+            error_obj = data.get("error", {})
+            err_msg = error_obj.get("message", res.text)
+            err_code = error_obj.get("code")
+
+            stmt = select(ChannelIntegration).where(ChannelIntegration.channel_type == ChannelType.whatsapp)
+            ch = (await session.exec(stmt)).first()
+            if ch:
+                ch.status = ChannelStatus.needs_attention
+                session.add(ch)
+                await session.commit()
+
+            return {
+                "status": "error",
+                "connected": False,
+                "error_code": err_code,
+                "message": f"❌ Meta WhatsApp Token Test Failed (Code {err_code}): {err_msg}",
+                "raw_error": data
+            }
+
+    except Exception as e:
+        return {
+            "status": "error",
+            "connected": False,
+            "message": f"❌ Network or Server Error while contacting Meta API: {str(e)}"
+        }
+
+
+# ─── Instagram Access Token & Credentials Management ─────────────────────────
+
+class InstagramConfigRequest(BaseModel):
+    instagram_access_token: Optional[str] = None
+    instagram_account_id: Optional[str] = None
+    instagram_verify_token: Optional[str] = None
+
+
+@router.get("/instagram-config")
+async def get_instagram_config(
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    if current_user.role not in (UserRole.admin, UserRole.manager):
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    import os
+    token = os.environ.get("INSTAGRAM_ACCESS_TOKEN", "")
+    account_id = os.environ.get("INSTAGRAM_ACCOUNT_ID", "")
+    verify_token = os.environ.get("META_VERIFY_TOKEN", "") or os.environ.get("INSTAGRAM_VERIFY_TOKEN", "")
+
+    stmt = select(ChannelIntegration).where(ChannelIntegration.channel_type == ChannelType.instagram)
+    ch = (await session.exec(stmt)).first()
+
+    return {
+        "instagram_access_token": token,
+        "instagram_account_id": account_id,
+        "instagram_verify_token": verify_token,
+        "status": ch.status.value if (ch and hasattr(ch.status, 'value')) else (ch.status if ch else "connected"),
+        "channel_id": str(ch.id) if ch else None
+    }
+
+
+@router.post("/instagram-config")
+async def update_instagram_config(
+    body: InstagramConfigRequest,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    if current_user.role != UserRole.admin:
+        raise HTTPException(status_code=403, detail="Only admins can update Instagram credentials")
+
+    import os
+    env_updates = {}
+    if body.instagram_access_token is not None:
+        env_updates["INSTAGRAM_ACCESS_TOKEN"] = body.instagram_access_token.strip()
+    if body.instagram_account_id is not None:
+        env_updates["INSTAGRAM_ACCOUNT_ID"] = body.instagram_account_id.strip()
+    if body.instagram_verify_token is not None:
+        env_updates["META_VERIFY_TOKEN"] = body.instagram_verify_token.strip()
+        env_updates["INSTAGRAM_VERIFY_TOKEN"] = body.instagram_verify_token.strip()
+
+    if env_updates:
+        _update_env_file(env_updates)
+
+    stmt = select(ChannelIntegration).where(ChannelIntegration.channel_type == ChannelType.instagram)
+    ch = (await session.exec(stmt)).first()
+    if not ch:
+        ch = ChannelIntegration(
+            channel_type=ChannelType.instagram,
+            display_name=env_updates.get("INSTAGRAM_ACCOUNT_ID") or os.environ.get("INSTAGRAM_ACCOUNT_ID", "Instagram Direct"),
+            status=ChannelStatus.connected,
+            credentials_encrypted=env_updates.get("INSTAGRAM_ACCESS_TOKEN"),
+            weekly_volume=0
+        )
+        session.add(ch)
+    else:
+        if "INSTAGRAM_ACCESS_TOKEN" in env_updates:
+            ch.credentials_encrypted = env_updates["INSTAGRAM_ACCESS_TOKEN"]
+        if "INSTAGRAM_ACCOUNT_ID" in env_updates:
+            ch.display_name = env_updates["INSTAGRAM_ACCOUNT_ID"]
+        ch.status = ChannelStatus.connected
+        session.add(ch)
+    
+    await session.commit()
+    await session.refresh(ch)
+
+    return {
+        "status": "success",
+        "message": "Instagram Access Token and credentials updated successfully in .env and database!",
+        "instagram_account_id": os.environ.get("INSTAGRAM_ACCOUNT_ID"),
+        "instagram_access_token": os.environ.get("INSTAGRAM_ACCESS_TOKEN"),
+    }
+
+
+@router.post("/instagram-config/test")
+async def test_instagram_config(
+    body: Optional[InstagramConfigRequest] = None,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    if current_user.role not in (UserRole.admin, UserRole.manager):
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    import os
+    import httpx
+
+    token = (body.instagram_access_token if (body and body.instagram_access_token) else os.environ.get("INSTAGRAM_ACCESS_TOKEN", "")).strip()
+    account_id = (body.instagram_account_id if (body and body.instagram_account_id) else os.environ.get("INSTAGRAM_ACCOUNT_ID", "")).strip()
+
+    if not token:
+        raise HTTPException(status_code=400, detail="Instagram Access Token is required to run connection test.")
+
+    url = "https://graph.instagram.com/v19.0/me?fields=id,username,name,account_type"
+    headers = {"Authorization": f"Bearer {token}"}
+
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as http_client:
+            res = await http_client.get(url, headers=headers)
+            data = res.json()
+
+        if res.status_code == 200:
+            username = data.get("username") or data.get("name") or "Instagram Account"
+            acc_id = data.get("id") or account_id
+
+            stmt = select(ChannelIntegration).where(ChannelIntegration.channel_type == ChannelType.instagram)
+            ch = (await session.exec(stmt)).first()
+            if ch:
+                ch.status = ChannelStatus.connected
+                session.add(ch)
+                await session.commit()
+
+            return {
+                "status": "success",
+                "connected": True,
+                "message": f"✅ Instagram Access Token Verified! Connected to @{username} (ID: {acc_id})",
+                "details": {
+                    "id": acc_id,
+                    "username": username,
+                    "account_type": data.get("account_type", "BUSINESS"),
+                }
+            }
+        else:
+            error_obj = data.get("error", {})
+            err_msg = error_obj.get("message", res.text)
+            err_code = error_obj.get("code")
+
+            stmt = select(ChannelIntegration).where(ChannelIntegration.channel_type == ChannelType.instagram)
+            ch = (await session.exec(stmt)).first()
+            if ch:
+                ch.status = ChannelStatus.needs_attention
+                session.add(ch)
+                await session.commit()
+
+            return {
+                "status": "error",
+                "connected": False,
+                "error_code": err_code,
+                "message": f"❌ Meta Instagram Token Test Failed (Code {err_code}): {err_msg}",
+                "raw_error": data
+            }
+
+    except Exception as e:
+        return {
+            "status": "error",
+            "connected": False,
+            "message": f"❌ Network or Server Error while contacting Meta Instagram API: {str(e)}"
+        }
+
+
+

@@ -121,6 +121,48 @@ class AIOrchestrator:
         self._response_parser = response_parser or ResponseParser()
         self._repository = repository or AIRepository()
 
+    async def generate_for_ticket(
+        self,
+        ticket: any,
+        messages: list[any],
+        customer: any = None,
+        kb_context: Optional[str] = None,
+        tone: Optional[str] = "standard",
+    ) -> AIResponse:
+        """
+        Generate an AI response directly for a Ticket + Message list (used by agent suggested reply routes).
+        """
+        start_time = time.monotonic()
+        try:
+            llm_context = self._context_builder.build_from_ticket(
+                ticket=ticket,
+                messages=messages,
+                customer=customer,
+                kb_context=kb_context,
+                tone=tone,
+            )
+            prompt = self._prompt_builder.build(
+                llm_context=llm_context,
+                model_name=self._adapter.model_name,
+            )
+            raw_response = await self._adapter.generate(prompt)
+            latency_ms = int(raw_response.get("latency_ms", 0) or ((time.monotonic() - start_time) * 1000))
+            ai_response = self._response_parser.parse(
+                raw_response=raw_response,
+                prompt=prompt,
+                provider=self._adapter.provider_name,
+                model_name=self._adapter.model_name,
+                latency_ms=latency_ms,
+            )
+            return ai_response
+        except Exception as exc:
+            logger.error("AI generate_for_ticket error: %s", exc, exc_info=True)
+            return self._build_fallback_response(
+                adapter=self._adapter,
+                error=str(exc),
+                latency_ms=int((time.monotonic() - start_time) * 1000),
+            )
+
     async def generate(self, ctx: "ConversationContext") -> AIResponse:
         """
         Run the full AI pipeline for a ConversationContext.

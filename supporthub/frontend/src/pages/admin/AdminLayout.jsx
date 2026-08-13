@@ -14,6 +14,8 @@ import {
 
 import UnifiedInbox from '../../components/UnifiedInbox'
 import WhatsAppInbox from '../../components/WhatsAppInbox'
+import EmailInbox from '../../components/EmailInbox'
+import InstagramInbox from '../../components/InstagramInbox'
 import TicketDetail from '../../components/TicketDetail'
 import AdminOverview from './AdminOverview'
 import UserManagement from './UserManagement'
@@ -22,7 +24,7 @@ import HelpCenterMgmt from './HelpCenterMgmt'
 import AISettings from './AISettings'
 import RolesPermissions from './RolesPermissions'
 import SystemSettings from './SystemSettings'
-import { Smartphone } from 'lucide-react'
+import { Smartphone, Mail, Instagram } from 'lucide-react'
 
 export default function AdminLayout() {
   const { role, logout, name, setRole, isAuthenticated } = useAuthStore()
@@ -31,6 +33,11 @@ export default function AdminLayout() {
 
   // Redirect to login if not authenticated
   if (!isAuthenticated) return <Navigate to="/login" replace />
+
+  const handleLogout = () => {
+    logout()
+    navigate('/login', { replace: true })
+  }
 
   const handleRoleChange = (newRole) => {
     setRole(newRole)
@@ -43,6 +50,8 @@ export default function AdminLayout() {
   const navItems = [
     { label: 'Dashboard', path: '/admin', icon: LayoutDashboard, exact: true },
     { label: 'WhatsApp Inbox', path: '/admin/whatsapp', icon: Smartphone },
+    { label: 'Instagram Inbox', path: '/admin/instagram', icon: Instagram },
+    { label: 'Email Inbox', path: '/admin/email', icon: Mail },
     { label: 'User Management', path: '/admin/users', icon: Users },
     { label: 'Channel Integrations', path: '/admin/channels', icon: Link2 },
     { label: 'Help Center Mgmt', path: '/admin/help-center', icon: BookOpen },
@@ -130,7 +139,7 @@ export default function AdminLayout() {
               </div>
             </div>
             <button
-              onClick={logout}
+              onClick={handleLogout}
               className="text-[#9598B0] hover:text-red-600 p-1.5 rounded-lg hover:bg-red-50 transition-colors"
               title="Log out"
             >
@@ -145,6 +154,8 @@ export default function AdminLayout() {
         <Routes>
           <Route path="/" element={<AdminOverview />} />
           <Route path="/whatsapp" element={<WhatsAppInbox basePath="/admin" />} />
+          <Route path="/instagram" element={<InstagramInbox basePath="/admin" />} />
+          <Route path="/email" element={<EmailInbox basePath="/admin" />} />
           <Route path="/users" element={<UserManagement />} />
           <Route path="/directory" element={<UserManagement />} />
           <Route path="/channels" element={<ChannelIntegrations />} />

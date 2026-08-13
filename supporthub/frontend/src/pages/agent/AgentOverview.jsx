@@ -137,7 +137,7 @@ export default function AgentOverview() {
                   <tr key={ticket.id} onClick={() => navigate(`/agent/tickets/${ticket.id}`)} className="hover:bg-gray-50 transition-colors cursor-pointer">
                     <td className="py-3 pr-4">
                       <div className="font-bold text-[#1C1B2E]">{ticket.subject}</div>
-                      <div className="text-xs text-[#9598B0]">{ticket.ref}</div>
+                      <div className="text-xs text-[#9598B0] mt-0.5">{ticket.ref}</div>
                     </td>
                     <td className="py-3 capitalize">{ticket.channel.replace('_', ' ')}</td>
                     <td className="py-3">

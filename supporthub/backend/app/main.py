@@ -1,6 +1,7 @@
 """SupportHub FastAPI application — entry point."""
 from __future__ import annotations
 
+import logging
 import sentry_sdk
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -11,8 +12,14 @@ from slowapi.util import get_remote_address
 
 from app.config import get_settings
 from app.database import init_db
-from app.routers import auth, tickets, knowledge, admin, webhooks
+from app.routers import auth, tickets, knowledge, admin, webhooks, legal
+from app.routers import instagram as instagram_router
 from app.routers.ws import chat
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+)
 
 settings = get_settings()
 
@@ -79,9 +86,11 @@ API_PREFIX = "/api/v1"
 
 app.include_router(auth.router, prefix=API_PREFIX)
 app.include_router(tickets.router, prefix=API_PREFIX)
+app.include_router(instagram_router.router, prefix=API_PREFIX)
 app.include_router(knowledge.router, prefix=API_PREFIX)
 app.include_router(admin.router, prefix=API_PREFIX)
 app.include_router(webhooks.router, prefix=API_PREFIX)
+app.include_router(legal.router)          # Public Meta compliance routes (root level)
 app.include_router(chat.router)           # WebSocket — no prefix
 
 

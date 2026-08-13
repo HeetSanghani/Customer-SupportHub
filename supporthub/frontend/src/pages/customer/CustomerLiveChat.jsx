@@ -162,17 +162,23 @@ function ChatPane({ ticketId }) {
   useEffect(() => {
     if (!token || !ticketId) return
 
-    const wsUrl = `ws://localhost:8001/ws/chat/${ticketId}?token=${token}`
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+    const host = window.location.host
+    const wsUrl = `${protocol}//${host}/ws/chat/${ticketId}?token=${token}`
     const socket = new WebSocket(wsUrl)
     
     socket.onmessage = (event) => {
       const data = JSON.parse(event.data)
       if (data.type === 'message') {
         setIsTyping(false)
-        setMessages(prev => [...prev, {
-          ...data,
-          sender_type: data.sender_type || data.sender_role
-        }])
+        setMessages(prev => {
+          const exists = prev.some(m => (m.id && m.id === data.id) || (m.external_message_id && m.external_message_id === data.external_message_id))
+          if (exists) return prev
+          return [...prev, {
+            ...data,
+            sender_type: data.sender_type || data.sender_role
+          }]
+        })
       } else if (data.type === 'ticket_update') {
         if (data.status) {
           setTicketStatus(data.status)

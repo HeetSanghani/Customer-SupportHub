@@ -81,7 +81,7 @@ class User(SQLModel, table=True):
     password_hash: str = Field(max_length=255)
     role: UserRole = Field(default=UserRole.customer)
     status: UserStatus = Field(default=UserStatus.invited)
-    avatar_url: Optional[str] = Field(default=None, max_length=500)
+    avatar_url: Optional[str] = Field(default=None, sa_column=Column(Text))
     totp_secret: Optional[str] = Field(default=None)
     totp_enabled: bool = Field(default=False)
     email_signature: Optional[str] = Field(default=None, sa_column=Column(Text))

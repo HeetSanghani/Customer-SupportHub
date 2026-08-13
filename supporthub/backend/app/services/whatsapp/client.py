@@ -258,3 +258,52 @@ class MetaWhatsAppClient:
             is_retryable=is_retryable,
             raw_error=data,
         )
+
+    # ─── Media Downloader ─────────────────────────────────────────────────────
+
+    async def download_media(self, media_id: str, mime_type: Optional[str] = None) -> tuple[Optional[str], Optional[str]]:
+        """
+        Download media from Meta using media_id.
+        
+        Returns:
+            Tuple of (local_file_url, local_filename). Returns (None, None) on failure.
+        """
+        if not self.access_token:
+            logger.error("No access token available to download media.")
+            return None, None
+            
+        headers = {
+            "Authorization": f"Bearer {self.access_token}"
+        }
+        
+        url_endpoint = f"{self.base_url}/{media_id}"
+        
+        try:
+            # 1. Get the media URL from Meta
+            async with httpx.AsyncClient(timeout=15.0) as http_client:
+                res = await http_client.get(url_endpoint, headers=headers)
+                
+                if res.status_code != 200:
+                    logger.error("Failed to fetch media metadata for %s: %s", media_id, res.text)
+                    return None, None
+                    
+                meta_data = res.json()
+                media_url = meta_data.get("url")
+                meta_mime = meta_data.get("mime_type", mime_type)
+                
+                if not media_url:
+                    logger.error("Meta media response missing 'url': %s", meta_data)
+                    return None, None
+                
+                # 2. Download the binary data using the Bearer token via GenericMediaDownloader
+                from app.services.channels.media import GenericMediaDownloader
+                return await GenericMediaDownloader.download_url(
+                    url=media_url,
+                    headers=headers,
+                    expected_mime_type=meta_mime
+                )
+                
+        except Exception as exc:
+            logger.error("Error downloading media %s: %s", media_id, exc)
+            return None, None
+

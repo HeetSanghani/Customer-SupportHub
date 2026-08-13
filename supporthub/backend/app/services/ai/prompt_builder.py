@@ -107,6 +107,7 @@ class PromptBuilder:
                 temperature=temperature,
                 max_tokens=max_tokens,
                 model_name=model_name,
+                image_paths=llm_context.image_paths,
             )
 
             logger.debug(
@@ -128,71 +129,63 @@ class PromptBuilder:
     # ─── System Prompt ────────────────────────────────────────────────────────
 
     def _build_system_prompt(self, ctx: LLMContext) -> str:
-        """
-        Build the system instruction block.
-
-        This is the most impactful part of any LLM prompt. A well-designed
-        system prompt produces consistent, safe, on-brand responses.
-        A bad one causes hallucination, off-topic replies, and tone failures.
-        """
         role_section = self._build_role_section(ctx)
         rules_section = self._build_business_rules(ctx)
         tone_section = self._build_tone_section(ctx)
         context_section = self._build_context_section(ctx)
-        output_section = self._build_output_section()
+        kb_section = self._build_kb_section(ctx)
+        output_section = self._build_output_section(ctx)
 
-        return "\n\n".join([
-            role_section,
-            rules_section,
-            tone_section,
-            context_section,
-            output_section,
-        ]).strip()
+        sections = [role_section, rules_section, tone_section, context_section]
+        if kb_section:
+            sections.append(kb_section)
+        sections.append(output_section)
+
+        return "\n\n".join(sections).strip()
 
     def _build_role_section(self, ctx: LLMContext) -> str:
-        """Define who the AI is."""
+        channel_desc = f" for {ctx.channel.upper()}" if ctx.channel else ""
         return (
             "## ROLE\n"
-            "You are a helpful, professional AI support agent for SupportHub — "
-            "an AI-powered customer support platform. "
+            f"You are a helpful, professional AI support agent for SupportHub{channel_desc}. "
             "Your goal is to understand the customer's issue and provide a clear, "
             "accurate, and friendly response."
         )
 
     def _build_business_rules(self, ctx: LLMContext) -> str:
-        """
-        Define hard rules the AI must always follow.
-
-        These are the 'guardrails' — production AI systems always have these.
-        They prevent the AI from: making up information, making commitments
-        it cannot keep, sharing sensitive data, or going off-topic.
-        """
         rules = [
             "## RULES (NEVER VIOLATE THESE)",
-            "1. NEVER invent information. If you don't know, say so and offer to connect with a human agent.",
-            "2. NEVER make promises about refunds, timelines, or policies unless stated explicitly in context.",
-            "3. NEVER share another customer's information.",
-            "4. NEVER pretend to be human if the customer sincerely asks if they are talking to an AI.",
-            "5. If the customer is very angry, frustrated, or requests a human — suggest escalation.",
-            "6. Stay on topic. Do not discuss politics, religion, or unrelated subjects.",
-            "7. If the conversation has resolved the issue — confirm and close warmly.",
+            "1. NEVER invent information. NEVER invent company policies, prices, discounts, or terms not provided in context.",
+            "2. NEVER claim an action was performed (e.g. 'I refunded your money' or 'I processed your return') unless confirmed in context.",
+            "3. NEVER make promises about refunds, timelines, or policies unless stated explicitly in context.",
+            "4. NEVER share another customer's information.",
+            "5. NEVER pretend to be human if the customer sincerely asks if they are talking to an AI.",
+            "6. If the customer is very angry, frustrated, or requests a human — suggest escalation.",
+            "7. Stay on topic. Do not discuss politics, religion, or unrelated subjects.",
+            "8. If the conversation has resolved the issue — confirm and close warmly.",
         ]
 
-        # Add escalation rule for high-priority tickets
         if ctx.ticket_priority in ("urgent", "high"):
             rules.append(
-                "8. This ticket is marked HIGH PRIORITY. Treat this as urgent. "
+                "9. This ticket is marked HIGH PRIORITY. Treat this as urgent. "
                 "Acknowledge the urgency immediately."
             )
 
         return "\n".join(rules)
 
     def _build_tone_section(self, ctx: LLMContext) -> str:
-        """Define communication style based on channel and customer state."""
-        # WhatsApp conversations are typically more informal than email
         channel = ctx.channel
         base_tone = "professional yet conversational"
-        if channel == "whatsapp":
+
+        if ctx.tone == "friendly":
+            base_tone = "warm, enthusiastic, and highly approachable"
+        elif ctx.tone == "shorter":
+            base_tone = "extremely brief, direct, and to the point"
+        elif ctx.tone == "professional":
+            base_tone = "formal, precise, and polite"
+        elif channel == "instagram":
+            base_tone = "friendly, concise, and approachable for Instagram Direct Messages"
+        elif channel == "whatsapp":
             base_tone = "friendly, concise, and conversational — like a knowledgeable friend"
         elif channel == "email":
             base_tone = "professional, clear, and structured"
@@ -212,7 +205,6 @@ class PromptBuilder:
         return f"## TONE\nBe {base_tone}.{welcome_note}"
 
     def _build_context_section(self, ctx: LLMContext) -> str:
-        """Provide customer and conversation context to personalize the response."""
         lines = [
             "## CURRENT CONTEXT",
             f"Customer Name: {ctx.customer_name}",
@@ -222,6 +214,11 @@ class PromptBuilder:
             f"Priority: {ctx.ticket_priority}",
         ]
 
+        if ctx.ticket_subject:
+            lines.append(f"Subject: {ctx.ticket_subject}")
+        if ctx.ticket_category:
+            lines.append(f"Category: {ctx.ticket_category}")
+
         if ctx.current_message_type != "text":
             lines.append(
                 f"Message Type: {ctx.current_message_type} "
@@ -230,22 +227,26 @@ class PromptBuilder:
 
         return "\n".join(lines)
 
-    def _build_output_section(self) -> str:
-        """
-        Tell the LLM how to format its output.
+    def _build_kb_section(self, ctx: LLMContext) -> str | None:
+        if not ctx.kb_context:
+            return None
+        return f"## VERIFIED KNOWLEDGE BASE & POLICIES\n{ctx.kb_context}"
 
-        CRITICAL: On WhatsApp, markdown formatting (**, ##, ```) is NOT rendered.
-        Plain text with line breaks works best. This instruction prevents the AI
-        from sending messages full of ** asterisks **.
-        """
-        return (
-            "## OUTPUT FORMAT\n"
-            "- Write in plain text. Do NOT use markdown formatting (no **, no ##, no bullets with -).\n"
-            "- Use short paragraphs. Maximum 3-4 sentences per paragraph.\n"
-            "- Be concise. Customers on WhatsApp prefer short, clear replies.\n"
-            "- Address the customer by their first name if known.\n"
+    def _build_output_section(self, ctx: LLMContext) -> str:
+        lines = [
+            "## OUTPUT FORMAT",
+            "- Write in plain text. Do NOT use markdown formatting (no **, no ##, no bullets with -).",
+            "- Use short paragraphs.",
+        ]
+        if ctx.channel == "instagram":
+            lines.append("- This response is tailored for Instagram Direct Messages. Keep it plain text, concise, and friendly. Do NOT use markdown headings.")
+        elif ctx.channel == "whatsapp":
+            lines.append("- Be concise. Customers on WhatsApp prefer short, clear replies.")
+        lines.extend([
+            "- Address the customer by their first name if known.",
             "- End with a clear next step or a question if more info is needed."
-        )
+        ])
+        return "\n".join(lines)
 
     # ─── Message History ──────────────────────────────────────────────────────
 

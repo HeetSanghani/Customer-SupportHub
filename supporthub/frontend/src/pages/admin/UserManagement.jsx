@@ -71,7 +71,8 @@ export default function UserManagement() {
   const filteredUsers = users.filter(user =>
     user.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     user.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    user.role?.toLowerCase().includes(searchTerm.toLowerCase())
+    user.role?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    String(user.id).includes(searchTerm)
   )
 
   const handleInviteSubmit = (e) => {
@@ -124,7 +125,7 @@ export default function UserManagement() {
           <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#9598B0]" size={16} />
           <input
             type="text"
-            placeholder="Search users..."
+            placeholder="Search by ID, name, email, or role..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full pl-10 pr-4 py-2.5 bg-white border border-[#E5E7F3] rounded-xl text-sm focus:outline-none focus:border-indigo-500 shadow-sm"

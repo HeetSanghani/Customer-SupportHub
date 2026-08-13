@@ -46,8 +46,8 @@ DATABASE_URL=postgresql+asyncpg://supporthub:supporthub_dev@localhost:5433/suppo
 REDIS_URL=redis://localhost:6381/0
 SECRET_KEY=your_random_secret_key_here   # generate with: openssl rand -hex 32
 
-# ─── AI (Claude) ───────────────────────────────────────
-ANTHROPIC_API_KEY=sk-ant-...
+# ─── AI (Gemini) ───────────────────────────────────────
+GEMINI_API_KEY=your_gemini_api_key_here
 
 # ─── Email (Mailgun) ───────────────────────────────────
 MAILGUN_DOMAIN=your_mailgun_domain
