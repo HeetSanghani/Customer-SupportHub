@@ -10,6 +10,9 @@ export const authApi = {
   register: (data) =>
     client.post('/auth/register', data),
 
+  refresh: (refreshToken) =>
+    client.post('/auth/refresh', { refresh_token: refreshToken }),
+
   me: () => client.get('/auth/me'),
   updateMe: (data) => client.patch('/auth/me', data),
   listUsers: () => client.get('/auth/users'),

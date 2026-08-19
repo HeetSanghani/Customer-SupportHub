@@ -9,6 +9,7 @@ from pydantic import BaseModel
 from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlmodel import select
 
+from app.config import get_settings
 from app.database import get_session
 from app.dependencies import get_current_user
 from app.models import User, UserRole, UserStatus, ChannelIntegration, ChannelType, ChannelStatus, Ticket, TicketStatus, TicketPriority, SenderType, Message
@@ -529,12 +530,15 @@ async def get_whatsapp_config(
         raise HTTPException(status_code=403, detail="Not authorized")
 
     import os
-    token = os.environ.get("WHATSAPP_ACCESS_TOKEN", "")
-    phone_id = os.environ.get("WHATSAPP_PHONE_ID", "")
-    verify_token = os.environ.get("META_VERIFY_TOKEN", "") or os.environ.get("WHATSAPP_VERIFY_TOKEN", "")
+    token = os.environ.get("WHATSAPP_ACCESS_TOKEN", "") or get_settings().whatsapp_access_token
+    phone_id = os.environ.get("WHATSAPP_PHONE_ID", "") or get_settings().whatsapp_phone_id
+    verify_token = os.environ.get("META_VERIFY_TOKEN", "") or os.environ.get("WHATSAPP_VERIFY_TOKEN", "") or get_settings().meta_verify_token
 
     stmt = select(ChannelIntegration).where(ChannelIntegration.channel_type == ChannelType.whatsapp)
     ch = (await session.exec(stmt)).first()
+
+    if not token and ch and ch.credentials_encrypted:
+        token = ch.credentials_encrypted
 
     return {
         "whatsapp_access_token": token,
@@ -557,32 +561,43 @@ async def update_whatsapp_config(
     import os
     env_updates = {}
     if body.whatsapp_access_token is not None:
-        env_updates["WHATSAPP_ACCESS_TOKEN"] = body.whatsapp_access_token.strip()
+        token_clean = body.whatsapp_access_token.strip()
+        env_updates["WHATSAPP_ACCESS_TOKEN"] = token_clean
+        os.environ["WHATSAPP_ACCESS_TOKEN"] = token_clean
+        get_settings().whatsapp_access_token = token_clean
     if body.whatsapp_phone_id is not None:
-        env_updates["WHATSAPP_PHONE_ID"] = body.whatsapp_phone_id.strip()
+        phone_clean = body.whatsapp_phone_id.strip()
+        env_updates["WHATSAPP_PHONE_ID"] = phone_clean
+        os.environ["WHATSAPP_PHONE_ID"] = phone_clean
+        get_settings().whatsapp_phone_id = phone_clean
     if body.whatsapp_verify_token is not None:
-        env_updates["META_VERIFY_TOKEN"] = body.whatsapp_verify_token.strip()
-        env_updates["WHATSAPP_VERIFY_TOKEN"] = body.whatsapp_verify_token.strip()
+        verify_clean = body.whatsapp_verify_token.strip()
+        env_updates["META_VERIFY_TOKEN"] = verify_clean
+        env_updates["WHATSAPP_VERIFY_TOKEN"] = verify_clean
+        os.environ["META_VERIFY_TOKEN"] = verify_clean
+        os.environ["WHATSAPP_VERIFY_TOKEN"] = verify_clean
+        get_settings().meta_verify_token = verify_clean
 
     if env_updates:
         _update_env_file(env_updates)
 
     stmt = select(ChannelIntegration).where(ChannelIntegration.channel_type == ChannelType.whatsapp)
     ch = (await session.exec(stmt)).first()
+    saved_token = os.environ.get("WHATSAPP_ACCESS_TOKEN", "")
     if not ch:
         ch = ChannelIntegration(
             channel_type=ChannelType.whatsapp,
-            display_name=env_updates.get("WHATSAPP_PHONE_ID") or os.environ.get("WHATSAPP_PHONE_ID", "WhatsApp Business API"),
+            display_name=os.environ.get("WHATSAPP_PHONE_ID") or "WhatsApp Business API",
             status=ChannelStatus.connected,
-            credentials_encrypted=env_updates.get("WHATSAPP_ACCESS_TOKEN"),
+            credentials_encrypted=saved_token,
             weekly_volume=0
         )
         session.add(ch)
     else:
-        if "WHATSAPP_ACCESS_TOKEN" in env_updates:
-            ch.credentials_encrypted = env_updates["WHATSAPP_ACCESS_TOKEN"]
-        if "WHATSAPP_PHONE_ID" in env_updates:
-            ch.display_name = env_updates["WHATSAPP_PHONE_ID"]
+        if saved_token:
+            ch.credentials_encrypted = saved_token
+        if os.environ.get("WHATSAPP_PHONE_ID"):
+            ch.display_name = os.environ.get("WHATSAPP_PHONE_ID")
         ch.status = ChannelStatus.connected
         session.add(ch)
     
@@ -592,8 +607,8 @@ async def update_whatsapp_config(
     return {
         "status": "success",
         "message": "WhatsApp Access Token and credentials updated successfully in .env and database!",
-        "whatsapp_phone_id": os.environ.get("WHATSAPP_PHONE_ID"),
-        "whatsapp_access_token": os.environ.get("WHATSAPP_ACCESS_TOKEN"),
+        "whatsapp_phone_id": os.environ.get("WHATSAPP_PHONE_ID", ""),
+        "whatsapp_access_token": saved_token,
     }
 
 
@@ -609,8 +624,8 @@ async def test_whatsapp_config(
     import os
     import httpx
 
-    token = (body.whatsapp_access_token if (body and body.whatsapp_access_token) else os.environ.get("WHATSAPP_ACCESS_TOKEN", "")).strip()
-    phone_id = (body.whatsapp_phone_id if (body and body.whatsapp_phone_id) else os.environ.get("WHATSAPP_PHONE_ID", "")).strip()
+    token = (body.whatsapp_access_token if (body and body.whatsapp_access_token) else os.environ.get("WHATSAPP_ACCESS_TOKEN", "") or get_settings().whatsapp_access_token).strip()
+    phone_id = (body.whatsapp_phone_id if (body and body.whatsapp_phone_id) else os.environ.get("WHATSAPP_PHONE_ID", "") or get_settings().whatsapp_phone_id).strip()
 
     if not token:
         raise HTTPException(status_code=400, detail="WhatsApp Access Token is required to run connection test.")
@@ -694,12 +709,15 @@ async def get_instagram_config(
         raise HTTPException(status_code=403, detail="Not authorized")
 
     import os
-    token = os.environ.get("INSTAGRAM_ACCESS_TOKEN", "")
-    account_id = os.environ.get("INSTAGRAM_ACCOUNT_ID", "")
-    verify_token = os.environ.get("META_VERIFY_TOKEN", "") or os.environ.get("INSTAGRAM_VERIFY_TOKEN", "")
+    token = os.environ.get("INSTAGRAM_ACCESS_TOKEN", "") or get_settings().instagram_access_token
+    account_id = os.environ.get("INSTAGRAM_ACCOUNT_ID", "") or os.environ.get("IG_PAGE_ID", "") or get_settings().instagram_account_id or get_settings().ig_page_id
+    verify_token = os.environ.get("META_VERIFY_TOKEN", "") or os.environ.get("INSTAGRAM_VERIFY_TOKEN", "") or get_settings().meta_verify_token
 
     stmt = select(ChannelIntegration).where(ChannelIntegration.channel_type == ChannelType.instagram)
     ch = (await session.exec(stmt)).first()
+
+    if not token and ch and ch.credentials_encrypted:
+        token = ch.credentials_encrypted
 
     return {
         "instagram_access_token": token,
@@ -722,32 +740,43 @@ async def update_instagram_config(
     import os
     env_updates = {}
     if body.instagram_access_token is not None:
-        env_updates["INSTAGRAM_ACCESS_TOKEN"] = body.instagram_access_token.strip()
+        token_clean = body.instagram_access_token.strip()
+        env_updates["INSTAGRAM_ACCESS_TOKEN"] = token_clean
+        os.environ["INSTAGRAM_ACCESS_TOKEN"] = token_clean
+        get_settings().instagram_access_token = token_clean
     if body.instagram_account_id is not None:
-        env_updates["INSTAGRAM_ACCOUNT_ID"] = body.instagram_account_id.strip()
+        acc_clean = body.instagram_account_id.strip()
+        env_updates["INSTAGRAM_ACCOUNT_ID"] = acc_clean
+        os.environ["INSTAGRAM_ACCOUNT_ID"] = acc_clean
+        get_settings().instagram_account_id = acc_clean
     if body.instagram_verify_token is not None:
-        env_updates["META_VERIFY_TOKEN"] = body.instagram_verify_token.strip()
-        env_updates["INSTAGRAM_VERIFY_TOKEN"] = body.instagram_verify_token.strip()
+        verify_clean = body.instagram_verify_token.strip()
+        env_updates["META_VERIFY_TOKEN"] = verify_clean
+        env_updates["INSTAGRAM_VERIFY_TOKEN"] = verify_clean
+        os.environ["META_VERIFY_TOKEN"] = verify_clean
+        os.environ["INSTAGRAM_VERIFY_TOKEN"] = verify_clean
+        get_settings().meta_verify_token = verify_clean
 
     if env_updates:
         _update_env_file(env_updates)
 
     stmt = select(ChannelIntegration).where(ChannelIntegration.channel_type == ChannelType.instagram)
     ch = (await session.exec(stmt)).first()
+    saved_token = os.environ.get("INSTAGRAM_ACCESS_TOKEN", "")
     if not ch:
         ch = ChannelIntegration(
             channel_type=ChannelType.instagram,
-            display_name=env_updates.get("INSTAGRAM_ACCOUNT_ID") or os.environ.get("INSTAGRAM_ACCOUNT_ID", "Instagram Direct"),
+            display_name=os.environ.get("INSTAGRAM_ACCOUNT_ID") or "Instagram Direct",
             status=ChannelStatus.connected,
-            credentials_encrypted=env_updates.get("INSTAGRAM_ACCESS_TOKEN"),
+            credentials_encrypted=saved_token,
             weekly_volume=0
         )
         session.add(ch)
     else:
-        if "INSTAGRAM_ACCESS_TOKEN" in env_updates:
-            ch.credentials_encrypted = env_updates["INSTAGRAM_ACCESS_TOKEN"]
-        if "INSTAGRAM_ACCOUNT_ID" in env_updates:
-            ch.display_name = env_updates["INSTAGRAM_ACCOUNT_ID"]
+        if saved_token:
+            ch.credentials_encrypted = saved_token
+        if os.environ.get("INSTAGRAM_ACCOUNT_ID"):
+            ch.display_name = os.environ.get("INSTAGRAM_ACCOUNT_ID")
         ch.status = ChannelStatus.connected
         session.add(ch)
     
@@ -757,8 +786,8 @@ async def update_instagram_config(
     return {
         "status": "success",
         "message": "Instagram Access Token and credentials updated successfully in .env and database!",
-        "instagram_account_id": os.environ.get("INSTAGRAM_ACCOUNT_ID"),
-        "instagram_access_token": os.environ.get("INSTAGRAM_ACCESS_TOKEN"),
+        "instagram_account_id": os.environ.get("INSTAGRAM_ACCOUNT_ID", ""),
+        "instagram_access_token": saved_token,
     }
 
 
@@ -774,8 +803,8 @@ async def test_instagram_config(
     import os
     import httpx
 
-    token = (body.instagram_access_token if (body and body.instagram_access_token) else os.environ.get("INSTAGRAM_ACCESS_TOKEN", "")).strip()
-    account_id = (body.instagram_account_id if (body and body.instagram_account_id) else os.environ.get("INSTAGRAM_ACCOUNT_ID", "")).strip()
+    token = (body.instagram_access_token if (body and body.instagram_access_token) else os.environ.get("INSTAGRAM_ACCESS_TOKEN", "") or get_settings().instagram_access_token).strip()
+    account_id = (body.instagram_account_id if (body and body.instagram_account_id) else os.environ.get("INSTAGRAM_ACCOUNT_ID", "") or get_settings().instagram_account_id).strip()
 
     if not token:
         raise HTTPException(status_code=400, detail="Instagram Access Token is required to run connection test.")
@@ -837,4 +866,237 @@ async def test_instagram_config(
         }
 
 
+# ─── Facebook Access Token & Credentials Management ─────────────────────────
+
+class FacebookConfigRequest(BaseModel):
+    facebook_access_token: Optional[str] = None
+    facebook_page_access_token: Optional[str] = None
+    facebook_page_id: Optional[str] = None
+    facebook_verify_token: Optional[str] = None
+
+
+@router.get("/facebook-config")
+async def get_facebook_config(
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    if current_user.role not in (UserRole.admin, UserRole.manager):
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    import os
+    token = (
+        os.environ.get("PAGE_ACCESS_TOKEN", "")
+        or os.environ.get("FACEBOOK_ACCESS_TOKEN", "")
+        or os.environ.get("FACEBOOK_PAGE_ACCESS_TOKEN", "")
+        or get_settings().page_access_token
+    )
+    page_id = (
+        os.environ.get("FACEBOOK_PAGE_ID", "")
+        or os.environ.get("FB_PAGE_ID", "")
+        or get_settings().fb_page_id
+    )
+    verify_token = (
+        os.environ.get("META_VERIFY_TOKEN", "")
+        or os.environ.get("FACEBOOK_VERIFY_TOKEN", "")
+        or get_settings().meta_verify_token
+    )
+
+    stmt = select(ChannelIntegration).where(ChannelIntegration.channel_type == ChannelType.facebook)
+    ch = (await session.exec(stmt)).first()
+
+    if not token and ch and ch.credentials_encrypted:
+        token = ch.credentials_encrypted
+
+    return {
+        "facebook_access_token": token,
+        "facebook_page_access_token": token,
+        "facebook_page_id": page_id,
+        "facebook_verify_token": verify_token,
+        "status": ch.status.value if (ch and hasattr(ch.status, 'value')) else (ch.status if ch else "connected"),
+        "channel_id": str(ch.id) if ch else None
+    }
+
+
+@router.post("/facebook-config")
+async def update_facebook_config(
+    body: FacebookConfigRequest,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    if current_user.role != UserRole.admin:
+        raise HTTPException(status_code=403, detail="Only admins can update Facebook credentials")
+
+    import os
+    env_updates = {}
+    token_val = body.facebook_page_access_token or body.facebook_access_token
+    if token_val is not None:
+        token_clean = token_val.strip()
+        env_updates["PAGE_ACCESS_TOKEN"] = token_clean
+        env_updates["FACEBOOK_ACCESS_TOKEN"] = token_clean
+        env_updates["FACEBOOK_PAGE_ACCESS_TOKEN"] = token_clean
+        os.environ["PAGE_ACCESS_TOKEN"] = token_clean
+        os.environ["FACEBOOK_ACCESS_TOKEN"] = token_clean
+        os.environ["FACEBOOK_PAGE_ACCESS_TOKEN"] = token_clean
+        get_settings().page_access_token = token_clean
+
+    if body.facebook_page_id is not None:
+        page_id_clean = body.facebook_page_id.strip()
+        env_updates["FACEBOOK_PAGE_ID"] = page_id_clean
+        env_updates["FB_PAGE_ID"] = page_id_clean
+        os.environ["FACEBOOK_PAGE_ID"] = page_id_clean
+        os.environ["FB_PAGE_ID"] = page_id_clean
+        get_settings().fb_page_id = page_id_clean
+
+    if body.facebook_verify_token is not None:
+        verify_clean = body.facebook_verify_token.strip()
+        env_updates["META_VERIFY_TOKEN"] = verify_clean
+        env_updates["FACEBOOK_VERIFY_TOKEN"] = verify_clean
+        os.environ["META_VERIFY_TOKEN"] = verify_clean
+        os.environ["FACEBOOK_VERIFY_TOKEN"] = verify_clean
+        get_settings().meta_verify_token = verify_clean
+
+    if env_updates:
+        _update_env_file(env_updates)
+
+    stmt = select(ChannelIntegration).where(ChannelIntegration.channel_type == ChannelType.facebook)
+    ch = (await session.exec(stmt)).first()
+    saved_token = os.environ.get("PAGE_ACCESS_TOKEN", "")
+    if not ch:
+        ch = ChannelIntegration(
+            channel_type=ChannelType.facebook,
+            display_name=os.environ.get("FACEBOOK_PAGE_ID") or "Facebook Messenger",
+            status=ChannelStatus.connected,
+            credentials_encrypted=saved_token,
+            weekly_volume=0
+        )
+        session.add(ch)
+    else:
+        if saved_token:
+            ch.credentials_encrypted = saved_token
+        if os.environ.get("FACEBOOK_PAGE_ID"):
+            ch.display_name = os.environ.get("FACEBOOK_PAGE_ID")
+        ch.status = ChannelStatus.connected
+        session.add(ch)
+    
+    await session.commit()
+    await session.refresh(ch)
+
+    return {
+        "status": "success",
+        "message": "Facebook Access Token and credentials updated successfully in .env and database!",
+        "facebook_page_id": os.environ.get("FACEBOOK_PAGE_ID", ""),
+        "facebook_access_token": saved_token,
+        "facebook_page_access_token": saved_token,
+    }
+
+
+@router.post("/facebook-config/test")
+async def test_facebook_config(
+    body: Optional[FacebookConfigRequest] = None,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    if current_user.role not in (UserRole.admin, UserRole.manager):
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    import os
+    import httpx
+
+    token_val = ""
+    if body:
+        token_val = (body.facebook_page_access_token or body.facebook_access_token or "").strip()
+    if not token_val:
+        token_val = (
+            os.environ.get("PAGE_ACCESS_TOKEN")
+            or os.environ.get("FACEBOOK_ACCESS_TOKEN")
+            or os.environ.get("FACEBOOK_PAGE_ACCESS_TOKEN")
+            or get_settings().page_access_token
+            or ""
+        ).strip()
+
+    if not token_val:
+        raise HTTPException(status_code=400, detail="Facebook Access Token is required to run connection test.")
+
+    url = "https://graph.facebook.com/v19.0/debug_token"
+    params = {"input_token": token_val, "access_token": token_val}
+
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as http_client:
+            res = await http_client.get(url, params=params)
+            data = res.json()
+
+        if res.status_code == 200 and data.get("data", {}).get("is_valid"):
+            token_data = data.get("data", {})
+            name = token_data.get("application") or "Facebook Page"
+            acc_id = token_data.get("profile_id") or token_data.get("app_id")
+
+            stmt = select(ChannelIntegration).where(ChannelIntegration.channel_type == ChannelType.facebook)
+            ch = (await session.exec(stmt)).first()
+            if ch:
+                ch.status = ChannelStatus.connected
+                session.add(ch)
+                await session.commit()
+
+            return {
+                "status": "success",
+                "connected": True,
+                "message": f"✅ Facebook Access Token Verified! Connected App: '{name}' (Profile ID: {acc_id})",
+                "details": {
+                    "id": acc_id,
+                    "name": name,
+                    "scopes": token_data.get("scopes", [])
+                }
+            }
+        else:
+            # Fallback to /me endpoint if debug_token doesn't succeed (e.g. Page Access Token vs User Token)
+            async with httpx.AsyncClient(timeout=10.0) as http_client:
+                me_res = await http_client.get(f"https://graph.facebook.com/v19.0/me?access_token={token_val}")
+                me_data = me_res.json()
+            
+            if me_res.status_code == 200 and me_data.get("id"):
+                page_name = me_data.get("name") or "Facebook Page"
+                page_id = me_data.get("id")
+                
+                stmt = select(ChannelIntegration).where(ChannelIntegration.channel_type == ChannelType.facebook)
+                ch = (await session.exec(stmt)).first()
+                if ch:
+                    ch.status = ChannelStatus.connected
+                    session.add(ch)
+                    await session.commit()
+
+                return {
+                    "status": "success",
+                    "connected": True,
+                    "message": f"✅ Facebook Access Token Verified! Connected to '{page_name}' (ID: {page_id})",
+                    "details": {
+                        "id": page_id,
+                        "name": page_name,
+                    }
+                }
+
+            error_obj = data.get("error", {})
+            err_msg = error_obj.get("message", res.text)
+            err_code = error_obj.get("code")
+
+            stmt = select(ChannelIntegration).where(ChannelIntegration.channel_type == ChannelType.facebook)
+            ch = (await session.exec(stmt)).first()
+            if ch:
+                ch.status = ChannelStatus.needs_attention
+                session.add(ch)
+                await session.commit()
+
+            return {
+                "status": "error",
+                "connected": False,
+                "error_code": err_code,
+                "message": f"❌ Meta Facebook Token Test Failed (Code {err_code}): {err_msg}",
+                "raw_error": data
+            }
+
+    except Exception as e:
+        return {
+            "status": "error",
+            "connected": False,
+            "message": f"❌ Network or Server Error while contacting Meta Facebook API: {str(e)}"
+        }
 

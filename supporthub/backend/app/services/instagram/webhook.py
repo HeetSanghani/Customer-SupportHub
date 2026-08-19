@@ -118,26 +118,33 @@ async def _process_single_instagram_event(
 
     # Download attachments if present
     attachments = message_info.get("attachments", [])
+    has_any_attachment = False
     if attachments:
         from app.services.channels.media import GenericMediaDownloader
         for att in attachments:
+            att_type = att.get("type", "file")
             att_payload = att.get("payload", {})
             att_url = att_payload.get("url")
             
             if att_url:
+                has_any_attachment = True
                 local_url, filename = await GenericMediaDownloader.download_url(url=att_url)
                 if local_url and filename:
                     markdown = f" 📎 [Attachment: {filename}]({local_url})"
-                    text_body = (text_body + markdown).strip()
+                else:
+                    logger.info("[IG WEBHOOK] Could not download attachment locally, using raw CDN URL | type=%s", att_type)
+                    markdown = f" 📎 [Attachment: {att_type}]({att_url})"
+                text_body = (text_body + markdown).strip()
 
     logger.info(
-        "[IG WEBHOOK] Event received | sender=%s | recipient=%s | entry_id=%s | mid=%s | is_echo=%s | has_text=%s",
+        "[IG WEBHOOK] Event received | sender=%s | recipient=%s | entry_id=%s | mid=%s | is_echo=%s | has_text=%s | has_attachment=%s",
         sender_id,
         recipient_id,
         entry_account_id,
         message_mid,
         message_info.get("is_echo"),
-        bool(text_body),
+        bool(message_info.get("text", "").strip()),
+        has_any_attachment,
     )
 
     # Safe validation for unsupported event types, echos, or empty message IDs
@@ -161,8 +168,8 @@ async def _process_single_instagram_event(
             valid_account_ids,
         )
 
-    # Skip event if text_body is empty (after processing attachments)
-    if not text_body:
+    # Skip event only if there is truly nothing to process
+    if not text_body and not has_any_attachment:
         logger.info("[IG WEBHOOK] Ignoring message %s: empty text body and no attachments.", message_mid)
         return
 
@@ -490,6 +497,8 @@ async def _execute_ai_for_instagram(ticket_id, sender_id: str, ticket_id_str: st
                     logger.warning("[IG AUTO-AI] Outbound IG API call failed (saved locally): %s", send_err)
 
                 # 5. Store AI message in database
+                ticket.updated_at = datetime.now()
+                db_session.add(ticket)
                 ai_msg = Message(
                     ticket_id=ticket.id,
                     sender_id=None,

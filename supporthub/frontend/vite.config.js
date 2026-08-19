@@ -18,6 +18,14 @@ export default defineConfig({
         target: 'ws://localhost:8001',
         ws: true,
       },
+      '/uploads': {
+        target: 'http://localhost:8001',
+        changeOrigin: true,
+      },
+      '/static': {
+        target: 'http://localhost:8001',
+        changeOrigin: true,
+      },
     },
   },
 })

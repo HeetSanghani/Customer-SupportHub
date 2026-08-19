@@ -45,3 +45,32 @@ export function formatTime(dateStr) {
   if (!dateStr) return ''
   return parseUTCDate(dateStr).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 }
+
+/**
+ * Formats a datetime string dynamically:
+ * - If the date matches the current calendar day (today), displays the time (e.g. "10:45 AM").
+ * - Otherwise (if older/previous day), displays the date (e.g. "Aug 14, 2026" or "8/14/2026").
+ *
+ * @param {string|Date|null|undefined} dateStr - ISO datetime string or Date object
+ * @returns {string} - Formatted dynamic string
+ */
+export function formatSmartTime(dateStr) {
+  if (!dateStr) return ''
+  const date = parseUTCDate(dateStr)
+  if (isNaN(date.getTime())) return ''
+
+  const now = new Date()
+  const isToday =
+    date.getFullYear() === now.getFullYear() &&
+    date.getMonth() === now.getMonth() &&
+    date.getDate() === now.getDate()
+
+  if (isToday) {
+    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  }
+  return date.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })
+}
+
+// Aliases for compatibility across components
+export const formatChatTime = formatSmartTime
+export const formatTimeOrDate = formatSmartTime

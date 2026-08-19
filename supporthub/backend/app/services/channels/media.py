@@ -68,7 +68,8 @@ class GenericMediaDownloader:
                 with open(file_path, "wb") as f:
                     f.write(media_res.content)
                     
-                local_url = f"http://localhost:8001/static/uploads/{filename}"
+                from app.config import get_settings as _get_settings
+                local_url = f"{_get_settings().backend_url}/static/uploads/{filename}"
                 logger.info("Successfully downloaded generic media -> %s", filename)
                 return local_url, filename
                 

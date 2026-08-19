@@ -13,19 +13,21 @@ from app.services.instagram.client import MetaInstagramClient
 from app.services.senders import send_email_reply
 from app.ws.manager import manager
 
+from app.config import get_settings
+
 logger = logging.getLogger(__name__)
 
 async def deliver_csat_survey(session: AsyncSession, ticket: Ticket, customer: User) -> Optional[Message]:
     """Generate and deliver a CSAT survey message to the appropriate channel."""
     
-    frontend_url = "http://localhost:8001" # Or from settings
+    backend_url = get_settings().backend_url
     
     # Text fallback for social channels
     text_prompt = (
         f"Your ticket [{ticket.ref}] has been resolved.\n\n"
         f"How would you rate your support experience today?\n"
         f"Please click the link below to submit your rating (1-5):\n"
-        f"{frontend_url}/api/v1/tickets/{ticket.id}/rate-email?rating=5\n"
+        f"{backend_url}/api/v1/tickets/{ticket.id}/rate-email?rating=5\n"
         f"We appreciate your feedback!"
     )
     
@@ -37,10 +39,10 @@ async def deliver_csat_survey(session: AsyncSession, ticket: Ticket, customer: U
         </div>
         <p style="color: #6C7089; font-size: 13px; margin: 4px 0 16px 0;">Your inquiry <strong>"{ticket.subject}"</strong> has been resolved. How would you rate your support experience today?</p>
         <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-            <a href="{frontend_url}/api/v1/tickets/{ticket.id}/rate-email?rating=5" target="_blank" style="background: #10B981; color: white; padding: 8px 14px; text-decoration: none; border-radius: 10px; font-weight: bold; font-size: 12px; display: inline-block;">⭐⭐⭐⭐⭐ 5 - Excellent</a>
-            <a href="{frontend_url}/api/v1/tickets/{ticket.id}/rate-email?rating=4" target="_blank" style="background: #3B82F6; color: white; padding: 8px 14px; text-decoration: none; border-radius: 10px; font-weight: bold; font-size: 12px; display: inline-block;">⭐⭐⭐⭐ 4 - Good</a>
-            <a href="{frontend_url}/api/v1/tickets/{ticket.id}/rate-email?rating=3" target="_blank" style="background: #F59E0B; color: white; padding: 8px 14px; text-decoration: none; border-radius: 10px; font-weight: bold; font-size: 12px; display: inline-block;">⭐⭐⭐ 3 - Neutral</a>
-            <a href="{frontend_url}/api/v1/tickets/{ticket.id}/rate-email?rating=1" target="_blank" style="background: #EF4444; color: white; padding: 8px 14px; text-decoration: none; border-radius: 10px; font-weight: bold; font-size: 12px; display: inline-block;">⭐ 1 - Unsatisfied</a>
+            <a href="{backend_url}/api/v1/tickets/{ticket.id}/rate-email?rating=5" target="_blank" style="background: #10B981; color: white; padding: 8px 14px; text-decoration: none; border-radius: 10px; font-weight: bold; font-size: 12px; display: inline-block;">⭐⭐⭐⭐⭐ 5 - Excellent</a>
+            <a href="{backend_url}/api/v1/tickets/{ticket.id}/rate-email?rating=4" target="_blank" style="background: #3B82F6; color: white; padding: 8px 14px; text-decoration: none; border-radius: 10px; font-weight: bold; font-size: 12px; display: inline-block;">⭐⭐⭐⭐ 4 - Good</a>
+            <a href="{backend_url}/api/v1/tickets/{ticket.id}/rate-email?rating=3" target="_blank" style="background: #F59E0B; color: white; padding: 8px 14px; text-decoration: none; border-radius: 10px; font-weight: bold; font-size: 12px; display: inline-block;">⭐⭐⭐ 3 - Neutral</a>
+            <a href="{backend_url}/api/v1/tickets/{ticket.id}/rate-email?rating=1" target="_blank" style="background: #EF4444; color: white; padding: 8px 14px; text-decoration: none; border-radius: 10px; font-weight: bold; font-size: 12px; display: inline-block;">⭐ 1 - Unsatisfied</a>
         </div>
         <p style="color: #9598B0; font-size: 11px; margin-top: 14px; margin-bottom: 0;">Need further assistance? Simply reply to this thread to automatically reopen your ticket.</p>
     </div>
@@ -87,6 +89,10 @@ async def deliver_csat_survey(session: AsyncSession, ticket: Ticket, customer: U
     elif ticket.channel == TicketChannel.instagram:
         if customer and customer.channel_customer_id:
             asyncio.create_task(_send_instagram_csat(ticket, customer, msg))
+
+    elif ticket.channel == TicketChannel.facebook:
+        if customer and customer.channel_customer_id:
+            asyncio.create_task(_send_facebook_csat(ticket, customer, msg))
 
     return msg
 
@@ -138,6 +144,28 @@ async def _send_instagram_csat(ticket: Ticket, customer: User, msg: Message):
                 await session.commit()
     except Exception as exc:
         logger.error(f"Failed to send CSAT via Instagram for ticket {ticket.ref}: {exc}")
+        async with AsyncSessionLocal() as session:
+            db_msg = await session.get(Message, msg.id)
+            if db_msg:
+                db_msg.attachments = json.dumps({"status": "failed", "error_message": str(exc)})
+                session.add(db_msg)
+                await session.commit()
+
+async def _send_facebook_csat(ticket: Ticket, customer: User, msg: Message):
+    """Send a CSAT survey to a Facebook Messenger customer via the Graph API."""
+    from app.database import AsyncSessionLocal
+    from app.services.senders import send_messenger_reply
+    try:
+        success = await send_messenger_reply(recipient_id=customer.channel_customer_id, text=msg.body)
+        status = "delivered" if success else "failed"
+        async with AsyncSessionLocal() as session:
+            db_msg = await session.get(Message, msg.id)
+            if db_msg:
+                db_msg.attachments = json.dumps({"status": status})
+                session.add(db_msg)
+                await session.commit()
+    except Exception as exc:
+        logger.error(f"Failed to send CSAT via Facebook Messenger for ticket {ticket.ref}: {exc}")
         async with AsyncSessionLocal() as session:
             db_msg = await session.get(Message, msg.id)
             if db_msg:

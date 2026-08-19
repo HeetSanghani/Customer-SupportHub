@@ -251,14 +251,33 @@ class GeminiAdapter(AIModelAdapter):
                         role = "user" if msg["role"] == "user" else "model"
                         parts = [msg["content"]]
                         # Append images to the last message if available
-                        if i == len(prompt.messages) - 1 and role == "user" and getattr(prompt, "image_paths", None):
-                            import PIL.Image
-                            for p in prompt.image_paths:
-                                try:
-                                    img = PIL.Image.open(p)
-                                    parts.append(img)
-                                except Exception as e:
-                                    logger.error(f"Failed to load image {p} for Gemini: {e}")
+                        if i == len(prompt.messages) - 1 and role == "user":
+                            # 1. Local image files
+                            if getattr(prompt, "image_paths", None):
+                                import PIL.Image
+                                for p in prompt.image_paths:
+                                    try:
+                                        img = PIL.Image.open(p)
+                                        parts.append(img)
+                                    except Exception as e:
+                                        logger.error(f"Failed to load image {p} for Gemini: {e}")
+                            # 2. Remote image URLs (Facebook/Instagram CDN)
+                            if getattr(prompt, "image_urls", None):
+                                import httpx as _httpx
+                                import io
+                                import PIL.Image
+                                for img_url in prompt.image_urls:
+                                    try:
+                                        async with _httpx.AsyncClient(timeout=10.0) as img_client:
+                                            img_resp = await img_client.get(img_url)
+                                        if img_resp.status_code == 200:
+                                            img = PIL.Image.open(io.BytesIO(img_resp.content))
+                                            parts.append(img)
+                                            logger.info("Loaded remote image for Gemini vision | url=%s", img_url[:80])
+                                        else:
+                                            logger.warning("Failed to fetch remote image for Gemini | status=%d | url=%s", img_resp.status_code, img_url[:80])
+                                    except Exception as e:
+                                        logger.error(f"Failed to load remote image {img_url[:80]} for Gemini: {e}")
                         gemini_messages.append({"role": role, "parts": parts})
 
                     # Make the API call

@@ -152,18 +152,25 @@ class ContextBuilder:
                 current_message = ticket.subject or "Support Request"
 
             image_paths = []
+            image_urls = []
             if messages:
                 import re
                 import os
                 upload_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "uploads"))
                 
-                # Extract image attachments from the current message
-                matches = re.findall(r"📎\s*\[Attachment:\s*([^\]]+)\]\(([^)]+)\)", current_message)
-                for filename, url in matches:
-                    if filename.lower().endswith(('.jpg', '.jpeg', '.png', '.webp', '.gif')):
-                        local_path = os.path.join(upload_dir, filename)
-                        if os.path.exists(local_path):
+                # Extract image attachments from ALL messages (history + current)
+                # to capture images sent in previous turns of the conversation
+                for msg in messages:
+                    body = msg.body or ""
+                    matches = re.findall(r"📎\s*\[Attachment:\s*([^\]]+)\]\(([^)]+)\)", body)
+                    for filename_or_type, url in matches:
+                        # Check if this is a local file we already downloaded
+                        local_path = os.path.join(upload_dir, filename_or_type)
+                        if os.path.exists(local_path) and filename_or_type.lower().endswith(('.jpg', '.jpeg', '.png', '.webp', '.gif')):
                             image_paths.append(local_path)
+                        elif url.startswith('http'):
+                            # Store remote CDN URL for adapters that support URL-based images
+                            image_urls.append(url)
 
             return LLMContext(
                 customer_name=customer_name,
@@ -182,6 +189,7 @@ class ContextBuilder:
                 ticket_category=ticket.category,
                 tone=tone,
                 image_paths=image_paths,
+                image_urls=image_urls,
             )
         except Exception as exc:
             raise ContextBuildError(f"Error building LLMContext from ticket: {exc}") from exc

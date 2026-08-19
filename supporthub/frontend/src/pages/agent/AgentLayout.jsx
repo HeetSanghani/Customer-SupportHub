@@ -3,12 +3,13 @@ import { Routes, Route, Navigate, Link, useNavigate, useLocation } from 'react-r
 import { useAuthStore } from '../../store/authStore'
 import { useQuery } from '@tanstack/react-query'
 import { ticketsApi } from '../../api/tickets'
-import { Inbox, CheckCircle, Clock, LogOut, Search, Filter, LayoutDashboard, ListFilter, Zap, BookOpen, MessageSquare, Mail, Smartphone, Instagram } from 'lucide-react'
+import { Inbox, CheckCircle, Clock, LogOut, Search, Filter, LayoutDashboard, ListFilter, Zap, BookOpen, MessageSquare, Mail, Smartphone, Instagram, Facebook } from 'lucide-react'
 
 import UnifiedInbox from '../../components/UnifiedInbox'
 import WhatsAppInbox from '../../components/WhatsAppInbox'
 import EmailInbox from '../../components/EmailInbox'
 import InstagramInbox from '../../components/InstagramInbox'
+import FacebookInbox from '../../components/FacebookInbox'
 import AgentOverview from './AgentOverview'
 import AgentTicketQueue from './AgentTicketQueue'
 import AgentQuickReplies from './AgentQuickReplies'
@@ -110,6 +111,10 @@ export default function AgentLayout() {
             <div className="flex items-center gap-2.5"><Instagram size={16} className="text-pink-400" /> Instagram Inbox</div>
           </Link>
 
+          <Link to="/agent/facebook" className={`flex items-center justify-between px-3 py-2 rounded-lg text-xs font-semibold transition-colors ${location.pathname === '/agent/facebook' ? 'bg-[#1877F2] text-white shadow-sm' : 'text-[#9598B0] hover:bg-white/5'}`}>
+            <div className="flex items-center gap-2.5"><Facebook size={16} className="text-blue-400" /> Facebook Inbox</div>
+          </Link>
+
           <Link to="/agent/email" className={`flex items-center justify-between px-3 py-2 rounded-lg text-xs font-semibold transition-colors ${location.pathname === '/agent/email' ? 'bg-indigo-600 text-white shadow-sm' : 'text-[#9598B0] hover:bg-white/5'}`}>
             <div className="flex items-center gap-2.5"><Mail size={16} className="text-indigo-400" /> Email Inbox</div>
           </Link>
@@ -165,6 +170,7 @@ export default function AgentLayout() {
           <Route path="/" element={<AgentOverview />} />
           <Route path="/whatsapp" element={<WhatsAppInbox basePath="/agent" />} />
           <Route path="/instagram" element={<InstagramInbox basePath="/agent" />} />
+          <Route path="/facebook" element={<FacebookInbox basePath="/agent" />} />
           <Route path="/email" element={<EmailInbox basePath="/agent" />} />
           <Route path="/inbox" element={<UnifiedInbox filter="all" basePath="/agent" />} />
           <Route path="/active" element={<UnifiedInbox filter="active" basePath="/agent" />} />

@@ -1,34 +1,41 @@
-"""Automation rule evaluation — runs on every new ticket/message."""
+"""
+app/tasks/automation_tasks.py
+
+Automation rule evaluation — runs on new tickets/messages in background.
+"""
+
+import asyncio
+import logging
+import uuid
 from app.tasks.celery_app import celery_app
+
+logger = logging.getLogger(__name__)
 
 
 @celery_app.task(name="app.tasks.automation_tasks.evaluate_automations", bind=True, max_retries=2)
-def evaluate_automations(self, ticket_id: str):
+def evaluate_automations(self, ticket_id: str, event_type: str = "ticket_created", message_body: str = None):
     """
-    Evaluate all active automation rules against the given ticket.
-    Rules are sorted by priority (lower = evaluated first).
-    Phase 12: full rule engine. For now: hardcoded behaviors.
+    Evaluate all active automation rules against the given ticket asynchronously.
     """
-    from sqlalchemy import create_engine
-    from sqlmodel import Session, select
-    from app.config import get_settings
-    from app.models import Ticket, Automation, TicketStatus
+    from app.database import AsyncSessionLocal
+    from app.models import Ticket
+    from app.services.automations.engine import evaluate_ticket_automations
 
-    settings = get_settings()
-    sync_url = settings.database_url.replace("postgresql+asyncpg", "postgresql+psycopg2")
-    engine = create_engine(sync_url)
+    async def _run():
+        try:
+            ticket_uuid = uuid.UUID(ticket_id) if isinstance(ticket_id, str) else ticket_id
+            async with AsyncSessionLocal() as session:
+                ticket = await session.get(Ticket, ticket_uuid)
+                if not ticket or ticket.deleted_at:
+                    return
+                results = await evaluate_ticket_automations(
+                    session=session,
+                    ticket=ticket,
+                    event_type=event_type,
+                    message_body=message_body,
+                )
+                logger.info(f"[Automation Task] Evaluated {len(results)} rules on ticket {ticket.ref}")
+        except Exception as exc:
+            logger.error(f"[Automation Task] Error evaluating ticket {ticket_id}: {exc}")
 
-    with Session(engine) as session:
-        ticket = session.get(Ticket, ticket_id)
-        if not ticket or ticket.deleted_at:
-            return
-
-        automations = session.exec(
-            select(Automation)
-            .where(Automation.is_active == True)
-            .order_by(Automation.priority)
-        ).all()
-
-        for auto in automations:
-            # Phase 12: parse trigger_json + action_json and evaluate
-            print(f"[Automation] Evaluating '{auto.name}' on {ticket.ref}")
+    asyncio.run(_run())

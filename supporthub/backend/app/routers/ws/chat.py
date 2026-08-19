@@ -183,7 +183,9 @@ async def websocket_chat(
                 if not body:
                     continue
 
-                # Persist message
+                # Persist message and update ticket activity timestamp
+                ticket.updated_at = datetime.now()
+                session.add(ticket)
                 msg = Message(
                     ticket_id=ticket_uuid,
                     sender_id=user.id,
@@ -270,6 +272,10 @@ async def websocket_chat(
                                     ai_text = "I'm sorry, our AI assistant is temporarily unavailable due to high demand. A human agent will assist you shortly."
                                 else:
                                     ai_text = "I'm sorry, something went wrong on our end. Please try again in a moment."
+
+                            if fresh_ticket:
+                                fresh_ticket.updated_at = datetime.now()
+                                ai_session.add(fresh_ticket)
 
                             ai_msg = Message(
                                 ticket_id=UUID(room_id),

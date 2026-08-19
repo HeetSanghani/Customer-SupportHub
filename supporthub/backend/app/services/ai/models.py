@@ -76,7 +76,8 @@ class LLMContext:
     ticket_subject: Optional[str] = None
     ticket_category: Optional[str] = None
     tone: Optional[str] = None
-    image_paths: list[str] = field(default_factory=list)
+    image_paths: list[str] = field(default_factory=list)  # local file paths
+    image_urls: list[str] = field(default_factory=list)   # remote CDN URLs
 
 
 # ─── Prompt ───────────────────────────────────────────────────────────────────
@@ -110,7 +111,8 @@ class Prompt:
     temperature: float = 0.4
     max_tokens: int = 500
     model_name: str = "gemini-flash-lite-latest"
-    image_paths: list[str] = field(default_factory=list)
+    image_paths: list[str] = field(default_factory=list)   # local filesystem paths
+    image_urls: list[str] = field(default_factory=list)    # remote URLs (CDN, etc.)
 
     @property
     def system_hash(self) -> str:

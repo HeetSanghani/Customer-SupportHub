@@ -16,6 +16,7 @@ import UnifiedInbox from '../../components/UnifiedInbox'
 import WhatsAppInbox from '../../components/WhatsAppInbox'
 import EmailInbox from '../../components/EmailInbox'
 import InstagramInbox from '../../components/InstagramInbox'
+import FacebookInbox from '../../components/FacebookInbox'
 import TicketDetail from '../../components/TicketDetail'
 import AdminOverview from './AdminOverview'
 import UserManagement from './UserManagement'
@@ -24,7 +25,7 @@ import HelpCenterMgmt from './HelpCenterMgmt'
 import AISettings from './AISettings'
 import RolesPermissions from './RolesPermissions'
 import SystemSettings from './SystemSettings'
-import { Smartphone, Mail, Instagram } from 'lucide-react'
+import { Smartphone, Mail, Instagram, Facebook } from 'lucide-react'
 
 export default function AdminLayout() {
   const { role, logout, name, setRole, isAuthenticated } = useAuthStore()
@@ -51,6 +52,7 @@ export default function AdminLayout() {
     { label: 'Dashboard', path: '/admin', icon: LayoutDashboard, exact: true },
     { label: 'WhatsApp Inbox', path: '/admin/whatsapp', icon: Smartphone },
     { label: 'Instagram Inbox', path: '/admin/instagram', icon: Instagram },
+    { label: 'Facebook Inbox', path: '/admin/facebook', icon: Facebook },
     { label: 'Email Inbox', path: '/admin/email', icon: Mail },
     { label: 'User Management', path: '/admin/users', icon: Users },
     { label: 'Channel Integrations', path: '/admin/channels', icon: Link2 },
@@ -155,6 +157,7 @@ export default function AdminLayout() {
           <Route path="/" element={<AdminOverview />} />
           <Route path="/whatsapp" element={<WhatsAppInbox basePath="/admin" />} />
           <Route path="/instagram" element={<InstagramInbox basePath="/admin" />} />
+          <Route path="/facebook" element={<FacebookInbox basePath="/admin" />} />
           <Route path="/email" element={<EmailInbox basePath="/admin" />} />
           <Route path="/users" element={<UserManagement />} />
           <Route path="/directory" element={<UserManagement />} />

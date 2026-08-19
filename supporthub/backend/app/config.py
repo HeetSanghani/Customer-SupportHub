@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     app_env: str = "development"
     secret_key: str = "change_me"
     frontend_url: str = "http://localhost:5173"
+    backend_url: str = "http://localhost:8001"   # Set to your public domain in production
 
     # Database
     database_url: str = "postgresql+asyncpg://supporthub:supporthub_dev@localhost:5432/supporthub"

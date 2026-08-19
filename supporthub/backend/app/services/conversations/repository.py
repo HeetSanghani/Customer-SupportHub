@@ -440,6 +440,8 @@ class MessageRepository:
             attachments=attachments_json,
             external_message_id=incoming.channel_message_id,
         )
+        ticket.updated_at = datetime.utcnow()
+        session.add(ticket)
         session.add(message)
         await session.flush()
         return message

@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { ticketsApi } from '../api/tickets'
 import { useAuthStore } from '../store/authStore'
 import client from '../api/client'
-import { formatDateTime, formatTime } from '../utils/dateUtils'
+import { formatDateTime, formatTime, formatSmartTime } from '../utils/dateUtils'
 import { 
   Mail, Search, Filter, Bot, User, Send, Paperclip, 
   Sparkles, Check, CheckCheck, AlertCircle, Clock, Zap, 
@@ -272,12 +272,18 @@ export default function EmailInbox({ basePath = '/agent' }) {
     }
     return true
   }).sort((a, b) => {
-    if (sortBy === 'oldest') return new Date(a.created_at) - new Date(b.created_at)
+    if (sortBy === 'oldest') {
+      const timeA = new Date(a.updated_at || a.created_at).getTime()
+      const timeB = new Date(b.updated_at || b.created_at).getTime()
+      return timeA - timeB
+    }
     if (sortBy === 'priority') {
       const pOrder = { urgent: 4, high: 3, medium: 2, low: 1 }
       return (pOrder[b.priority] || 0) - (pOrder[a.priority] || 0)
     }
-    return new Date(b.created_at) - new Date(a.created_at)
+    const timeA = new Date(a.updated_at || a.created_at).getTime()
+    const timeB = new Date(b.updated_at || b.created_at).getTime()
+    return timeB - timeA
   })
 
   // Set default selected ticket to the first active ticket (open, waiting, new)
@@ -327,14 +333,25 @@ export default function EmailInbox({ basePath = '/agent' }) {
   // 3. WebSocket Real-time Connection
   useEffect(() => {
     if (!selectedTicketId || !token) return
-    const wsUrl = `ws://localhost:8001/ws/chat/${selectedTicketId}?token=${token}`
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+    const host = window.location.host
+    const wsUrl = `${protocol}//${host}/ws/chat/${selectedTicketId}?token=${token}`
     const socket = new WebSocket(wsUrl)
 
     socket.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data)
         if (data.type === 'message') {
-          setMessages(prev => [...prev, data])
+          setMessages(prev => {
+            const exists = prev.some(m => (m.id && m.id === data.id) || (m.external_message_id && m.external_message_id === data.external_message_id))
+            if (exists) return prev
+            return [...prev, data]
+          })
+          // Update query cache for ticket so updated_at is now, bringing it to top immediately
+          queryClient.setQueryData(['email-tickets'], old => {
+            if (!old) return old
+            return old.map(t => t.id === selectedTicketId ? { ...t, updated_at: new Date().toISOString() } : t)
+          })
           queryClient.invalidateQueries({ queryKey: ['email-tickets'] })
         }
       } catch (e) {
@@ -520,7 +537,7 @@ export default function EmailInbox({ basePath = '/agent' }) {
                         {ticket.customer?.name || 'Email Customer'}
                       </span>
                       <span className="text-[10px] text-[#9598B0]">
-                        {formatTime(ticket.updated_at || ticket.created_at)}
+                        {formatSmartTime(ticket.updated_at || ticket.created_at)}
                       </span>
                     </div>
 
@@ -720,7 +737,7 @@ export default function EmailInbox({ basePath = '/agent' }) {
                         </div>
                       </div>
                       <span className={`text-[10px] font-mono ${isCustomer ? 'text-[#9598B0]' : isAI ? 'text-indigo-600 font-semibold' : 'text-indigo-100'}`}>
-                        {formatTime(msg.created_at)}
+                        {formatSmartTime(msg.created_at)}
                       </span>
                     </div>
 
@@ -732,25 +749,69 @@ export default function EmailInbox({ basePath = '/agent' }) {
                     {/* Email Content Body */}
                     <div className="text-xs leading-relaxed whitespace-pre-wrap font-sans">
                       {(() => {
-                        const match = msg.body?.match(/📎\s*\[Attachment:\s*([^\]]+)\]\(([^)]+)\)/)
+                        const match = msg.body?.match(/📎\s*\[Attachment:\s*([^\]]+)\]\(([^)]+)\)/i) || msg.body?.match(/📎\s*Attachment:\s*([^\s(]+)\s*\(([^)]+)\)/i)
                         if (match) {
                           const filename = match[1]
-                          const url = match[2]
-                          const isImage = /\.(jpg|jpeg|png|gif|webp|svg)/i.test(filename) || /\.(jpg|jpeg|png|gif|webp|svg)/i.test(url)
+                          let rawUrl = match[2]
+                          const backendBase = (typeof window !== 'undefined' && (window.location.port === '5173' || window.location.port === '3000')) ? 'http://localhost:8001' : ''
+                          const url = rawUrl.startsWith('http') ? rawUrl : `${backendBase}${rawUrl.startsWith('/') ? '' : '/'}${rawUrl}`
+                          const isImage = /\.(jpg|jpeg|png|gif|webp|svg|bmp|ico)(\?.*)?$/i.test(filename) || 
+                                          /\.(jpg|jpeg|png|gif|webp|svg|bmp|ico)(\?.*)?$/i.test(url) || 
+                                          /image|photo|picture|screenshot/i.test(filename) || 
+                                          /(fbsbx|fbcdn|cdninstagram|lookaside)/i.test(url)
+                          const isVideo = /\.(mp4|webm|mov|ogg|m4v|3gp)(\?.*)?$/i.test(filename) || 
+                                          /\.(mp4|webm|mov|ogg|m4v|3gp)(\?.*)?$/i.test(url) || 
+                                          /video|clip/i.test(filename)
+                          const isAudio = /\.(mp3|wav|ogg|m4a|aac)(\?.*)?$/i.test(filename) || 
+                                          /\.(mp3|wav|ogg|m4a|aac)(\?.*)?$/i.test(url) || 
+                                          /audio|voice/i.test(filename)
+                          const isPdf = /\.pdf(\?.*)?$/i.test(filename) || /\.pdf(\?.*)?$/i.test(url)
                           const textWithoutLink = msg.body.replace(match[0], '').trim()
 
                           return (
                             <div className="space-y-2 mt-1">
-                              {textWithoutLink && <p className="whitespace-pre-wrap">{textWithoutLink}</p>}
                               {isImage ? (
                                 <a href={url} target="_blank" rel="noopener noreferrer" className="block mt-1 overflow-hidden rounded-xl border border-black/10 shadow-sm max-w-xs hover:opacity-95 transition-opacity">
-                                  <img src={url} alt={filename} className="w-full h-auto max-h-48 object-cover rounded-xl" />
+                                  <img 
+                                    src={url} 
+                                    alt={filename} 
+                                    className="w-full h-auto max-h-48 object-cover rounded-xl"
+                                    onError={(e) => {
+                                      e.target.onerror = null
+                                      e.target.style.display = 'none'
+                                      if (e.target.parentElement) {
+                                        e.target.parentElement.className = 'inline-flex items-center gap-2 px-3 py-2 bg-black/10 hover:bg-black/20 rounded-xl font-bold transition-colors text-xs'
+                                        e.target.parentElement.innerText = `📎 ${filename || 'Image Attachment'}`
+                                      }
+                                    }}
+                                  />
+                                </a>
+                              ) : isVideo ? (
+                                <div className="mt-1 overflow-hidden rounded-xl border border-black/10 shadow-sm max-w-xs bg-black">
+                                  <video controls preload="metadata" className="w-full h-auto max-h-48 rounded-xl" src={url}>
+                                    Your browser does not support video playback.
+                                  </video>
+                                </div>
+                              ) : isAudio ? (
+                                <div className="mt-1 p-2 rounded-xl bg-black/5 border border-black/10 max-w-xs">
+                                  <audio controls className="w-full h-8" src={url}>
+                                    Your browser does not support audio playback.
+                                  </audio>
+                                  <div className="text-[10px] text-gray-500 mt-1 truncate">🎵 {filename}</div>
+                                </div>
+                              ) : isPdf ? (
+                                <a href={url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 px-3 py-2 bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-800 rounded-xl font-bold transition-colors text-xs">
+                                  <FileText size={16} className="text-rose-600" />
+                                  <span className="truncate max-w-[200px]">{filename}</span>
+                                  <span className="text-[10px] uppercase px-1.5 py-0.5 bg-rose-200/60 rounded text-rose-900 ml-1">PDF</span>
                                 </a>
                               ) : (
-                                <a href={url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 px-3 py-1.5 bg-black/10 hover:bg-black/20 rounded-xl font-bold transition-colors underline">
-                                  📎 {filename}
+                                <a href={url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 px-3 py-2 bg-black/10 hover:bg-black/20 rounded-xl font-bold transition-colors text-xs">
+                                  <Paperclip size={14} />
+                                  <span className="truncate max-w-[200px]">{filename}</span>
                                 </a>
                               )}
+                              {textWithoutLink && <p className="whitespace-pre-wrap">{textWithoutLink}</p>}
                             </div>
                           )
                         }
@@ -770,7 +831,7 @@ export default function EmailInbox({ basePath = '/agent' }) {
                     <div className={`flex justify-end items-center gap-1 mt-2 text-[10px] ${
                       isCustomer ? 'text-[#9598B0]' : isAI ? 'text-indigo-600 font-semibold' : 'text-indigo-100'
                     }`}>
-                      <span>{formatDateTime(msg.created_at)}</span>
+                      <span>{formatSmartTime(msg.created_at)}</span>
                       {!isCustomer && <CheckCheck size={13} className={isAI ? 'text-indigo-500' : 'text-indigo-200'} />}
                     </div>
                   </div>

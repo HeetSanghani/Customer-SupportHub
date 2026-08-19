@@ -11,7 +11,9 @@ from pydantic import BaseModel
 from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlmodel import select, and_, or_
 from sqlalchemy.orm import selectinload
+from sqlalchemy import func
 
+from app.config import get_settings
 from app.database import get_session
 from app.dependencies import get_current_user, require_role
 from app.models import (
@@ -221,6 +223,15 @@ async def create_ticket(
     import asyncio
     asyncio.create_task(_ai_classify_ticket(ticket.id, body.subject, body.body or "", body.category, session))
 
+    # Evaluate Workflow Automations
+    from app.services.automations.engine import evaluate_ticket_automations
+    await evaluate_ticket_automations(
+        session=session,
+        ticket=ticket,
+        event_type="ticket_created",
+        message_body=body.body,
+    )
+
     return TicketOut.from_orm(ticket)
 
 
@@ -247,7 +258,7 @@ async def list_tickets(
     if priority:
         stmt = stmt.where(Ticket.priority == priority)
 
-    stmt = stmt.order_by(Ticket.created_at.desc()).offset(skip).limit(limit)
+    stmt = stmt.order_by(func.coalesce(Ticket.updated_at, Ticket.created_at).desc(), Ticket.created_at.desc()).offset(skip).limit(limit)
     result = await session.exec(stmt)
     tickets = result.all()
     return [TicketOut.from_orm(t) for t in tickets]
@@ -580,7 +591,8 @@ async def upload_ticket_attachment(
     with open(file_path, "wb") as f:
         f.write(contents)
 
-    file_url = f"http://localhost:8001/static/uploads/{file_filename}"
+    backend_url = get_settings().backend_url
+    file_url = f"{backend_url}/static/uploads/{file_filename}"
     return {
         "filename": file.filename,
         "url": file_url,

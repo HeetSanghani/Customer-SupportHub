@@ -175,6 +175,83 @@ export default function ChannelIntegrations() {
     }
   }
 
+  // Facebook Access Token Modal State
+  const [isFbTokenModalOpen, setIsFbTokenModalOpen] = useState(false)
+  const [fbConfigForm, setFbConfigForm] = useState({
+    facebook_page_access_token: '',
+    facebook_access_token: '',
+    facebook_page_id: '',
+    facebook_verify_token: '',
+  })
+  const [isTestingFbToken, setIsTestingFbToken] = useState(false)
+  const [isSavingFbToken, setIsSavingFbToken] = useState(false)
+  const [fbTokenTestResult, setFbTokenTestResult] = useState(null)
+  const [fbTokenSaveResult, setFbTokenSaveResult] = useState(null)
+
+  const openFacebookTokenModal = async () => {
+    setIsFbTokenModalOpen(true)
+    setFbTokenTestResult(null)
+    setFbTokenSaveResult(null)
+    try {
+      const res = await adminApi.getFacebookConfig()
+      const token = res.data.facebook_page_access_token || res.data.facebook_access_token || ''
+      setFbConfigForm({
+        facebook_page_access_token: token,
+        facebook_access_token: token,
+        facebook_page_id: res.data.facebook_page_id || '',
+        facebook_verify_token: res.data.facebook_verify_token || '',
+      })
+    } catch (e) {
+      console.error('Failed to fetch Facebook config:', e)
+    }
+  }
+
+  const handleSaveFbToken = async (e) => {
+    e.preventDefault()
+    setIsSavingFbToken(true)
+    setFbTokenSaveResult(null)
+    try {
+      const tokenVal = (fbConfigForm.facebook_page_access_token || fbConfigForm.facebook_access_token || '').trim()
+      const payload = {
+        facebook_access_token: tokenVal,
+        facebook_page_access_token: tokenVal,
+        facebook_page_id: (fbConfigForm.facebook_page_id || '').trim(),
+        facebook_verify_token: (fbConfigForm.facebook_verify_token || '').trim(),
+      }
+      const res = await adminApi.updateFacebookConfig(payload)
+      setFbTokenSaveResult({ status: 'success', message: res.data.message })
+      queryClient.invalidateQueries(['admin-channels'])
+    } catch (err) {
+      setFbTokenSaveResult({ status: 'error', message: err.response?.data?.detail || 'Failed to update Facebook Access Token.' })
+    } finally {
+      setIsSavingFbToken(false)
+    }
+  }
+
+  const handleTestFbToken = async () => {
+    setIsTestingFbToken(true)
+    setFbTokenTestResult(null)
+    try {
+      const tokenVal = (fbConfigForm.facebook_page_access_token || fbConfigForm.facebook_access_token || '').trim()
+      const payload = {
+        facebook_access_token: tokenVal,
+        facebook_page_access_token: tokenVal,
+        facebook_page_id: (fbConfigForm.facebook_page_id || '').trim(),
+        facebook_verify_token: (fbConfigForm.facebook_verify_token || '').trim(),
+      }
+      const res = await adminApi.testFacebookConfig(payload)
+      setFbTokenTestResult(res.data)
+    } catch (err) {
+      setFbTokenTestResult({
+        status: 'error',
+        connected: false,
+        message: err.response?.data?.detail || 'Token testing failed. Please verify credentials.'
+      })
+    } finally {
+      setIsTestingFbToken(false)
+    }
+  }
+
   // Fetch channels from backend
   const { data: channels = [], isLoading } = useQuery({
     queryKey: ['admin-channels'],
@@ -409,6 +486,15 @@ export default function ChannelIntegrations() {
                       onClick={() => openInstagramTokenModal()}
                       title="Update & Test Instagram Access Token"
                       className="px-3 py-2 rounded-xl text-xs font-bold bg-pink-50 hover:bg-pink-100 text-pink-700 border border-pink-200 transition-colors flex items-center gap-1"
+                    >
+                      <Key size={14} /> Token & Test
+                    </button>
+                  )}
+                  {channel.channel_type === 'facebook' && (
+                    <button
+                      onClick={() => openFacebookTokenModal()}
+                      title="Update & Test Facebook Page Access Token"
+                      className="px-3 py-2 rounded-xl text-xs font-bold bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 transition-colors flex items-center gap-1"
                     >
                       <Key size={14} /> Token & Test
                     </button>
@@ -1024,6 +1110,149 @@ export default function ChannelIntegrations() {
                   >
                     {isSavingIgToken ? <RefreshCw size={14} className="animate-spin" /> : <Check size={14} />}
                     <span>{isSavingIgToken ? 'Updating .env...' : 'Save & Update .env'}</span>
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+      {/* Facebook Access Token Modal */}
+      {isFbTokenModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden border border-[#E5E7F3] animate-fadeIn">
+            {/* Header */}
+            <div className="px-6 py-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white flex justify-between items-center">
+              <div className="flex items-center gap-2">
+                <Facebook size={20} />
+                <div>
+                  <h3 className="font-bold text-base">Meta Facebook Page Access Token</h3>
+                  <p className="text-[11px] text-blue-100">Updates .env file & database settings immediately</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsFbTokenModalOpen(false)}
+                className="text-blue-100 hover:text-white p-1 rounded-lg hover:bg-white/10"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Form Body */}
+            <form onSubmit={handleSaveFbToken} className="p-6 space-y-4 text-xs">
+              {/* Save Alert Status */}
+              {fbTokenSaveResult && (
+                <div className={`p-3.5 rounded-xl border flex items-start gap-2.5 font-semibold text-xs ${fbTokenSaveResult.status === 'success'
+                    ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                    : 'bg-rose-50 text-rose-800 border-rose-200'
+                  }`}>
+                  {fbTokenSaveResult.status === 'success' ? <CheckCircle2 size={18} className="text-emerald-600 shrink-0 mt-0.5" /> : <AlertCircle size={18} className="text-rose-600 shrink-0 mt-0.5" />}
+                  <div>
+                    <div>{fbTokenSaveResult.message}</div>
+                    {fbTokenSaveResult.status === 'success' && (
+                      <div className="text-[10px] text-emerald-700 font-normal mt-0.5">
+                        Runtime environment & backend .env file updated. Changes applied immediately.
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Test Connection Alert Status */}
+              {fbTokenTestResult && (
+                <div className={`p-3.5 rounded-xl border flex items-start gap-2.5 font-semibold text-xs ${fbTokenTestResult.connected
+                    ? 'bg-blue-50 text-blue-900 border-blue-300'
+                    : 'bg-rose-50 text-rose-900 border-rose-300'
+                  }`}>
+                  {fbTokenTestResult.connected ? <CheckCircle2 size={18} className="text-blue-600 shrink-0 mt-0.5" /> : <ShieldAlert size={18} className="text-rose-600 shrink-0 mt-0.5" />}
+                  <div className="space-y-1">
+                    <div className="font-bold">{fbTokenTestResult.message}</div>
+                    {fbTokenTestResult.details && (
+                      <div className="text-[11px] font-mono text-blue-800 bg-white/70 p-2 rounded-lg border border-blue-200 space-y-0.5">
+                        <div>App / Page ID: {fbTokenTestResult.details.id}</div>
+                        <div>Name: {fbTokenTestResult.details.name}</div>
+                        {fbTokenTestResult.details.scopes && (
+                          <div>Permissions: <span className="font-bold text-blue-700">{fbTokenTestResult.details.scopes.join(', ')}</span></div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              <div>
+                <label className="block font-bold text-[#6C7089] uppercase tracking-wider text-[10px] mb-1">
+                  Facebook Page Access Token
+                </label>
+                <textarea
+                  rows={3}
+                  value={fbConfigForm.facebook_page_access_token || fbConfigForm.facebook_access_token || ''}
+                  onChange={e => setFbConfigForm({
+                    ...fbConfigForm,
+                    facebook_page_access_token: e.target.value,
+                    facebook_access_token: e.target.value
+                  })}
+                  placeholder="EAAPcP..."
+                  className="w-full bg-[#F6F7FC] border border-[#E5E7F3] rounded-xl p-3 font-mono text-xs outline-none focus:border-blue-500 focus:bg-white transition-all"
+                  required
+                />
+                <p className="text-[10px] text-[#9598B0] mt-1">
+                  From Meta Developer Portal &gt; Facebook Messenger API &gt; Page Access Token.
+                </p>
+              </div>
+
+              <div>
+                <label className="block font-bold text-[#6C7089] uppercase tracking-wider text-[10px] mb-1">
+                  Facebook Page ID (Optional)
+                </label>
+                <input
+                  type="text"
+                  value={fbConfigForm.facebook_page_id || ''}
+                  onChange={e => setFbConfigForm({ ...fbConfigForm, facebook_page_id: e.target.value })}
+                  placeholder="e.g. 17841400000000000"
+                  className="w-full bg-[#F6F7FC] border border-[#E5E7F3] rounded-xl px-3 py-2 font-mono text-xs outline-none focus:border-blue-500 focus:bg-white transition-all"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-[#6C7089] uppercase tracking-wider text-[10px] mb-1">
+                  Webhook Verify Token (Optional)
+                </label>
+                <input
+                  type="text"
+                  value={fbConfigForm.facebook_verify_token || ''}
+                  onChange={e => setFbConfigForm({ ...fbConfigForm, facebook_verify_token: e.target.value })}
+                  placeholder="your_webhook_verify_token"
+                  className="w-full bg-[#F6F7FC] border border-[#E5E7F3] rounded-xl px-3 py-2 font-mono text-xs outline-none focus:border-blue-500 focus:bg-white transition-all"
+                />
+              </div>
+
+              <div className="flex justify-between items-center pt-4 border-t border-[#E5E7F3] gap-2">
+                <button
+                  type="button"
+                  onClick={handleTestFbToken}
+                  disabled={isTestingFbToken || !(fbConfigForm.facebook_page_access_token || fbConfigForm.facebook_access_token || '').trim()}
+                  className="px-4 py-2 bg-blue-50 hover:bg-blue-100 text-blue-800 font-bold rounded-xl border border-blue-300 transition-all flex items-center gap-1.5 disabled:opacity-50"
+                >
+                  {isTestingFbToken ? <RefreshCw size={14} className="animate-spin" /> : <ShieldCheck size={14} />}
+                  <span>{isTestingFbToken ? 'Testing Meta Token...' : 'Test Connection'}</span>
+                </button>
+
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsFbTokenModalOpen(false)}
+                    className="px-4 py-2 text-xs font-semibold text-gray-600 hover:bg-gray-100 rounded-xl"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSavingFbToken || !(fbConfigForm.facebook_page_access_token || fbConfigForm.facebook_access_token || '').trim()}
+                    className="px-5 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:opacity-90 text-white font-bold rounded-xl transition-all shadow-xs flex items-center gap-1.5 disabled:opacity-50"
+                  >
+                    {isSavingFbToken ? <RefreshCw size={14} className="animate-spin" /> : <Check size={14} />}
+                    <span>{isSavingFbToken ? 'Updating .env...' : 'Save & Update .env'}</span>
                   </button>
                 </div>
               </div>

@@ -22,4 +22,7 @@ export const adminApi = {
   getInstagramConfig: () => client.get('/admin/instagram-config'),
   updateInstagramConfig: (data) => client.post('/admin/instagram-config', data),
   testInstagramConfig: (data) => client.post('/admin/instagram-config/test', data),
+  getFacebookConfig: () => client.get('/admin/facebook-config'),
+  updateFacebookConfig: (data) => client.post('/admin/facebook-config', data),
+  testFacebookConfig: (data) => client.post('/admin/facebook-config/test', data),
 }

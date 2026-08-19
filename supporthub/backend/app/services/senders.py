@@ -5,10 +5,8 @@ from app.config import get_settings
 logger = logging.getLogger(__name__)
 settings = get_settings()
 
-print("=== MAILGUN DEBUG ===")
-print("API KEY:", repr(settings.mailgun_api_key))
-print("DOMAIN:", repr(settings.mailgun_domain))
-print("======================")
+logger.debug("Mailgun domain configured: %s", settings.mailgun_domain or "(not set)")
+
 
 
 import asyncio

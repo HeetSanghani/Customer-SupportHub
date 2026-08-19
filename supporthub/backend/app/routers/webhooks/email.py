@@ -12,8 +12,8 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.database import get_session, AsyncSessionLocal
 from app.models import Ticket, User, Message, TicketChannel, TicketStatus, TicketPriority, SenderType, UserRole, UserStatus
-from app.services.ai_reply import generate_ai_reply
 from app.services.senders import send_email_reply
+from app.config import get_settings
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/email", tags=["webhooks-email"])
@@ -91,6 +91,8 @@ async def process_ai_email_reply(ticket_id: uuid.UUID, email_address: str, email
 
             if ai_reply_text:
                 # 3. Save AI reply Message record to database
+                ticket.updated_at = datetime.now()
+                session.add(ticket)
                 ai_msg = Message(
                     ticket_id=ticket_id,
                     sender_id=None,
@@ -176,7 +178,7 @@ async def receive_mailgun_email(
                         file_path = os.path.join(upload_dir, filename)
                         with open(file_path, "wb") as f:
                             f.write(content)
-                        local_url = f"http://localhost:8001/static/uploads/{filename}"
+                        local_url = f"{get_settings().backend_url}/static/uploads/{filename}"
                         display_name = value.filename or filename
                         markdown = f" 📎 [Attachment: {display_name}]({local_url})"
                         cleaned_body = (cleaned_body + markdown).strip()

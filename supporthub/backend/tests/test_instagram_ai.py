@@ -523,7 +523,7 @@ async def test_instagram_webhook_triggers_auto_ai_reply():
         ]
     }
 
-    with patch("app.services.instagram.webhook.MetaInstagramClient") as mock_client_cls:
+    with patch("app.services.instagram.client.MetaInstagramClient") as mock_client_cls:
         mock_client = AsyncMock()
         mock_client.get_user_profile.return_value = {"name": "Auto User", "profile_pic": None}
         mock_delivery = AsyncMock()
@@ -533,7 +533,7 @@ async def test_instagram_webhook_triggers_auto_ai_reply():
         mock_client.access_token = "mock_token"
         mock_client_cls.return_value = mock_client
 
-        with patch("app.services.instagram.webhook.AIOrchestrator") as mock_orch_cls:
+        with patch("app.services.ai.orchestrator.AIOrchestrator") as mock_orch_cls:
             mock_orch = AsyncMock()
             mock_orch.generate_for_ticket.return_value = {
                 "suggested_reply": "Yes! We ship worldwide to over 100 countries.",
@@ -542,16 +542,14 @@ async def test_instagram_webhook_triggers_auto_ai_reply():
             }
             mock_orch_cls.return_value = mock_orch
 
-            # Set delay to 0 to speed up test
             from app.services.ai.debouncer import ai_debouncer
             original_delay = ai_debouncer.delay_seconds
             ai_debouncer.delay_seconds = 0.01
             
             await process_instagram_webhook_background(payload)
-            
-            # Wait for the debouncer tasks to finish
+            await asyncio.sleep(0.15)
             if ai_debouncer._tasks:
-                await asyncio.gather(*ai_debouncer._tasks.values())
+                await asyncio.gather(*list(ai_debouncer._tasks.values()), return_exceptions=True)
                 
             ai_debouncer.delay_seconds = original_delay
 

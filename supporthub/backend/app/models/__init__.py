@@ -226,8 +226,8 @@ class Macro(SQLModel, table=True):
     body: str = Field(sa_column=Column(Text))
     category: Optional[str] = Field(default=None, max_length=100)
     created_by: uuid.UUID = Field(foreign_key="users.id")
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = Field(default_factory=datetime.now)
+    updated_at: datetime = Field(default_factory=datetime.now)
 
 
 # ─── CSAT Rating ──────────────────────────────────────────────────────────────
@@ -258,8 +258,8 @@ class Automation(SQLModel, table=True):
     is_active: bool = Field(default=True)
     priority: int = Field(default=0)  # lower = evaluated first
     created_by: uuid.UUID = Field(foreign_key="users.id")
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = Field(default_factory=datetime.now)
+    updated_at: datetime = Field(default_factory=datetime.now)
 
 
 # ─── AI Settings (singleton row) ──────────────────────────────────────────────
@@ -275,7 +275,7 @@ class AiSettings(SQLModel, table=True):
     sentiment_detection: bool = Field(default=True)
     confidence_threshold: float = Field(default=0.75)
     model_name: str = Field(default="claude-sonnet-4-5", max_length=100)
-    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=datetime.now)
 
 
 # ─── Audit Log (append-only) ─────────────────────────────────────────────────

@@ -19,7 +19,7 @@ export default function LoginPage() {
     setLoading(true)
     try {
       const { data } = await authApi.login({ email, password })
-      login(data.access_token, data.user_id, data.role, data.name)
+      login(data.access_token, data.user_id, data.role, data.name, data.refresh_token)
       navigate('/')
     } catch (err) {
       setError(err.response?.data?.detail || 'Login failed. Check your credentials.')

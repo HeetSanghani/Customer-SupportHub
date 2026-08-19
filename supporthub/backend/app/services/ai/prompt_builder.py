@@ -108,6 +108,7 @@ class PromptBuilder:
                 max_tokens=max_tokens,
                 model_name=model_name,
                 image_paths=llm_context.image_paths,
+                image_urls=getattr(llm_context, 'image_urls', []),
             )
 
             logger.debug(

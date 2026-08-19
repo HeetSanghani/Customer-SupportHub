@@ -5,7 +5,7 @@ import { ticketsApi } from '../../api/tickets'
 import { useAuthStore } from '../../store/authStore'
 import { Plus, Send, Star, CheckCircle, X, HelpCircle, CreditCard, Wrench, User as UserIcon, Paperclip } from 'lucide-react'
 import client from '../../api/client'
-import { formatTime, formatDate } from '../../utils/dateUtils'
+import { formatTime, formatDate, formatSmartTime } from '../../utils/dateUtils'
 
 function CsatWidget({ ticketId }) {
   const navigate = useNavigate()
@@ -265,25 +265,64 @@ function ChatPane({ ticketId }) {
             <div key={idx} className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
               <div className={`max-w-[80%] rounded-2xl px-5 py-3 ${isMe ? 'bg-[#6366F1] text-white rounded-br-sm shadow-sm' : 'bg-[#F6F7FC] text-[#1C1B2E] rounded-bl-sm border border-[#E5E7F3] shadow-xs'}`}>
                 {(() => {
-                  const match = msg.body?.match(/📎\s*\[Attachment:\s*([^\]]+)\]\(([^)]+)\)/)
+                  const match = msg.body?.match(/📎\s*\[Attachment:\s*([^\]]+)\]\(([^)]+)\)/i) || msg.body?.match(/📎\s*Attachment:\s*([^\s(]+)\s*\(([^)]+)\)/i)
                   if (match) {
                     const filename = match[1]
-                    const url = match[2]
-                    const isImage = /\.(jpg|jpeg|png|gif|webp|svg)/i.test(filename) || /\.(jpg|jpeg|png|gif|webp|svg)/i.test(url)
+                    let rawUrl = match[2]
+                    const backendBase = (typeof window !== 'undefined' && (window.location.port === '5173' || window.location.port === '3000')) ? 'http://localhost:8001' : ''
+                    const url = rawUrl.startsWith('http') ? rawUrl : `${backendBase}${rawUrl.startsWith('/') ? '' : '/'}${rawUrl}`
+                    const isImage = /\.(jpg|jpeg|png|gif|webp|svg|bmp|ico)(\?.*)?$/i.test(filename) || 
+                                    /\.(jpg|jpeg|png|gif|webp|svg|bmp|ico)(\?.*)?$/i.test(url) || 
+                                    /image|photo|picture|screenshot/i.test(filename) || 
+                                    /(fbsbx|fbcdn|cdninstagram|lookaside)/i.test(url)
+                    const isAudio = /\.(mp3|wav|ogg|m4a|aac)(\?.*)?$/i.test(filename) || 
+                                    /\.(mp3|wav|ogg|m4a|aac)(\?.*)?$/i.test(url) || 
+                                    /audio|voice/i.test(filename)
+                    const isPdf = /\.pdf(\?.*)?$/i.test(filename) || /\.pdf(\?.*)?$/i.test(url)
                     const textWithoutLink = msg.body.replace(match[0], '').trim()
 
                     return (
                       <div className="space-y-2">
-                        {textWithoutLink && <p className="text-sm whitespace-pre-wrap leading-relaxed">{textWithoutLink}</p>}
                         {isImage ? (
                           <a href={url} target="_blank" rel="noopener noreferrer" className="block mt-1 overflow-hidden rounded-xl border border-white/20 shadow-sm max-w-xs hover:opacity-95 transition-opacity">
-                            <img src={url} alt={filename} className="w-full h-auto max-h-48 object-cover rounded-xl" />
+                            <img 
+                              src={url} 
+                              alt={filename} 
+                              className="w-full h-auto max-h-48 object-cover rounded-xl"
+                              onError={(e) => {
+                                e.target.onerror = null
+                                e.target.style.display = 'none'
+                                if (e.target.parentElement) {
+                                  e.target.parentElement.className = 'inline-flex items-center gap-2 px-3 py-1.5 bg-black/10 hover:bg-black/20 rounded-xl text-xs font-bold transition-colors underline'
+                                  e.target.parentElement.innerText = `📎 ${filename || 'Image Attachment'}`
+                                }
+                              }}
+                            />
+                          </a>
+                        ) : isVideo ? (
+                          <div className="mt-1 overflow-hidden rounded-xl border border-white/20 shadow-sm max-w-xs bg-black">
+                            <video controls preload="metadata" className="w-full h-auto max-h-48 rounded-xl" src={url}>
+                              Your browser does not support video playback.
+                            </video>
+                          </div>
+                        ) : isAudio ? (
+                          <div className="mt-1 p-2 rounded-xl bg-black/10 border border-white/20 max-w-xs">
+                            <audio controls className="w-full h-8" src={url}>
+                              Your browser does not support audio playback.
+                            </audio>
+                            <div className="text-[10px] opacity-80 mt-1 truncate">🎵 {filename}</div>
+                          </div>
+                        ) : isPdf ? (
+                          <a href={url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 px-3 py-2 bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-800 rounded-xl font-bold transition-colors text-xs">
+                            <span className="truncate max-w-[180px]">{filename}</span>
+                            <span className="text-[10px] uppercase px-1.5 py-0.5 bg-rose-200/60 rounded text-rose-900 ml-1">PDF</span>
                           </a>
                         ) : (
                           <a href={url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 px-3 py-1.5 bg-black/10 hover:bg-black/20 rounded-xl text-xs font-bold transition-colors underline">
                             📎 {filename}
                           </a>
                         )}
+                        {textWithoutLink && <p className="text-sm whitespace-pre-wrap leading-relaxed">{textWithoutLink}</p>}
                       </div>
                     )
                   }
@@ -299,7 +338,7 @@ function ChatPane({ ticketId }) {
                 })()}
               </div>
               <div className="text-[10px] text-[#9598B0] mt-1.5 px-1 flex gap-2 font-medium">
-                {isMe ? 'You' : (msg.sender_type === 'ai' ? '✨ SupportHub AI' : 'Agent User')} · {formatTime(msg.created_at)}
+                {isMe ? 'You' : (msg.sender_type === 'ai' ? '✨ SupportHub AI' : 'Agent User')} · {formatSmartTime(msg.created_at)}
               </div>
             </div>
           )
@@ -514,7 +553,7 @@ export default function CustomerLiveChat() {
                     </div>
                     <div className="flex justify-between items-center text-[10px] text-[#9598B0] font-semibold mt-2">
                       <div>Linked: <span className="font-mono">{t.ref}</span></div>
-                      <div>{formatDate(t.created_at)}</div>
+                      <div>{formatSmartTime(t.updated_at || t.created_at)}</div>
                     </div>
                   </div>
                 )

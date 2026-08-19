@@ -5,11 +5,13 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordRequestForm
-from jose import jwt
+from jose import jwt, JWTError
 import bcrypt
 from pydantic import BaseModel, EmailStr
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlmodel import select
 
@@ -20,6 +22,7 @@ from app.models import User, UserRole, UserStatus
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 settings = get_settings()
+limiter = Limiter(key_func=get_remote_address)
 
 
 
@@ -33,10 +36,15 @@ class RegisterRequest(BaseModel):
 
 class TokenResponse(BaseModel):
     access_token: str
+    refresh_token: Optional[str] = None
     token_type: str = "bearer"
     role: str
     user_id: str
     name: str
+
+
+class RefreshTokenRequest(BaseModel):
+    refresh_token: str
 
 
 class MeResponse(BaseModel):
@@ -77,10 +85,24 @@ def create_access_token(user_id: str, role: str) -> str:
     )
 
 
+def create_refresh_token(user_id: str) -> str:
+    expire = datetime.now(timezone.utc) + timedelta(days=settings.refresh_token_expire_days)
+    return jwt.encode(
+        {"sub": user_id, "type": "refresh", "exp": expire},
+        settings.secret_key,
+        algorithm=ALGORITHM,
+    )
+
+
 # ─── Routes ───────────────────────────────────────────────────────────────────
 
 @router.post("/register", response_model=TokenResponse, status_code=201)
-async def register(body: RegisterRequest, session: AsyncSession = Depends(get_session)):
+@limiter.limit("10/minute")
+async def register(
+    request: Request,
+    body: RegisterRequest,
+    session: AsyncSession = Depends(get_session),
+):
     existing = await session.exec(select(User).where(User.email == body.email))
     if existing.first():
         raise HTTPException(status_code=400, detail="Email already registered")
@@ -96,9 +118,11 @@ async def register(body: RegisterRequest, session: AsyncSession = Depends(get_se
     await session.commit()
     await session.refresh(user)
 
-    token = create_access_token(str(user.id), user.role.value)
+    access_token = create_access_token(str(user.id), user.role.value)
+    refresh_tok = create_refresh_token(str(user.id))
     return TokenResponse(
-        access_token=token,
+        access_token=access_token,
+        refresh_token=refresh_tok,
         role=user.role.value,
         user_id=str(user.id),
         name=user.name,
@@ -106,7 +130,9 @@ async def register(body: RegisterRequest, session: AsyncSession = Depends(get_se
 
 
 @router.post("/login", response_model=TokenResponse)
+@limiter.limit("15/minute")
 async def login(
+    request: Request,
     form: OAuth2PasswordRequestForm = Depends(),
     session: AsyncSession = Depends(get_session),
 ):
@@ -120,9 +146,47 @@ async def login(
     if user.status == UserStatus.suspended:
         raise HTTPException(status_code=403, detail="Account suspended")
 
-    token = create_access_token(str(user.id), user.role.value)
+    access_token = create_access_token(str(user.id), user.role.value)
+    refresh_tok = create_refresh_token(str(user.id))
     return TokenResponse(
-        access_token=token,
+        access_token=access_token,
+        refresh_token=refresh_tok,
+        role=user.role.value,
+        user_id=str(user.id),
+        name=user.name,
+    )
+
+
+@router.post("/refresh", response_model=TokenResponse)
+@limiter.limit("20/minute")
+async def refresh_token_endpoint(
+    request: Request,
+    body: RefreshTokenRequest,
+    session: AsyncSession = Depends(get_session),
+):
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Invalid or expired refresh token",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    try:
+        payload = jwt.decode(body.refresh_token, settings.secret_key, algorithms=[ALGORITHM])
+        user_id: Optional[str] = payload.get("sub")
+        token_type: Optional[str] = payload.get("type")
+        if not user_id or token_type != "refresh":
+            raise credentials_exception
+    except (JWTError, Exception):
+        raise credentials_exception
+
+    user = await session.get(User, UUID(user_id))
+    if not user or user.status != UserStatus.active:
+        raise credentials_exception
+
+    new_access_token = create_access_token(str(user.id), user.role.value)
+    new_refresh_token = create_refresh_token(str(user.id))
+    return TokenResponse(
+        access_token=new_access_token,
+        refresh_token=new_refresh_token,
         role=user.role.value,
         user_id=str(user.id),
         name=user.name,
