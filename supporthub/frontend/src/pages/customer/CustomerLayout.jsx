@@ -3,9 +3,15 @@ import { Routes, Route, Navigate, Link, useNavigate, useLocation } from 'react-r
 import { useQuery } from '@tanstack/react-query'
 import { ticketsApi } from '../../api/tickets'
 import { useAuthStore } from '../../store/authStore'
-import { MessageSquare, LogOut, User, Star, Mail, BookOpen, Phone, Instagram } from 'lucide-react'
+import { MessageSquare, LogOut, User, Star, Mail, BookOpen, Phone, Instagram, ShoppingBag, LayoutDashboard, Truck, RotateCcw, Lock, History } from 'lucide-react'
 
+import CustomerDashboard from './CustomerDashboard'
 import CustomerLiveChat from './CustomerLiveChat'
+import CustomerOrders from './CustomerOrders'
+import CustomerShipments from './CustomerShipments'
+import CustomerReturnsRefunds from './CustomerReturnsRefunds'
+import CustomerSupportHistory from './CustomerSupportHistory'
+import CustomerSecuritySettings from './CustomerSecuritySettings'
 import CustomerProfile from './CustomerProfile'
 import CustomerReviews from './CustomerReviews'
 import CustomerHelpCenter from './CustomerHelpCenter'
@@ -44,7 +50,7 @@ export default function CustomerLayout() {
   return (
     <div className="flex h-screen bg-[#F6F7FC] overflow-hidden">
       {/* Sidebar */}
-      <aside className="w-64 bg-white border-r border-[#E5E7F3] flex flex-col z-20">
+      <aside className="w-64 bg-white border-r border-[#E5E7F3] flex flex-col z-20 overflow-y-auto">
         <div className="p-6 flex items-center gap-3">
           <div className="w-8 h-8 rounded-lg flex items-center justify-center text-white font-bold text-xs" style={{ background: 'linear-gradient(135deg,#6366F1 0%,#A855F7 100%)' }}>S</div>
           <div>
@@ -54,11 +60,14 @@ export default function CustomerLayout() {
         </div>
         
         <div className="px-4 py-3">
-           <div className="text-[10px] font-bold text-[#9598B0] uppercase tracking-wider mb-2 px-3">Support</div>
+           <div className="text-[10px] font-bold text-[#9598B0] uppercase tracking-wider mb-2 px-3">Account & Support</div>
            <nav className="space-y-1">
-             <Link to="/customer" className={`flex items-center justify-between px-3 py-2.5 rounded-lg text-sm font-semibold transition-colors ${location.pathname === '/customer' || location.pathname.startsWith('/customer/chat') ? 'bg-indigo-50 text-indigo-700' : 'text-[#6C7089] hover:bg-gray-50'}`}>
+             <Link to="/customer/dashboard" className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-semibold transition-colors ${location.pathname === '/customer' || location.pathname === '/customer/dashboard' ? 'bg-indigo-50 text-indigo-700' : 'text-[#6C7089] hover:bg-gray-50'}`}>
+               <LayoutDashboard size={18} /> Dashboard Overview
+             </Link>
+             <Link to="/customer/chat" className={`flex items-center justify-between px-3 py-2 rounded-lg text-sm font-semibold transition-colors ${location.pathname.startsWith('/customer/chat') ? 'bg-indigo-50 text-indigo-700' : 'text-[#6C7089] hover:bg-gray-50'}`}>
                <div className="flex items-center gap-3">
-                 <MessageSquare size={18} /> Live Chat
+                 <MessageSquare size={18} /> Live AI Assistant
                </div>
                {activeCount > 0 && (
                  <span className="bg-[#6366F1] text-white text-[10px] font-bold px-2 py-0.5 rounded-full">
@@ -66,33 +75,50 @@ export default function CustomerLayout() {
                  </span>
                )}
              </Link>
+             <Link to="/customer/orders" className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-semibold transition-colors ${location.pathname === '/customer/orders' ? 'bg-indigo-50 text-indigo-700' : 'text-[#6C7089] hover:bg-gray-50'}`}>
+               <ShoppingBag size={18} /> My Orders
+             </Link>
+             <Link to="/customer/shipments" className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-semibold transition-colors ${location.pathname === '/customer/shipments' ? 'bg-indigo-50 text-indigo-700' : 'text-[#6C7089] hover:bg-gray-50'}`}>
+               <Truck size={18} /> Shipments & Tracking
+             </Link>
+             <Link to="/customer/returns" className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-semibold transition-colors ${location.pathname === '/customer/returns' ? 'bg-indigo-50 text-indigo-700' : 'text-[#6C7089] hover:bg-gray-50'}`}>
+               <RotateCcw size={18} /> Returns & Refunds
+             </Link>
+             <Link to="/customer/support" className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-semibold transition-colors ${location.pathname === '/customer/support' ? 'bg-indigo-50 text-indigo-700' : 'text-[#6C7089] hover:bg-gray-50'}`}>
+               <History size={18} /> Support History
+             </Link>
+             <Link to="/customer/profile" className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-semibold transition-colors ${location.pathname === '/customer/profile' ? 'bg-indigo-50 text-indigo-700' : 'text-[#6C7089] hover:bg-gray-50'}`}>
+               <User size={18} /> Customer Profile
+             </Link>
+             <Link to="/customer/settings" className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-semibold transition-colors ${location.pathname === '/customer/settings' ? 'bg-indigo-50 text-indigo-700' : 'text-[#6C7089] hover:bg-gray-50'}`}>
+               <Lock size={18} /> Security Settings
+             </Link>
+             <Link to="/customer/help" className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-semibold transition-colors ${location.pathname === '/customer/help' ? 'bg-indigo-50 text-indigo-700' : 'text-[#6C7089] hover:bg-gray-50'}`}>
+               <BookOpen size={18} /> Help Center & FAQs
+             </Link>
+             <Link to="/customer/reviews" className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-semibold transition-colors ${location.pathname === '/customer/reviews' ? 'bg-indigo-50 text-indigo-700' : 'text-[#6C7089] hover:bg-gray-50'}`}>
+               <Star size={18} /> My Reviews
+             </Link>
+
+             <div className="pt-2 text-[10px] font-bold text-[#9598B0] uppercase tracking-wider px-3">Omnichannel Channels</div>
              <button
                onClick={() => setIsWhatsAppModalOpen(true)}
-               className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold text-[#6C7089] hover:bg-emerald-50 hover:text-emerald-600 transition-colors text-left"
+               className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-semibold text-[#6C7089] hover:bg-emerald-50 hover:text-emerald-600 transition-colors text-left"
              >
-               <Phone size={18} className="text-emerald-500" /> Connect on WhatsApp
+               <Phone size={16} className="text-emerald-500" /> Connect WhatsApp
              </button>
              <button
                onClick={() => setIsInstagramModalOpen(true)}
-               className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold text-[#6C7089] hover:bg-rose-50 hover:text-rose-600 transition-colors text-left"
+               className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-semibold text-[#6C7089] hover:bg-rose-50 hover:text-rose-600 transition-colors text-left"
              >
-               <Instagram size={18} className="text-rose-500" /> Connect on Instagram
+               <Instagram size={16} className="text-rose-500" /> Connect Instagram
              </button>
              <button
                onClick={() => setIsEmailModalOpen(true)}
-               className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold text-[#6C7089] hover:bg-blue-50 hover:text-blue-600 transition-colors text-left"
+               className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-semibold text-[#6C7089] hover:bg-blue-50 hover:text-blue-600 transition-colors text-left"
              >
-               <Mail size={18} className="text-blue-500" /> Contact via Email
+               <Mail size={16} className="text-blue-500" /> Contact Email
              </button>
-             <Link to="/customer/help" className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold transition-colors ${location.pathname === '/customer/help' ? 'bg-indigo-50 text-indigo-700' : 'text-[#6C7089] hover:bg-gray-50'}`}>
-               <BookOpen size={18} /> Help Center & FAQs
-             </Link>
-             <Link to="/customer/reviews" className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold transition-colors ${location.pathname === '/customer/reviews' ? 'bg-indigo-50 text-indigo-700' : 'text-[#6C7089] hover:bg-gray-50'}`}>
-               <Star size={18} /> My Reviews
-             </Link>
-             <Link to="/customer/profile" className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold transition-colors ${location.pathname === '/customer/profile' ? 'bg-indigo-50 text-indigo-700' : 'text-[#6C7089] hover:bg-gray-50'}`}>
-               <User size={18} /> Customer Profile
-             </Link>
            </nav>
         </div>
         
@@ -117,11 +143,18 @@ export default function CustomerLayout() {
       {/* Main Content Area */}
       <main className="flex-1 flex flex-col min-w-0">
         <Routes>
-          <Route path="/" element={<CustomerLiveChat />} />
+          <Route path="/" element={<CustomerDashboard />} />
+          <Route path="/dashboard" element={<CustomerDashboard />} />
+          <Route path="/chat" element={<CustomerLiveChat />} />
           <Route path="/chat/:id" element={<CustomerLiveChat />} />
+          <Route path="/orders" element={<CustomerOrders />} />
+          <Route path="/shipments" element={<CustomerShipments />} />
+          <Route path="/returns" element={<CustomerReturnsRefunds />} />
+          <Route path="/support" element={<CustomerSupportHistory />} />
+          <Route path="/profile" element={<CustomerProfile />} />
+          <Route path="/settings" element={<CustomerSecuritySettings />} />
           <Route path="/help" element={<CustomerHelpCenter />} />
           <Route path="/reviews" element={<CustomerReviews />} />
-          <Route path="/profile" element={<CustomerProfile />} />
           <Route path="*" element={<Navigate to="/customer" replace />} />
         </Routes>
       </main>
@@ -132,3 +165,4 @@ export default function CustomerLayout() {
     </div>
   )
 }
+

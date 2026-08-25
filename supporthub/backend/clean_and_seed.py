@@ -66,8 +66,8 @@ async def run_clean_and_seed():
             {"email": "emma.wilson@supporthub.com", "name": "Emma Wilson", "role": UserRole.agent, "phone": "+1 (555) 010-0006"},
 
             # Customers
-            {"email": "customer@supporthub.com", "name": "Customer User", "role": UserRole.customer, "phone": "+1 (555) 100-0001"},
-            {"email": "sarah.j@example.com", "name": "Sarah Johnson", "role": UserRole.customer, "phone": "+1 (555) 234-5678"},
+            {"email": "customer@supporthub.com", "name": "Customer User", "role": UserRole.customer, "phone": "+1 (555) 100-0001", "customer_id": "CUST-001"},
+            {"email": "sarah.j@example.com", "name": "Sarah Johnson", "role": UserRole.customer, "phone": "+1 (555) 234-5678", "customer_id": "CUST-002"},
             {"email": "alex.t@example.com", "name": "Alex Thomas", "role": UserRole.customer, "phone": "+1 (555) 345-6789"},
             {"email": "michael.c@example.com", "name": "Michael Chen", "role": UserRole.customer, "phone": "+1 (555) 456-7890"},
             {"email": "rahul.s@example.com", "name": "Rahul Sharma", "role": UserRole.customer, "phone": "+91 98765 43210"},
@@ -135,7 +135,8 @@ async def run_clean_and_seed():
                     status=UserStatus.active,
                     phone=u_data.get("phone"),
                     channel=u_data.get("channel"),
-                    channel_customer_id=u_data.get("channel_customer_id")
+                    channel_customer_id=u_data.get("channel_customer_id"),
+                    customer_id=u_data.get("customer_id")
                 )
                 session.add(new_u)
                 await session.commit()
@@ -151,6 +152,8 @@ async def run_clean_and_seed():
                     existing.channel = u_data["channel"]
                 if "channel_customer_id" in u_data:
                     existing.channel_customer_id = u_data["channel_customer_id"]
+                if "customer_id" in u_data:
+                    existing.customer_id = u_data["customer_id"]
                 session.add(existing)
                 await session.commit()
                 await session.refresh(existing)

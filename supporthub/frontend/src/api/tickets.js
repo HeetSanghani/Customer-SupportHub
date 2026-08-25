@@ -40,4 +40,18 @@ export const ticketsApi = {
 
   getSimilar: (id) =>
     client.get(`/tickets/${id}/similar`),
+
+  // Phase 15.5 — Action Lifecycle Endpoints
+  escalate: (id) =>
+    client.post(`/tickets/${id}/escalate`),
+
+  accept: (id) =>
+    client.post(`/tickets/${id}/accept`),
+
+  resolve: (id) =>
+    client.post(`/tickets/${id}/resolve`),
+
+  reopen: (id) =>
+    client.post(`/tickets/${id}/reopen`),
 }
+

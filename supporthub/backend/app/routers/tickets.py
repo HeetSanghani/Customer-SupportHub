@@ -17,8 +17,9 @@ from app.config import get_settings
 from app.database import get_session
 from app.dependencies import get_current_user, require_role
 from app.models import (
-    AuditLog, Ticket, TicketChannel, TicketPriority, TicketStatus, User, UserRole
+    AuditLog, Message, SenderType, Ticket, TicketChannel, TicketPriority, TicketStatus, User, UserRole
 )
+
 from app.services.ai.orchestrator import AIOrchestrator
 
 router = APIRouter(prefix="/tickets", tags=["tickets"])
@@ -80,7 +81,9 @@ class TicketOut(BaseModel):
     @classmethod
     def from_orm(cls, t: Ticket, customer_obj: Optional[User] = None) -> "TicketOut":
         cust_out = None
-        cust = customer_obj or getattr(t, 'customer', None)
+        cust = customer_obj
+        if not cust and 'customer' in getattr(t, '__dict__', {}):
+            cust = t.__dict__['customer']
         if cust:
             cust_out = CustomerOut(
                 id=str(cust.id),
@@ -124,11 +127,12 @@ def _compute_sla(priority: TicketPriority) -> datetime:
 
 # ─── Routes ───────────────────────────────────────────────────────────────────
 
-async def _ai_classify_ticket(ticket_id, subject: str, body_text: str, current_category: str, session):
+async def _ai_classify_ticket(ticket_id: uuid.UUID, subject: str, body_text: str, current_category: str):
     """Background task: use Gemini to auto-classify category, priority and sentiment."""
     try:
         import asyncio
         import google.generativeai as genai
+        from app.database import engine
 
         prompt = f"""Classify this customer support ticket and respond with ONLY valid JSON.
 
@@ -155,19 +159,21 @@ Rules:
         import json
         data = json.loads(raw)
 
-        ticket = await session.get(Ticket, ticket_id)
-        if ticket:
-            if data.get("category") and data["category"].lower() != "general" or current_category == "General Support":
-                ticket.category = data["category"]
-            if data.get("priority") and data["priority"] in ["low", "medium", "high", "urgent"]:
-                ticket.priority = TicketPriority(data["priority"])
-                ticket.sla_due_at = _compute_sla(ticket.priority)
-            if data.get("sentiment"):
-                ticket.sentiment = data["sentiment"]
-            session.add(ticket)
-            await session.commit()
+        async with AsyncSession(engine) as task_session:
+            ticket = await task_session.get(Ticket, ticket_id)
+            if ticket:
+                if data.get("category") and data["category"].lower() != "general" or current_category == "General Support":
+                    ticket.category = data["category"]
+                if data.get("priority") and data["priority"] in ["low", "medium", "high", "urgent"]:
+                    ticket.priority = TicketPriority(data["priority"])
+                    ticket.sla_due_at = _compute_sla(ticket.priority)
+                if data.get("sentiment"):
+                    ticket.sentiment = data["sentiment"]
+                task_session.add(ticket)
+                await task_session.commit()
     except Exception:
         pass  # Silently fail — auto-classify is best-effort
+
 
 
 @router.post("/", response_model=TicketOut, status_code=201)
@@ -221,7 +227,7 @@ async def create_ticket(
 
     # Phase 6: Background AI auto-classification (category, priority, sentiment)
     import asyncio
-    asyncio.create_task(_ai_classify_ticket(ticket.id, body.subject, body.body or "", body.category, session))
+    asyncio.create_task(_ai_classify_ticket(ticket.id, body.subject, body.body or "", body.category))
 
     # Evaluate Workflow Automations
     from app.services.automations.engine import evaluate_ticket_automations
@@ -330,6 +336,216 @@ async def update_ticket(
     return TicketOut.from_orm(ticket)
 
 
+@router.post("/{ticket_id}/escalate", response_model=TicketOut)
+async def escalate_ticket(
+    ticket_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    """Explicitly escalate ticket to human agent (customer or staff)."""
+    ticket = await session.get(Ticket, ticket_id)
+    if not ticket or ticket.deleted_at:
+        raise HTTPException(status_code=404, detail="Ticket not found")
+    if current_user.role == UserRole.customer and ticket.customer_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    old_status = str(ticket.status.value if hasattr(ticket.status, 'value') else ticket.status)
+    ticket.status = TicketStatus.escalated
+    if ticket.priority == TicketPriority.medium:
+        ticket.priority = TicketPriority.high
+    ticket.updated_at = datetime.now()
+    session.add(ticket)
+
+    session.add(AuditLog(
+        actor_id=current_user.id,
+        action="ticket.escalated",
+        entity_type="ticket",
+        entity_id=str(ticket.id),
+        ticket_id=ticket.id,
+        diff_json=f'{{"old_status": "{old_status}", "new_status": "escalated"}}',
+    ))
+    await session.commit()
+    await session.refresh(ticket)
+
+    # Broadcast WS update
+    from app.ws.manager import manager
+    await manager.broadcast(str(ticket.id), {
+        "type": "ticket_update",
+        "status": "escalated",
+        "subject": ticket.subject or "",
+    })
+    await manager.broadcast_to_agents({
+        "type": "inbox_update",
+        "ticket_id": str(ticket.id),
+        "preview": f"Customer requested human escalation for ticket {ticket.ref}",
+        "sender_name": current_user.name,
+        "subject": ticket.subject or "",
+        "status": "escalated",
+    })
+
+    return TicketOut.from_orm(ticket)
+
+
+@router.post("/{ticket_id}/accept", response_model=TicketOut)
+async def accept_ticket(
+    ticket_id: uuid.UUID,
+    current_user: User = Depends(require_role(UserRole.agent)),
+    session: AsyncSession = Depends(get_session),
+):
+    """Agent accepts an escalated or unassigned ticket."""
+    ticket = await session.get(Ticket, ticket_id)
+    if not ticket or ticket.deleted_at:
+        raise HTTPException(status_code=404, detail="Ticket not found")
+
+    old_status = str(ticket.status.value if hasattr(ticket.status, 'value') else ticket.status)
+    ticket.agent_id = current_user.id
+    ticket.status = TicketStatus.open
+    ticket.updated_at = datetime.now()
+    session.add(ticket)
+
+    session.add(AuditLog(
+        actor_id=current_user.id,
+        action="ticket.accepted",
+        entity_type="ticket",
+        entity_id=str(ticket.id),
+        ticket_id=ticket.id,
+        diff_json=f'{{"old_status": "{old_status}", "new_status": "open", "agent_id": "{current_user.id}"}}',
+    ))
+    await session.commit()
+    await session.refresh(ticket)
+
+    # Broadcast agent_joined and ticket_update WS events
+    from app.ws.manager import manager
+    await manager.broadcast(str(ticket.id), {
+        "type": "agent_joined",
+        "agent_id": str(current_user.id),
+        "agent_name": current_user.name,
+        "joined_at": datetime.now(timezone.utc).isoformat(),
+    })
+    await manager.broadcast(str(ticket.id), {
+        "type": "ticket_update",
+        "status": "open",
+        "agent_id": str(current_user.id),
+        "agent_name": current_user.name,
+        "subject": ticket.subject or "",
+    })
+    await manager.broadcast_to_agents({
+        "type": "inbox_update",
+        "ticket_id": str(ticket.id),
+        "preview": f"Agent {current_user.name} accepted ticket {ticket.ref}",
+        "sender_name": current_user.name,
+        "subject": ticket.subject or "",
+        "status": "open",
+    })
+
+    return TicketOut.from_orm(ticket)
+
+
+@router.post("/{ticket_id}/resolve", response_model=TicketOut)
+async def resolve_ticket(
+    ticket_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    """Resolve ticket and trigger CSAT survey."""
+    ticket = await session.get(Ticket, ticket_id)
+    if not ticket or ticket.deleted_at:
+        raise HTTPException(status_code=404, detail="Ticket not found")
+    if current_user.role == UserRole.customer and ticket.customer_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    old_status = str(ticket.status.value if hasattr(ticket.status, 'value') else ticket.status)
+    ticket.status = TicketStatus.resolved
+    ticket.updated_at = datetime.now()
+    session.add(ticket)
+
+    session.add(AuditLog(
+        actor_id=current_user.id,
+        action="ticket.resolved",
+        entity_type="ticket",
+        entity_id=str(ticket.id),
+        ticket_id=ticket.id,
+        diff_json=f'{{"old_status": "{old_status}", "new_status": "resolved"}}',
+    ))
+    await session.commit()
+
+    # Deliver CSAT survey if not already done
+    from app.services.csat_delivery import deliver_csat_survey
+    customer = await session.get(User, ticket.customer_id)
+    if customer:
+        try:
+            await deliver_csat_survey(session, ticket, customer)
+        except Exception:
+            pass
+
+    await session.refresh(ticket)
+
+    from app.ws.manager import manager
+    await manager.broadcast(str(ticket.id), {
+        "type": "ticket_update",
+        "status": "resolved",
+        "subject": ticket.subject or "",
+    })
+    await manager.broadcast_to_agents({
+        "type": "inbox_update",
+        "ticket_id": str(ticket.id),
+        "preview": f"Ticket {ticket.ref} resolved",
+        "sender_name": current_user.name,
+        "subject": ticket.subject or "",
+        "status": "resolved",
+    })
+
+    return TicketOut.from_orm(ticket)
+
+
+@router.post("/{ticket_id}/reopen", response_model=TicketOut)
+async def reopen_ticket(
+    ticket_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    """Reopen a resolved or closed ticket."""
+    ticket = await session.get(Ticket, ticket_id)
+    if not ticket or ticket.deleted_at:
+        raise HTTPException(status_code=404, detail="Ticket not found")
+    if current_user.role == UserRole.customer and ticket.customer_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    old_status = str(ticket.status.value if hasattr(ticket.status, 'value') else ticket.status)
+    ticket.status = TicketStatus.open
+    ticket.updated_at = datetime.now()
+    session.add(ticket)
+
+    session.add(AuditLog(
+        actor_id=current_user.id,
+        action="ticket.reopened",
+        entity_type="ticket",
+        entity_id=str(ticket.id),
+        ticket_id=ticket.id,
+        diff_json=f'{{"old_status": "{old_status}", "new_status": "open"}}',
+    ))
+    await session.commit()
+    await session.refresh(ticket)
+
+    from app.ws.manager import manager
+    await manager.broadcast(str(ticket.id), {
+        "type": "ticket_update",
+        "status": "open",
+        "subject": ticket.subject or "",
+    })
+    await manager.broadcast_to_agents({
+        "type": "inbox_update",
+        "ticket_id": str(ticket.id),
+        "preview": f"Ticket {ticket.ref} reopened by {current_user.name}",
+        "sender_name": current_user.name,
+        "subject": ticket.subject or "",
+        "status": "open",
+    })
+
+    return TicketOut.from_orm(ticket)
+
+
+
 class MessageOut(BaseModel):
     id: str
     ticket_id: str
@@ -343,8 +559,57 @@ class MessageOut(BaseModel):
     created_at: datetime
 
 
+class MessageCreate(BaseModel):
+    body: str
+
+
+@router.post("/{ticket_id}/messages", response_model=MessageOut, status_code=201)
+async def create_ticket_message(
+    ticket_id: uuid.UUID,
+    body: MessageCreate,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    ticket = await session.get(Ticket, ticket_id)
+    if not ticket or ticket.deleted_at:
+        raise HTTPException(status_code=404, detail="Ticket not found")
+    
+    role_val = current_user.role.value if hasattr(current_user.role, 'value') else str(current_user.role)
+    if role_val == "customer" and ticket.customer_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    sender_type = SenderType.agent if role_val in ("agent", "admin", "manager") else SenderType.customer
+    msg = Message(
+        ticket_id=ticket.id,
+        sender_id=current_user.id,
+        sender_type=sender_type,
+        body=body.body,
+    )
+
+    session.add(msg)
+    ticket.updated_at = datetime.now()
+    session.add(ticket)
+    await session.commit()
+    await session.refresh(msg)
+    return MessageOut(
+        id=str(msg.id),
+        ticket_id=str(msg.ticket_id),
+        sender_id=str(msg.sender_id),
+        sender_name=current_user.name,
+        sender_role=role_val,
+        sender_type=msg.sender_type.value if hasattr(msg.sender_type, 'value') else str(msg.sender_type),
+        body=msg.body,
+        body_html=msg.body_html,
+        attachments=msg.attachments,
+        created_at=msg.created_at,
+    )
+
+
+
+
 @router.get("/{ticket_id}/messages", response_model=List[MessageOut])
 async def get_ticket_messages(
+
     ticket_id: uuid.UUID,
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),

@@ -179,6 +179,18 @@ function ChatPane({ ticketId }) {
             sender_type: data.sender_type || data.sender_role
           }]
         })
+      } else if (data.type === 'agent_joined') {
+        queryClient.invalidateQueries({ queryKey: ['ticket', ticketId] })
+        queryClient.invalidateQueries({ queryKey: ['tickets'] })
+        setMessages(prev => [
+          ...prev,
+          {
+            id: `system-joined-${Date.now()}`,
+            sender_type: 'system',
+            body: `AGENT CONNECTED: Agent ${data.agent_name || 'Support Agent'} has joined the conversation.`,
+            created_at: data.joined_at || new Date().toISOString()
+          }
+        ])
       } else if (data.type === 'ticket_update') {
         if (data.status) {
           setTicketStatus(data.status)
@@ -204,6 +216,8 @@ function ChatPane({ ticketId }) {
 
   const currentStatus = ticketStatus || ticket?.status
   const isClosed = currentStatus === 'closed' || currentStatus === 'resolved'
+  const isEscalated = currentStatus === 'escalated'
+  const hasAgent = !!ticket?.agent_id
 
   const sendMessage = (e) => {
     e.preventDefault()
@@ -243,16 +257,48 @@ function ChatPane({ ticketId }) {
             <div className="text-[10px] text-[#9598B0] flex items-center gap-2 mt-0.5">
               <span>Category: <strong className="capitalize text-[#6C7089]">{ticket?.category || 'General'}</strong></span>
               <span>•</span>
-              <div className="text-emerald-500 font-bold uppercase flex items-center gap-1">
-                <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full"></div> Active Support
-              </div>
+              {hasAgent ? (
+                <div className="text-emerald-600 font-bold uppercase flex items-center gap-1">
+                  <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></div> Agent Connected ({ticket?.agent?.name || 'Live Agent'})
+                </div>
+              ) : isEscalated ? (
+                <div className="text-amber-600 font-bold uppercase flex items-center gap-1">
+                  <div className="w-1.5 h-1.5 bg-amber-500 rounded-full animate-pulse"></div> Waiting for Human Agent
+                </div>
+              ) : (
+                <div className="text-indigo-600 font-bold uppercase flex items-center gap-1">
+                  <div className="w-1.5 h-1.5 bg-indigo-500 rounded-full"></div> AI Assistant Active
+                </div>
+              )}
             </div>
           </div>
         </div>
-        <div className="text-right">
-          <div className="text-[10px] font-bold text-[#9598B0] uppercase">Ticket Ref</div>
-          <div className="text-xs font-mono font-bold bg-gray-100 px-2 py-0.5 rounded text-[#1C1B2E] mt-0.5">
-            {ticket?.ref || '...'}
+
+        <div className="flex items-center gap-3">
+          {!isEscalated && !hasAgent && !isClosed && (
+            <button
+              onClick={async () => {
+                try {
+                  await ticketsApi.escalate(ticketId)
+                  setTicketStatus('escalated')
+                  queryClient.invalidateQueries({ queryKey: ['ticket', ticketId] })
+                  queryClient.invalidateQueries({ queryKey: ['tickets'] })
+                } catch (err) {
+                  console.error('Escalation error:', err)
+                }
+              }}
+              className="inline-flex items-center gap-1 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 font-bold text-xs px-3 py-1.5 rounded-lg transition-colors cursor-pointer"
+              title="Escalate chat directly to a human support agent"
+            >
+              <UserIcon size={14} /> Talk to Human
+            </button>
+          )}
+
+          <div className="text-right">
+            <div className="text-[10px] font-bold text-[#9598B0] uppercase">Ticket Ref</div>
+            <div className="text-xs font-mono font-bold bg-gray-100 px-2 py-0.5 rounded text-[#1C1B2E] mt-0.5">
+              {ticket?.ref || '...'}
+            </div>
           </div>
         </div>
       </div>
@@ -366,8 +412,25 @@ function ChatPane({ ticketId }) {
       <div className="p-4 border-t border-[#E5E7F3] space-y-3">
         {isClosed ? (
           <>
-            <div className="text-center p-3 text-sm font-semibold text-[#9598B0] bg-gray-50 rounded-xl border border-[#E5E7F3]">
-              This chat is closed. Please start a new chat for further assistance.
+            <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-[#E5E7F3]">
+              <span className="text-xs font-semibold text-[#6C7089]">
+                This conversation is resolved. Need further help?
+              </span>
+              <button
+                onClick={async () => {
+                  try {
+                    await ticketsApi.reopen(ticketId)
+                    setTicketStatus('open')
+                    queryClient.invalidateQueries({ queryKey: ['ticket', ticketId] })
+                    queryClient.invalidateQueries({ queryKey: ['tickets'] })
+                  } catch (err) {
+                    console.error('Reopen error:', err)
+                  }
+                }}
+                className="px-3 py-1.5 bg-[#6366F1] hover:bg-[#4F46E5] text-white text-xs font-bold rounded-lg transition-colors cursor-pointer"
+              >
+                Reopen Conversation
+              </button>
             </div>
             <CsatWidget ticketId={ticketId} />
           </>

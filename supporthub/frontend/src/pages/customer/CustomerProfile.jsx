@@ -3,13 +3,21 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { ticketsApi } from '../../api/tickets'
 import { authApi } from '../../api/auth'
 import { useAuthStore } from '../../store/authStore'
-import { User, Mail, MessageSquare, CheckCircle, Clock, Save, Shield, AlertCircle } from 'lucide-react'
+import { User, Mail, MessageSquare, CheckCircle, Clock, Save, Shield, AlertCircle, Phone, MapPin, Tag } from 'lucide-react'
 
 export default function CustomerProfile() {
   const { name, role, updateUser } = useAuthStore()
   const queryClient = useQueryClient()
+  
   const [displayName, setDisplayName] = useState(name || 'Customer User')
   const [displayEmail, setDisplayEmail] = useState('')
+  const [phone, setPhone] = useState('')
+  const [address, setAddress] = useState('')
+  const [city, setCity] = useState('')
+  const [state, setState] = useState('')
+  const [postalCode, setPostalCode] = useState('')
+  const [country, setCountry] = useState('')
+  
   const [isEditing, setIsEditing] = useState(false)
   const [savedMsg, setSavedMsg] = useState(false)
   const [errorMsg, setErrorMsg] = useState('')
@@ -23,9 +31,16 @@ export default function CustomerProfile() {
     queryKey: ['auth', 'me'],
     queryFn: async () => {
       const res = await authApi.me()
-      setDisplayName(res.data.name)
-      setDisplayEmail(res.data.email)
-      return res.data
+      const u = res.data
+      setDisplayName(u.name || '')
+      setDisplayEmail(u.email || '')
+      setPhone(u.phone || '')
+      setAddress(u.address || '')
+      setCity(u.city || '')
+      setState(u.state || '')
+      setPostalCode(u.postal_code || '')
+      setCountry(u.country || '')
+      return u
     },
     staleTime: 1000 * 60 * 5 // 5 minutes
   })
@@ -48,7 +63,7 @@ export default function CustomerProfile() {
       setIsEditing(false)
       setSavedMsg(true)
       setErrorMsg('')
-      updateUser(res.data.name) // Update the global state so sidebar changes
+      updateUser(res.data.name)
       queryClient.invalidateQueries(['auth', 'me'])
       setTimeout(() => setSavedMsg(false), 3000)
     },
@@ -66,6 +81,12 @@ export default function CustomerProfile() {
     updateProfileMutation.mutate({
       name: displayName,
       email: displayEmail,
+      phone,
+      address,
+      city,
+      state,
+      postal_code: postalCode,
+      country,
     })
   }
 
@@ -74,7 +95,7 @@ export default function CustomerProfile() {
       <div className="mb-6 flex justify-between items-center">
         <div>
           <h1 className="text-2xl font-bold font-['Plus_Jakarta_Sans']">Customer Profile</h1>
-          <p className="text-[#6C7089] text-sm">Manage your personal information and support stats.</p>
+          <p className="text-[#6C7089] text-sm">Manage your personal account details, shipping addresses, and communication preferences.</p>
         </div>
         {savedMsg && (
           <div className="bg-emerald-50 text-emerald-600 px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 border border-emerald-200">
@@ -84,14 +105,25 @@ export default function CustomerProfile() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {/* Left Column: Card */}
+        {/* Left Column: Avatar & Summary Card */}
         <div className="bg-white p-8 rounded-2xl border border-[#E5E7F3] shadow-sm flex flex-col items-center text-center">
           <div className="w-24 h-24 rounded-full bg-gradient-to-tr from-[#6366F1] to-[#A855F7] text-white flex items-center justify-center text-3xl font-bold mb-4 shadow-md">
-            {displayName.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase()}
+            {displayName ? displayName.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase() : 'CU'}
           </div>
           <h2 className="text-xl font-bold font-['Plus_Jakarta_Sans']">{displayName}</h2>
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-indigo-50 text-indigo-600 text-xs font-bold rounded-full mt-2 mb-6">
-            <Shield size={12} /> {role.toUpperCase()} ACCOUNT
+          <div className="flex flex-col items-center gap-2 mt-2 mb-6">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-indigo-50 text-indigo-600 text-xs font-bold rounded-full">
+              <Shield size={12} /> {role.toUpperCase()} ACCOUNT
+            </span>
+            {userProfile?.customer_id ? (
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-bold rounded-full">
+                <Tag size={12} /> LINKED: {userProfile.customer_id}
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-amber-50 text-amber-700 border border-amber-200 text-xs font-bold rounded-full">
+                <AlertCircle size={12} /> UNLINKED ACCOUNT
+              </span>
+            )}
           </div>
 
           {/* Quick Stats Grid */}
@@ -111,11 +143,11 @@ export default function CustomerProfile() {
           </div>
         </div>
 
-        {/* Right Column: Account Form & Settings */}
+        {/* Right Column: Account & Address Form */}
         <div className="md:col-span-2 space-y-6">
           <div className="bg-white p-8 rounded-2xl border border-[#E5E7F3] shadow-sm">
             <div className="flex justify-between items-center mb-6">
-              <h3 className="font-bold text-sm text-[#1C1B2E]">Account Information</h3>
+              <h3 className="font-bold text-sm text-[#1C1B2E]">Personal Information & Address</h3>
               {!isEditing && (
                 <button
                   type="button"
@@ -165,17 +197,104 @@ export default function CustomerProfile() {
                 </div>
 
                 <div>
-                  <label className="text-xs text-[#9598B0] mb-1 font-semibold block">Support Tier</label>
-                  <div className="font-bold text-sm text-[#1C1B2E] flex items-center gap-2">
-                    <MessageSquare size={14} className="text-indigo-500" /> Standard AI Support
-                  </div>
+                  <label className="text-xs text-[#9598B0] mb-1 font-semibold block">Phone Number</label>
+                  {isEditing ? (
+                    <input
+                      type="text"
+                      value={phone}
+                      onChange={e => setPhone(e.target.value)}
+                      placeholder="+1 (555) 000-0000"
+                      className="w-full border border-[#E5E7F3] rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none font-bold"
+                    />
+                  ) : (
+                    <div className="font-bold text-sm text-[#1C1B2E] flex items-center gap-2">
+                      <Phone size={14} className="text-[#9598B0]" /> {phone || 'Not specified'}
+                    </div>
+                  )}
                 </div>
 
                 <div>
-                  <label className="text-xs text-[#9598B0] mb-1 font-semibold block">Preferred Channel</label>
+                  <label className="text-xs text-[#9598B0] mb-1 font-semibold block">Customer ID</label>
                   <div className="font-bold text-sm text-[#1C1B2E] flex items-center gap-2">
-                    <Clock size={14} className="text-emerald-500" /> Live Web Chat
+                    <Tag size={14} className="text-indigo-500" /> {userProfile?.customer_id || 'Unlinked'}
                   </div>
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="text-xs text-[#9598B0] mb-1 font-semibold block">Street Address</label>
+                  {isEditing ? (
+                    <input
+                      type="text"
+                      value={address}
+                      onChange={e => setAddress(e.target.value)}
+                      placeholder="123 Main Street, Suite 100"
+                      className="w-full border border-[#E5E7F3] rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none font-bold"
+                    />
+                  ) : (
+                    <div className="font-bold text-sm text-[#1C1B2E] flex items-center gap-2">
+                      <MapPin size={14} className="text-[#9598B0]" /> {address || 'No street address provided'}
+                    </div>
+                  )}
+                </div>
+
+                <div>
+                  <label className="text-xs text-[#9598B0] mb-1 font-semibold block">City</label>
+                  {isEditing ? (
+                    <input
+                      type="text"
+                      value={city}
+                      onChange={e => setCity(e.target.value)}
+                      placeholder="New York"
+                      className="w-full border border-[#E5E7F3] rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none font-bold"
+                    />
+                  ) : (
+                    <div className="font-bold text-sm text-[#1C1B2E]">{city || 'N/A'}</div>
+                  )}
+                </div>
+
+                <div>
+                  <label className="text-xs text-[#9598B0] mb-1 font-semibold block">State / Province</label>
+                  {isEditing ? (
+                    <input
+                      type="text"
+                      value={state}
+                      onChange={e => setState(e.target.value)}
+                      placeholder="NY"
+                      className="w-full border border-[#E5E7F3] rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none font-bold"
+                    />
+                  ) : (
+                    <div className="font-bold text-sm text-[#1C1B2E]">{state || 'N/A'}</div>
+                  )}
+                </div>
+
+                <div>
+                  <label className="text-xs text-[#9598B0] mb-1 font-semibold block">Postal / Zip Code</label>
+                  {isEditing ? (
+                    <input
+                      type="text"
+                      value={postalCode}
+                      onChange={e => setPostalCode(e.target.value)}
+                      placeholder="10001"
+                      className="w-full border border-[#E5E7F3] rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none font-bold"
+                    />
+                  ) : (
+                    <div className="font-bold text-sm text-[#1C1B2E]">{postalCode || 'N/A'}</div>
+                  )}
+                </div>
+
+                <div>
+                  <label className="text-xs text-[#9598B0] mb-1 font-semibold block">Country</label>
+                  {isEditing ? (
+                    <input
+                      type="text"
+                      value={country}
+                      onChange={e => setCountry(e.target.value)}
+                      placeholder="United States"
+                      className="w-full border border-[#E5E7F3] rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none font-bold"
+                    />
+                  ) : (
+                    <div className="font-bold text-sm text-[#1C1B2E]">{country || 'N/A'}</div>
+                  )}
                 </div>
               </div>
 
@@ -187,6 +306,12 @@ export default function CustomerProfile() {
                       setIsEditing(false)
                       setDisplayName(userProfile?.name || name)
                       setDisplayEmail(userProfile?.email || '')
+                      setPhone(userProfile?.phone || '')
+                      setAddress(userProfile?.address || '')
+                      setCity(userProfile?.city || '')
+                      setState(userProfile?.state || '')
+                      setPostalCode(userProfile?.postal_code || '')
+                      setCountry(userProfile?.country || '')
                       setErrorMsg('')
                     }}
                     className="px-5 py-2 rounded-xl font-bold text-sm text-gray-600 hover:bg-gray-100 transition-colors"
@@ -244,6 +369,3 @@ export default function CustomerProfile() {
     </div>
   )
 }
-
-
-

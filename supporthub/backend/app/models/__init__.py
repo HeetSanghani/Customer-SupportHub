@@ -107,6 +107,13 @@ class User(SQLModel, table=True):
         # Unique per channel enforced at the service layer via compound lookup
     )
     phone: Optional[str] = Field(default=None, max_length=30, index=True)
+    customer_id: Optional[str] = Field(default=None, max_length=100, index=True)
+    address: Optional[str] = Field(default=None, sa_column=Column(Text))
+    city: Optional[str] = Field(default=None, max_length=100)
+    state: Optional[str] = Field(default=None, max_length=100)
+    postal_code: Optional[str] = Field(default=None, max_length=30)
+    country: Optional[str] = Field(default=None, max_length=100)
+    company_id: Optional[str] = Field(default=None, max_length=100, index=True)
 
     # Relationships
     submitted_tickets: list["Ticket"] = Relationship(
@@ -380,3 +387,158 @@ class WebhookEvent(SQLModel, table=True):
     )
     processed_at: Optional[datetime] = Field(default=None)
 
+# ─── Quick Reply (Admin Managed) ──────────────────────────────────────────────
+
+class QuickReply(SQLModel, table=True):
+    __tablename__ = "quick_replies"
+
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    tenant_id: str = Field(default="shopkart", index=True, max_length=100)
+    category: str = Field(max_length=100, index=True)  # e.g., "GREETING", "GRATITUDE", "HOURS", "CONTACT"
+    keyword_pattern: str = Field(max_length=500)       # e.g., "hello, hi, hey, good morning"
+    response_text: str = Field(sa_column=Column(Text))
+    priority: int = Field(default=10)
+    is_active: bool = Field(default=True)
+    created_at: datetime = Field(default_factory=datetime.now)
+    updated_at: datetime = Field(default_factory=datetime.now)
+
+
+# ─── Business / E-Commerce Models ─────────────────────────────────────────────
+
+class Company(SQLModel, table=True):
+    __tablename__ = "company"
+
+    company_id: str = Field(primary_key=True, max_length=50)
+    name: str = Field(max_length=255)
+    description: Optional[str] = Field(default=None, sa_column=Column(Text))
+    website: Optional[str] = Field(default=None, max_length=255)
+    support_email: Optional[str] = Field(default=None, max_length=255)
+    support_phone: Optional[str] = Field(default=None, max_length=50)
+    default_currency: str = Field(default="USD", max_length=10)
+    country: Optional[str] = Field(default=None, max_length=100)
+    created_at: datetime = Field(default_factory=datetime.now)
+    updated_at: datetime = Field(default_factory=datetime.now)
+
+
+class Category(SQLModel, table=True):
+    __tablename__ = "categories"
+
+    category_id: str = Field(primary_key=True, max_length=50)
+    company_id: str = Field(foreign_key="company.company_id", max_length=50, index=True)
+    name: str = Field(max_length=255)
+    description: Optional[str] = Field(default=None, sa_column=Column(Text))
+    parent_category_id: Optional[str] = Field(default=None, foreign_key="categories.category_id", max_length=50)
+
+
+class Seller(SQLModel, table=True):
+    __tablename__ = "sellers"
+
+    seller_id: str = Field(primary_key=True, max_length=50)
+    company_id: str = Field(foreign_key="company.company_id", max_length=50, index=True)
+    seller_name: str = Field(max_length=255)
+    email: Optional[str] = Field(default=None, max_length=255)
+    phone: Optional[str] = Field(default=None, max_length=50)
+    city: Optional[str] = Field(default=None, max_length=100)
+    state: Optional[str] = Field(default=None, max_length=100)
+    rating: Optional[float] = Field(default=None)
+    joined_date: Optional[datetime] = Field(default=None)
+    status: Optional[str] = Field(default="ACTIVE", max_length=50)
+
+
+class Product(SQLModel, table=True):
+    __tablename__ = "products"
+
+    product_id: str = Field(primary_key=True, max_length=50)
+    company_id: str = Field(foreign_key="company.company_id", max_length=50, index=True)
+    seller_id: str = Field(foreign_key="sellers.seller_id", max_length=50, index=True)
+    category_id: str = Field(foreign_key="categories.category_id", max_length=50, index=True)
+    name: str = Field(max_length=255)
+    brand: Optional[str] = Field(default=None, max_length=100)
+    description: Optional[str] = Field(default=None, sa_column=Column(Text))
+    price: float = Field()
+    mrp: Optional[float] = Field(default=None)
+    stock_quantity: int = Field(default=0)
+    specifications: Optional[str] = Field(default=None, sa_column=Column(Text))
+    created_at: datetime = Field(default_factory=datetime.now)
+
+
+class Order(SQLModel, table=True):
+    __tablename__ = "orders"
+
+    order_id: str = Field(primary_key=True, max_length=50)
+    company_id: str = Field(foreign_key="company.company_id", max_length=50, index=True)
+    customer_id: uuid.UUID = Field(foreign_key="users.id", index=True)
+    status: str = Field(max_length=50)
+    order_date: datetime = Field(default_factory=datetime.now)
+    total_amount: float = Field()
+    shipping_address: Optional[str] = Field(default=None, sa_column=Column(Text))
+    cancellation_reason: Optional[str] = Field(default=None, sa_column=Column(Text))
+    created_at: datetime = Field(default_factory=datetime.now)
+    updated_at: datetime = Field(default_factory=datetime.now)
+
+
+class OrderItem(SQLModel, table=True):
+    __tablename__ = "order_items"
+
+    order_item_id: str = Field(primary_key=True, max_length=50)
+    order_id: str = Field(foreign_key="orders.order_id", max_length=50, index=True)
+    product_id: str = Field(foreign_key="products.product_id", max_length=50, index=True)
+    quantity: int = Field()
+    unit_price: float = Field()
+    total_price: float = Field()
+
+
+class Payment(SQLModel, table=True):
+    __tablename__ = "payments"
+
+    payment_id: str = Field(primary_key=True, max_length=50)
+    order_id: str = Field(foreign_key="orders.order_id", max_length=50, index=True)
+    customer_id: uuid.UUID = Field(foreign_key="users.id", index=True)
+    amount: float = Field()
+    method: str = Field(max_length=50)
+    status: str = Field(max_length=50)
+    transaction_reference: Optional[str] = Field(default=None, max_length=100)
+    payment_date: datetime = Field(default_factory=datetime.now)
+    failure_reason: Optional[str] = Field(default=None, sa_column=Column(Text))
+
+
+class Shipment(SQLModel, table=True):
+    __tablename__ = "shipments"
+
+    shipment_id: str = Field(primary_key=True, max_length=50)
+    order_id: str = Field(foreign_key="orders.order_id", max_length=50, index=True)
+    tracking_number: Optional[str] = Field(default=None, max_length=100)
+    carrier: Optional[str] = Field(default=None, max_length=100)
+    status: str = Field(max_length=50)
+    estimated_delivery_date: Optional[datetime] = Field(default=None)
+    actual_delivery_date: Optional[datetime] = Field(default=None)
+    shipped_at: Optional[datetime] = Field(default=None)
+    delivered_at: Optional[datetime] = Field(default=None)
+
+
+class Return(SQLModel, table=True):
+    __tablename__ = "returns"
+
+    return_id: str = Field(primary_key=True, max_length=50)
+    order_id: str = Field(foreign_key="orders.order_id", max_length=50, index=True)
+    order_item_id: str = Field(foreign_key="order_items.order_item_id", max_length=50, index=True)
+    customer_id: uuid.UUID = Field(foreign_key="users.id", index=True)
+    reason: str = Field(sa_column=Column(Text))
+    status: str = Field(max_length=50)
+    requested_at: datetime = Field(default_factory=datetime.now)
+    pickup_date: Optional[datetime] = Field(default=None)
+    completed_at: Optional[datetime] = Field(default=None)
+
+
+class Refund(SQLModel, table=True):
+    __tablename__ = "refunds"
+
+    refund_id: str = Field(primary_key=True, max_length=50)
+    return_id: str = Field(foreign_key="returns.return_id", max_length=50, index=True)
+    order_id: str = Field(foreign_key="orders.order_id", max_length=50, index=True)
+    customer_id: uuid.UUID = Field(foreign_key="users.id", index=True)
+    refund_amount: float = Field()
+    status: str = Field(max_length=50)
+    initiated_at: datetime = Field(default_factory=datetime.now)
+    expected_date: Optional[datetime] = Field(default=None)
+    completed_at: Optional[datetime] = Field(default=None)
