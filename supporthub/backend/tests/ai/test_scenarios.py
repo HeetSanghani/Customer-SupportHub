@@ -8,8 +8,8 @@ class TestAllBenchmarkScenarios(unittest.TestCase):
 
     def test_60_scenarios_execution(self):
         report = run_evaluation()
-        self.assertEqual(report["total_scenarios"], 60)
-        self.assertEqual(report["total_passed"], 60)
+        self.assertEqual(report["total_scenarios"], 69)
+        self.assertEqual(report["total_passed"], 69)
         self.assertEqual(report["overall_accuracy_percentage"], 100.0)
         self.assertEqual(report["status"], "PASSED")
 

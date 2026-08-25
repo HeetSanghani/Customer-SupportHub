@@ -12,14 +12,14 @@ class TestEvaluationFramework(unittest.TestCase):
     def test_scenario_loader(self):
         """Verify all 60 scenarios are loaded and categorized."""
         scenarios = scenario_loader.load_all_scenarios()
-        self.assertEqual(len(scenarios), 60)
+        self.assertEqual(len(scenarios), 69)
 
         # Check category filter
         orders_scenarios = scenario_loader.get_by_category("orders")
         self.assertEqual(len(orders_scenarios), 8)
 
         sec_scenarios = scenario_loader.get_by_category("security")
-        self.assertEqual(len(sec_scenarios), 4)
+        self.assertEqual(len(sec_scenarios), 6)
 
     def test_metrics_calculator(self):
         """Verify accurate calculation of pass rates, confusion matrix, and latencies."""
