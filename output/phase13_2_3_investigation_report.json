@@ -1,0 +1,43 @@
+{
+  "phase": "13.2.3 — Contextual Reference Resolution Investigation",
+  "investigation_status": "ROOT_CAUSE_IDENTIFIED",
+  "mode": "READ_ONLY — ZERO PRODUCTION/TEST/DATABASE MODIFICATIONS",
+  "git_diff": "No tracked production files modified during investigation",
+  "manual_failure_reproduced": true,
+  "reproduction_condition": "Conversation must have active_order_id from a prior turn. Then query explicit product, then implicit follow-up (e.g. 'What is its price?').",
+  "root_cause": {
+    "description": "AIOrchestrator.process_message() passes route_decision.intent.entities (MERGED: explicit + context-inherited) as _explicit_entities to update_slots_domain_aware(). When the merged dict contains both product_id (explicit) and order_id (context-inherited), the if new_product_id: block sets active_product_id then clears order. But the subsequent if new_order_id: block (independent, not elif) then re-sets active_order_id = ORD-025 and clears active_product_id = None. The product slot is lost. The subsequent implicit follow-up finds only order_id in context, triggering ORDER_INQUIRY.",
+    "primary_file": "supporthub-ai-architecture/ai/orchestrator.py",
+    "primary_line": 79,
+    "primary_variable": "_explicit_entities = route_decision.intent.entities",
+    "secondary_file": "supporthub-ai-architecture/ai/context.py",
+    "secondary_method": "update_slots_domain_aware()",
+    "secondary_lines": "126-131",
+    "contributing_gap": "IntentResult.entities stores merged (context + explicit) entities. IntentResult has no separate explicit_entities field. Orchestrator cannot distinguish explicit from context-merged without re-computing."
+  },
+  "security_impact": {
+    "data_leakage": "NONE",
+    "ownership_checks_intact": true,
+    "security_boundary_violated": false,
+    "notes": "SC10 confirmed: unauthorized ORD-003 does not persist via revert_slots(). Subsequent implicit reference returns no-data, not foreign customer data."
+  },
+  "scenario_results": {
+    "SC1_known_failure": "FAIL — Order ORD-025 returned instead of Product PROD-002",
+    "SC2_is_it_available": "FAIL — Same root cause",
+    "SC3_its_mrp": "FAIL — Same root cause",
+    "SC4_order_carrier_followup": "PASS — Correct same-domain follow-up",
+    "SC5_order_total_followup": "PASS — Correct same-domain follow-up",
+    "SC6_explicit_entity_in_t3": "PASS — Explicit product_id in query overrides context",
+    "SC7_order_twice": "PASS",
+    "SC8_what_is_the_price": "FAIL — Same root cause (no explicit product_id in query)",
+    "SC9_what_about_it": "PARTIAL — Falls to GENERAL_QUERY; usability gap, not security issue",
+    "SC10_security": "PASS — No data leak, revert_slots() prevents unauthorized persistence"
+  },
+  "why_phase_13_2_2_tests_passed": "TestGroup8 used a fresh session with no prior order turn. active_order_id=None, so update_slots_domain_aware only saw product_id in merged dict and operated correctly. The bug only manifests when active_order_id is non-null before the product turn.",
+  "recommended_fix": {
+    "approach_a": "Add explicit_entities field to IntentResult dataclass. Populate in classify(). Orchestrator uses route_decision.intent.explicit_entities for update_slots_domain_aware().",
+    "approach_b": "Orchestrator calls intent_classifier.extract_entities(query) directly for _explicit_entities. No dataclass change needed.",
+    "files_to_change": ["ai/intent.py", "ai/orchestrator.py"],
+    "files_must_not_change": ["ai/context.py", "ai/router.py", "ai/tools.py", "ai/response.py", "ai/security.py", "auth", "postgresql", "mysql", "rag"]
+  }
+}

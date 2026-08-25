@@ -1,0 +1,102 @@
+[
+  {
+    "policy_id": "POL-001",
+    "company_id": "COMP-001",
+    "title": "ShopKart Return Policy",
+    "category": "Return",
+    "content": "# ShopKart Return Policy\n\n### 1. General Return Window\nShopKart offers a return window on eligible items delivered to customers in India:\n- **Electronics & Mobiles:** 7 calendar days from delivery date.\n- **Home & Kitchen Appliances:** 7 to 10 calendar days from delivery date.\n- **Fashion & Footwear:** 15 calendar days from delivery date.\n- **Large Furniture:** 10 calendar days from delivery date.\n\n### 2. Return Eligibility & Conditions\nTo qualify for a full return:\n- Products must be in original condition with all manufacturer tags, serial numbers, barcodes, warranty cards, and accessories intact.\n- Items must not show signs of physical abuse, unauthorized modification, or water damage.\n- Original packaging box and user manuals must be returned with the product.\n\n### 3. Non-Returnable Items\nFor health, safety, and hygiene regulations, the following items are strictly non-returnable:\n- Personal hygiene items, innerwear, socks, and lingerie.\n- Oral care products (e.g. electric toothbrushes, replacement brush heads).\n- Cosmetics, skincare serums, perfumes, and opened beauty formulations.\n- Clearance or discontinued products explicitly flagged as 'Final Sale / Non-Returnable'.\n\n### 4. Return Pickup & Inspection Process\n- Once a return request is submitted in the ShopKart app/website, a logistics agent will be assigned for doorstep pickup within 24–48 business hours.\n- A physical verification checklist will be performed by the field agent prior to accepting the package.\n- If verified successfully, the return status moves to 'PICKED_UP' and the corresponding refund is automatically initiated.",
+    "version": "2.4",
+    "status": "ACTIVE",
+    "effective_date": "2026-01-01"
+  },
+  {
+    "policy_id": "POL-002",
+    "company_id": "COMP-001",
+    "title": "ShopKart Refund Policy",
+    "category": "Refund",
+    "content": "# ShopKart Refund Policy\n\n### 1. Initiation Timelines\n- **Pre-dispatch Order Cancellations:** Refund initiated immediately upon cancellation approval.\n- **Doorstep Returns:** Refund initiated within 2 to 4 hours of the courier partner completing physical pickup.\n- **Warehouse Returned Items:** Refund initiated within 24 hours of warehouse quality check clearance.\n\n### 2. Refund Settlement Timelines by Payment Method\n- **UPI (Google Pay, PhonePe, Paytm, BHIM):** 2 to 24 hours (usually instantaneous).\n- **ShopKart Wallet / Instant Store Credit:** Instantaneous (0 to 15 minutes).\n- **Credit Cards & Debit Cards (Visa, Mastercard, RuPay):** 3 to 5 business banking days.\n- **Net Banking (All major Indian banks):** 3 to 7 business banking days.\n- **Cash on Delivery (COD) Orders:** Processed via customer-provided UPI VPA or NEFT/IMPS bank account within 24 to 48 hours after return pickup.\n\n### 3. Failed Refund Handling\nIf a refund fails due to an invalid UPI handle, closed bank account, or payment gateway timeout:\n- SupportHub will notify the customer via SMS/Email to update their bank/UPI details in the Account section.\n- The automated payment retry engine re-attempts the transaction within 24 hours of updated beneficiary details.",
+    "version": "2.1",
+    "status": "ACTIVE",
+    "effective_date": "2026-01-01"
+  },
+  {
+    "policy_id": "POL-003",
+    "company_id": "COMP-001",
+    "title": "ShopKart Order Cancellation Policy",
+    "category": "Cancellation",
+    "content": "# ShopKart Order Cancellation Policy\n\n### 1. When Cancellation is Allowed\n- Customers may cancel an order free of charge at any time while the order status remains **PLACED** or **CONFIRMED**.\n- Self-service one-click cancellation is accessible directly from 'My Orders'.\n\n### 2. When Cancellation is Blocked\n- Once an order reaches **PACKED**, **SHIPPED**, or **IN_TRANSIT**, self-service online cancellation is automatically locked because warehouse logistics and courier manifests have been generated.\n- In such cases, customers should refuse delivery at their doorstep when the courier agent arrives, or initiate a standard return post-delivery.\n\n### 3. Merchant / Platform Cancellations\nShopKart reserves the right to cancel orders in rare situations such as:\n- Item discovered to be damaged or out of stock during pre-dispatch warehouse quality inspection.\n- Incomplete or unserviceable delivery address pincode.\n- Flagged security alerts or suspected unauthorized payment transactions.",
+    "version": "1.8",
+    "status": "ACTIVE",
+    "effective_date": "2026-01-01"
+  },
+  {
+    "policy_id": "POL-004",
+    "company_id": "COMP-001",
+    "title": "ShopKart Shipping and Delivery Policy",
+    "category": "Shipping",
+    "content": "# ShopKart Shipping and Delivery Policy\n\n### 1. Standard Delivery Timelines\n- **Metro & Tier-1 Cities (Bengaluru, Mumbai, Delhi NCR, Hyderabad, Chennai, Kolkata, Pune):** 2 to 4 calendar days.\n- **Tier-2 & Tier-3 Cities:** 4 to 7 calendar days.\n- **Special / Remote Regions (Northeast, J&K, Island territories):** 7 to 10 calendar days.\n\n### 2. Logistics & Courier Partners\nOrders are fulfilled via verified tier-1 logistics networks including Delhivery, BlueDart, Ecom Express, Shadowfax, and XpressBees. Live real-time tracking links are provided via SMS and order details.\n\n### 3. Delivery Delays & Exceptions\nUnforeseen delays may occur due to severe weather conditions (monsoons, floods), transit hub congestion, regional holidays, or transportation strikes. Customers receive automated tracking alerts whenever transit status updates to 'DELAYED'.\n\n### 4. Delivery Address Changes\n- Delivery addresses may be modified only while the order is in **PLACED** or **CONFIRMED** status.\n- Once dispatched, address changes cannot be accommodated due to courier waybill locking.",
+    "version": "3.0",
+    "status": "ACTIVE",
+    "effective_date": "2026-01-01"
+  },
+  {
+    "policy_id": "POL-005",
+    "company_id": "COMP-001",
+    "title": "ShopKart Warranty Policy",
+    "category": "Warranty",
+    "content": "# ShopKart Warranty Policy\n\n### 1. Manufacturer Warranty\n- All branded electronics, home appliances, IT peripherals, and audio equipment sold on ShopKart carry official manufacturer brand warranty (typically 1 to 3 years as specified on the product page).\n- The official tax invoice downloaded from the ShopKart order page serves as the valid proof of purchase.\n\n### 2. Scope of Warranty Coverage\n- **Covered:** Inherent manufacturing defects, internal component failure, electrical circuit malfunction under normal usage.\n- **Excluded:** Accidental damage, liquid spills, cracked screens, physical abuse, unauthorized third-party repairs, normal cosmetic wear and tear.\n\n### 3. Onsite vs. Carry-in Service\n- **Large Appliances & Televisions:** Supported by authorized brand technician onsite home visits.\n- **Mobiles, Audio & Peripherals:** Supported via authorized brand service centers across India.",
+    "version": "2.0",
+    "status": "ACTIVE",
+    "effective_date": "2026-01-01"
+  },
+  {
+    "policy_id": "POL-006",
+    "company_id": "COMP-001",
+    "title": "ShopKart Replacement Policy",
+    "category": "Replacement",
+    "content": "# ShopKart Replacement Policy\n\n### 1. Replacement Eligibility\nIf a delivered product is damaged in transit, defective, or missing accessories, customers may opt for a free replacement instead of a refund within the designated return window.\n\n### 2. Conditions for Replacement\n- Replacement is subject to seller inventory availability.\n- The replacement unit will be dispatched as soon as the original unit is picked up and verified by the logistics agent.\n- If the required replacement SKU is out of stock, an automatic full refund will be processed.",
+    "version": "1.5",
+    "status": "ACTIVE",
+    "effective_date": "2026-01-01"
+  },
+  {
+    "policy_id": "POL-007",
+    "company_id": "COMP-001",
+    "title": "ShopKart Exchange Policy",
+    "category": "Exchange",
+    "content": "# ShopKart Exchange Policy\n\n### 1. Fashion & Footwear Size Exchanges\n- Customers purchasing apparel or footwear may request a free size exchange (e.g. Size M to Size L, or UK 8 to UK 9) within 15 days of delivery.\n- Size exchanges do not incur additional shipping or handling fees.\n\n### 2. Exchange Fulfillment\n- The courier agent delivers the new size and picks up the existing size during the same delivery attempt (Doorstep Exchange).",
+    "version": "1.3",
+    "status": "ACTIVE",
+    "effective_date": "2026-01-01"
+  },
+  {
+    "policy_id": "POL-008",
+    "company_id": "COMP-001",
+    "title": "ShopKart Payment Policy",
+    "category": "Payment",
+    "content": "# ShopKart Payment Policy\n\n### 1. Accepted Payment Modes\n- Unified Payments Interface (UPI) — Google Pay, PhonePe, Paytm, CRED, Amazon Pay, BHIM.\n- Credit Cards & Debit Cards — Visa, MasterCard, RuPay, American Express, Diners Club.\n- Net Banking — 50+ Indian commercial and public sector banks.\n- Digital Wallets — ShopKart Wallet, Paytm, Mobikwik.\n- Cash on Delivery (COD) — Available on orders up to ₹25,000 for serviceable pin codes.\n\n### 2. Payment Security & Encryption\nAll online transactions are encrypted via 256-bit SSL protocols and processed through RBI-compliant PCI-DSS Level 1 certified payment gateways. Two-Factor Authentication (OTP / UPI PIN) is mandatory.\n\n### 3. Duplicate Deductions & Gateway Timeouts\nIf money is deducted from your bank account but your order is not confirmed due to a network interruption, the payment gateway auto-reverses the transaction within 24 to 48 banking hours.",
+    "version": "2.2",
+    "status": "ACTIVE",
+    "effective_date": "2026-01-01"
+  },
+  {
+    "policy_id": "POL-009",
+    "company_id": "COMP-001",
+    "title": "ShopKart Account Management Policy",
+    "category": "Account",
+    "content": "# ShopKart Account Management Policy\n\n### 1. Profile & Information Updates\nCustomers can manage saved shipping addresses, primary email IDs, and phone numbers via the Account Settings portal.\n\n### 2. Account Security & Verification\n- Changing login mobile numbers or registered email addresses requires OTP verification sent to both previous and new credentials.\n- Multi-factor authentication is recommended for enhanced account safety.\n\n### 3. Suspended & Locked Accounts\n- Accounts with repeated fraudulent return claims or policy abuse may be temporarily suspended.\n- In case of suspicious unauthorized logins from unfamiliar devices, accounts are placed in **LOCKED** status to safeguard customer payment data until identity is verified.",
+    "version": "1.7",
+    "status": "ACTIVE",
+    "effective_date": "2026-01-01"
+  },
+  {
+    "policy_id": "POL-010",
+    "company_id": "COMP-001",
+    "title": "ShopKart Privacy & Security Policy",
+    "category": "Security",
+    "content": "# ShopKart Privacy & Security Policy\n\n### 1. Customer Privacy Safeguards\nShopKart strictly protects user privacy. Support agents and automated AI assistants are prohibited from disclosing:\n- Phone numbers, home addresses, or email addresses belonging to other customers.\n- Order details, payment records, or shipment manifests belonging to unrelated accounts.\n- One-Time Passwords (OTPs), CVVs, passwords, or banking credentials under any circumstances.\n\n### 2. Reporting Unauthorized Access\nIf you detect unfamiliar order placements, unexpected address changes, or suspect account compromise, contact ShopKart Trust & Safety immediately to freeze account activity and initiate audit logs.",
+    "version": "2.5",
+    "status": "ACTIVE",
+    "effective_date": "2026-01-01"
+  }
+]

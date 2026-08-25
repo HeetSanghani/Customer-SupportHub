@@ -1,0 +1,221 @@
+[
+  {
+    "article_id": "KA-001",
+    "company_id": "COMP-001",
+    "title": "How to Track Your ShopKart Order",
+    "category": "Orders",
+    "content": "# How to Track Your ShopKart Order\n\nYou can easily check the real-time location and expected delivery schedule of your order:\n\n1. **Via ShopKart App / Website:**\n   - Log in to your ShopKart account and click on **'My Orders'**.\n   - Select the relevant order and click **'Track Shipment'**.\n   - You will see live tracking milestones: *Placed -> Confirmed -> Packed -> Shipped -> In Transit -> Out for Delivery -> Delivered*.\n\n2. **Via Logistics Courier Portal:**\n   - Your shipment details include an Air Waybill (AWB) / Tracking Number and Carrier Name (e.g. Delhivery, BlueDart, Ecom Express).\n   - You can copy the tracking number and visit the courier's official tracking portal for granular checkpoint updates.\n\n3. **Status Explanations:**\n   - **In Transit:** Package is on the move between regional fulfillment sorting centers.\n   - **Out for Delivery:** Courier delivery executive has dispatched with your parcel and will attempt delivery today.\n   - **Delayed:** Unforeseen transit delays (weather, high volume). New estimated delivery date will be shown.",
+    "keywords": [
+      "track order",
+      "where is my order",
+      "tracking number",
+      "courier status",
+      "shipment tracking"
+    ],
+    "status": "PUBLISHED",
+    "created_at": "2026-01-15T09:00:00+00:00",
+    "updated_at": "2026-08-01T14:30:00+00:00"
+  },
+  {
+    "article_id": "KA-002",
+    "company_id": "COMP-001",
+    "title": "How to Cancel an Order Before Dispatch",
+    "category": "Orders",
+    "content": "# How to Cancel an Order Before Dispatch\n\nIf you changed your mind or placed an order by mistake:\n\n### 1. Self-Service Cancellation (Instant)\n- Navigate to **'My Orders'** in your ShopKart profile.\n- If the order status is **PLACED** or **CONFIRMED**, click the **'Cancel Order'** button.\n- Choose your cancellation reason (e.g. *Ordered by mistake, Found cheaper alternative, Expected delivery date too late*) and confirm.\n\n### 2. Can I cancel if the order is Shipped?\n- Once an order reaches **PACKED**, **SHIPPED**, or **IN_TRANSIT**, cancellation is locked.\n- Do not worry: Simply refuse the package when the courier executive arrives at your doorstep. The item will automatically return to the seller, and your full refund will be processed.",
+    "keywords": [
+      "cancel order",
+      "cancellation",
+      "stop delivery",
+      "cancel item"
+    ],
+    "status": "PUBLISHED",
+    "created_at": "2026-01-15T09:00:00+00:00",
+    "updated_at": "2026-08-01T14:30:00+00:00"
+  },
+  {
+    "article_id": "KA-003",
+    "company_id": "COMP-001",
+    "title": "Step-by-Step Guide to Request a Return",
+    "category": "Returns",
+    "content": "# Step-by-Step Guide to Request a Return\n\nShopKart offers hassle-free doorstep returns within the eligible product return window:\n\n1. **Initiating the Request:**\n   - Go to **'My Orders'** and select the delivered item.\n   - Click **'Request Return / Replace'**.\n   - Select the accurate reason: *Damaged, Wrong Product, Defective, Size Issue, Quality Issue, or Not as Expected*.\n   - Upload 1–3 clear photos showing the issue, shipping label, and original box.\n\n2. **Doorstep Pickup:**\n   - An authorized courier partner will visit your shipping address within 24 to 48 hours.\n   - Keep the item along with tags, warranty cards, manuals, and original packaging ready for handover.\n\n3. **Refund or Replacement Trigger:**\n   - Once the agent verifies the package condition and marks it 'PICKED_UP', your refund or replacement is initiated automatically.",
+    "keywords": [
+      "return product",
+      "request return",
+      "doorstep pickup",
+      "return window",
+      "damaged item"
+    ],
+    "status": "PUBLISHED",
+    "created_at": "2026-01-15T09:00:00+00:00",
+    "updated_at": "2026-08-01T14:30:00+00:00"
+  },
+  {
+    "article_id": "KA-004",
+    "company_id": "COMP-001",
+    "title": "Understanding Refund Timelines and Methods",
+    "category": "Refunds",
+    "content": "# Understanding Refund Timelines and Methods\n\nRefunds are processed automatically as soon as an order is cancelled or a returned product is picked up.\n\n### Expected Settlement Time by Payment Mode:\n- **UPI (GPay / PhonePe / Paytm / BHIM):** 2 to 24 hours (most credits reflect within 15 minutes).\n- **ShopKart Wallet Balance:** Instant (under 10 minutes).\n- **Credit / Debit Cards:** 3 to 5 business banking days (subject to issuing bank cycle).\n- **Net Banking:** 3 to 7 working days.\n- **Cash on Delivery (COD):** 24 to 48 hours after providing verified bank/UPI details.\n\n### If your refund status shows 'PROCESSING':\nThe transaction has been submitted to the National Payments Corporation of India (NPCI) or Visa/Mastercard network. Please allow the standard bank clearance window.",
+    "keywords": [
+      "where is my refund",
+      "refund timeline",
+      "upi refund",
+      "bank transfer",
+      "refund delay"
+    ],
+    "status": "PUBLISHED",
+    "created_at": "2026-01-15T09:00:00+00:00",
+    "updated_at": "2026-08-01T14:30:00+00:00"
+  },
+  {
+    "article_id": "KA-005",
+    "company_id": "COMP-001",
+    "title": "What to Do When Payment Fails or Money is Deducted",
+    "category": "Payments",
+    "content": "# What to Do When Payment Fails or Money is Deducted\n\nEncountering an issue during checkout can happen due to bank server timeouts or intermittent network drops:\n\n### Scenario 1: Money deducted from bank, but order not created (PAY04)\n- This is a temporary gateway drop. The funds are held in the banking clearance pool.\n- The payment gateway automatically detects the orphaned transaction and issues an auto-reversal within **24 to 48 banking hours** back to your original source account.\n\n### Scenario 2: Charged twice for a single order (PAY05)\n- If your bank account was debited two times for one order, the secondary transaction is automatically identified as a duplicate and refunded within **3 to 5 banking days**.\n- If not credited after 5 days, provide the 12-digit Bank RRN / Transaction Reference to ShopKart Support for manual settlement acceleration.",
+    "keywords": [
+      "payment failed",
+      "money deducted",
+      "charged but no order",
+      "duplicate payment",
+      "double charge"
+    ],
+    "status": "PUBLISHED",
+    "created_at": "2026-01-15T09:00:00+00:00",
+    "updated_at": "2026-08-01T14:30:00+00:00"
+  },
+  {
+    "article_id": "KA-006",
+    "company_id": "COMP-001",
+    "title": "What to Do If Your Delivery is Delayed",
+    "category": "Shipments",
+    "content": "# What to Do If Your Delivery is Delayed\n\nWe aim to deliver every package on or before the estimated delivery date:\n\n1. **Why do delays happen?**\n   - Unforeseen severe weather conditions (monsoons, cyclones, waterlogging).\n   - High volume festival sales causing sorting hub backlogs.\n   - Incomplete customer address or unreachable phone number during delivery attempt.\n\n2. **How to check the revised schedule:**\n   - Open **'Track Shipment'** in the app. The revised estimated delivery date and logistics reason will be updated in real time.\n\n3. **Urgent Delivery Escalation:**\n   - If your shipment has been stuck at a local hub for more than 48 hours with no movement, our AI assistant or support team can raise an automated priority dispatch ticket with the courier partner.",
+    "keywords": [
+      "delayed delivery",
+      "why is order late",
+      "late delivery",
+      "shipment delayed",
+      "reschedule delivery"
+    ],
+    "status": "PUBLISHED",
+    "created_at": "2026-01-15T09:00:00+00:00",
+    "updated_at": "2026-08-01T14:30:00+00:00"
+  },
+  {
+    "article_id": "KA-007",
+    "company_id": "COMP-001",
+    "title": "How to Claim Manufacturer Warranty",
+    "category": "Warranty",
+    "content": "# How to Claim Manufacturer Warranty\n\nAll electronics and brand appliances purchased on ShopKart carry authentic brand manufacturer warranty:\n\n1. **Download Official Proof of Purchase:**\n   - Go to **'My Orders'** -> Select the item -> Click **'Download Tax Invoice'**. The GST invoice serves as the primary warranty certificate.\n\n2. **Locating Authorized Service Centers:**\n   - Check the product description or warranty card inside the box for the manufacturer's toll-free support helpline or website.\n   - For major brands (Apple, Samsung, Dell, Philips, Boat, Sony), walk into any authorized service center with the device and invoice.\n\n3. **Onsite Appliance Servicing:**\n   - For TVs, washing machines, and large furniture, call the brand helpline to schedule an authorized technician home visit.",
+    "keywords": [
+      "warranty claim",
+      "brand warranty",
+      "service center",
+      "repair",
+      "tax invoice warranty"
+    ],
+    "status": "PUBLISHED",
+    "created_at": "2026-01-15T09:00:00+00:00",
+    "updated_at": "2026-08-01T14:30:00+00:00"
+  },
+  {
+    "article_id": "KA-008",
+    "company_id": "COMP-001",
+    "title": "Product Replacement and Exchange Process",
+    "category": "Returns",
+    "content": "# Product Replacement and Exchange Process\n\nNeed a different size or received a defective unit? Here is how replacement and exchange work:\n\n1. **Requesting Replacement:**\n   - Select **'Request Return / Replacement'** on your delivered order page.\n   - Select **'Replacement'** if you want the exact same product delivered again due to transit damage or defect.\n   - Select **'Size Exchange'** if you need a different apparel or footwear size.\n\n2. **Delivery & Pickup Handover:**\n   - In most metro areas, we support **Doorstep Exchange** — the delivery executive brings your new unit and collects the old one during the same visit.",
+    "keywords": [
+      "replacement",
+      "exchange size",
+      "swap item",
+      "defective replacement"
+    ],
+    "status": "PUBLISHED",
+    "created_at": "2026-01-15T09:00:00+00:00",
+    "updated_at": "2026-08-01T14:30:00+00:00"
+  },
+  {
+    "article_id": "KA-009",
+    "company_id": "COMP-001",
+    "title": "Account Recovery and Login Troubleshooting",
+    "category": "Account",
+    "content": "# Account Recovery and Login Troubleshooting\n\nIf you are experiencing issues accessing your ShopKart account:\n\n1. **Forgot Password:**\n   - Click **'Forgot Password'** on the login screen.\n   - Enter your registered email or mobile number to receive a secure password reset link / OTP.\n\n2. **OTP Not Received:**\n   - Ensure you have cellular network coverage and DND settings do not block transactional SMS.\n   - Click **'Resend OTP via Call / WhatsApp'** after 30 seconds.\n\n3. **Account Locked or Suspended:**\n   - If your account was locked due to multiple failed login attempts or security triggers, submit an identity verification request via registered email to `support@shopkart.in`.",
+    "keywords": [
+      "forgot password",
+      "cannot log in",
+      "reset password",
+      "otp not received",
+      "locked account"
+    ],
+    "status": "PUBLISHED",
+    "created_at": "2026-01-15T09:00:00+00:00",
+    "updated_at": "2026-08-01T14:30:00+00:00"
+  },
+  {
+    "article_id": "KA-010",
+    "company_id": "COMP-001",
+    "title": "Reporting Damaged, Broken or Defective Products",
+    "category": "Returns",
+    "content": "# Reporting Damaged, Broken or Defective Products\n\nIf your package arrives physically broken or damaged:\n\n1. **Report Within 48 Hours:**\n   - Report the damage immediately from **'My Orders'** -> **'Item Damaged on Arrival'**.\n   - Attach clear photographs showing:\n     - The outer cardboard box with the shipping courier label visible.\n     - The damaged part of the product.\n\n2. **Priority Resolution:**\n   - For verified transit damages, ShopKart provides expedited zero-cost replacement dispatch or 100% instant refund upon pickup verification.",
+    "keywords": [
+      "damaged product",
+      "broken item",
+      "seal broken",
+      "dented package",
+      "damaged delivery"
+    ],
+    "status": "PUBLISHED",
+    "created_at": "2026-01-15T09:00:00+00:00",
+    "updated_at": "2026-08-01T14:30:00+00:00"
+  },
+  {
+    "article_id": "KA-011",
+    "company_id": "COMP-001",
+    "title": "What to Do If You Received the Wrong Product",
+    "category": "Returns",
+    "content": "# What to Do If You Received the Wrong Product\n\nIf you opened your package and discovered an entirely different item, color, or model:\n\n1. **Keep Original Packaging Intact:**\n   - Do not discard the box, outer plastic flyer, or courier barcode label.\n2. **Submit a Wrong Item Claim:**\n   - Go to **'My Orders'** -> Select the order -> Choose reason **'WRONG_PRODUCT'**.\n   - Upload photos of the product and barcode tag on the box.\n3. **Expedited Swap:**\n   - Our logistics partner will pick up the incorrect item and dispatch the correct product right away.",
+    "keywords": [
+      "wrong product",
+      "incorrect item",
+      "different item received",
+      "wrong color",
+      "wrong model"
+    ],
+    "status": "PUBLISHED",
+    "created_at": "2026-01-15T09:00:00+00:00",
+    "updated_at": "2026-08-01T14:30:00+00:00"
+  },
+  {
+    "article_id": "KA-012",
+    "company_id": "COMP-001",
+    "title": "What to Do If Order Says Delivered But You Did Not Receive It",
+    "category": "Orders",
+    "content": "# What to Do If Order Says Delivered But You Did Not Receive It\n\nIf you receive an SMS or notification stating your order was delivered, but you haven't received the package:\n\n1. **Check with Household & Security:**\n   - Often, couriers leave packages with apartment building security guards, reception desks, or neighbors.\n\n2. **Contact Delivery Executive:**\n   - The 'Out for Delivery' SMS contains the delivery agent's direct phone number.\n\n3. **Raise a Non-Receipt Dispute (Scenario O08):**\n   - If the package is genuinely missing, report the dispute within **24 hours** by clicking **'Didn't Receive Order'** on the order tracking screen.\n   - ShopKart opens an immediate geo-location GPS tag audit with the courier service.",
+    "keywords": [
+      "delivered not received",
+      "fake delivery",
+      "marked delivered",
+      "order missing",
+      "delivery dispute"
+    ],
+    "status": "PUBLISHED",
+    "created_at": "2026-01-15T09:00:00+00:00",
+    "updated_at": "2026-08-01T14:30:00+00:00"
+  },
+  {
+    "article_id": "KA-013",
+    "company_id": "COMP-001",
+    "title": "ShopKart Account Security and Anti-Fraud Guidelines",
+    "category": "Security",
+    "content": "# ShopKart Account Security and Anti-Fraud Guidelines\n\nProtecting your payment methods and private information is our highest priority:\n\n1. **Never Share OTPs or Passwords:**\n   - ShopKart employees and customer support executives will **NEVER** ask for your One-Time Password (OTP), UPI PIN, card CVV, or net banking passwords.\n\n2. **Recognizing Phishing Attempts:**\n   - Official communications originate only from `@shopkart.in` and official verified WhatsApp channels.\n\n3. **Reporting Suspicious Activity:**\n   - If you notice unauthorized orders placed or profile modifications, immediately select **'Lock Account'** in Security Settings and contact Trust & Safety.",
+    "keywords": [
+      "unauthorized access",
+      "hacked account",
+      "fraud alert",
+      "otp scam",
+      "compromised profile"
+    ],
+    "status": "PUBLISHED",
+    "created_at": "2026-01-15T09:00:00+00:00",
+    "updated_at": "2026-08-01T14:30:00+00:00"
+  }
+]

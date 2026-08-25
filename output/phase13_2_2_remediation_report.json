@@ -1,0 +1,80 @@
+{
+  "phase": "13.2.2 — Multi-Turn Context Isolation Remediation",
+  "certification_status": "AUTOMATED_VERIFIED_PENDING_MANUAL",
+  "automated_tests": {
+    "new_context_isolation_suite": {
+      "file": "tests/phase13/test_context_isolation_phase13_2_2.py",
+      "total": 31,
+      "passed": 31,
+      "failed": 0
+    },
+    "supporthub_backend_suite": {
+      "file": "supporthub/backend/tests/",
+      "total": 230,
+      "passed": 228,
+      "failed_pre_existing": 2,
+      "failed_by_phase_13_2_2": 0,
+      "notes": "2 failures in test_phase12_security.py (test_sec01_sec02_otp_cvv_protection, test_sec05_customer_identity_spoofing) are pre-existing failures confirmed present on the unmodified git baseline."
+    },
+    "ai_architecture_suite": {
+      "file": "supporthub-ai-architecture/tests/",
+      "total": 67,
+      "passed": 67,
+      "failed": 0
+    },
+    "regressions_introduced": 0,
+    "security_violations_introduced": 0
+  },
+  "root_causes_fixed": [
+    {
+      "id": "RC-1",
+      "file": "supporthub-ai-architecture/ai/intent.py",
+      "method": "IntentClassifier.classify()",
+      "fix": "Separated explicit_entities (current query) from context_entities (prior turns). Step 8 (ORDER) now requires explicit order_id OR explicit order keywords, and does NOT fire when only a context-inherited order_id is present while the current query has explicit product entities."
+    },
+    {
+      "id": "RC-2",
+      "file": "supporthub-ai-architecture/ai/orchestrator.py",
+      "method": "AIOrchestrator.process_message()",
+      "fix": "Pre-turn slot snapshot taken before routing. ctx.update_slots_domain_aware() called only AFTER _check_ownership() succeeds. On security denial, ctx.revert_slots() restores pre-turn state so unauthorized IDs never persist."
+    },
+    {
+      "id": "RC-3",
+      "file": "supporthub-ai-architecture/ai/context.py",
+      "method": "ConversationContext.update_slots_domain_aware()",
+      "fix": "New domain-aware slot update method. When a new explicit domain entity arrives (e.g. product_id), conflicting slots from unrelated domains (order_id, return_id, refund_id) are cleared. Same-domain follow-ups with no explicit entities leave context unchanged."
+    }
+  ],
+  "files_changed": [
+    "supporthub-ai-architecture/ai/intent.py",
+    "supporthub-ai-architecture/ai/orchestrator.py",
+    "supporthub-ai-architecture/ai/context.py",
+    "supporthub/backend/tests/phase13/test_context_isolation_phase13_2_2.py"
+  ],
+  "files_unchanged": [
+    "ai/router.py",
+    "ai/tools.py",
+    "ai/response.py",
+    "ai/security.py",
+    "ai/escalation.py",
+    "scripts/*",
+    "app/services/ai/live_chat_adapter.py",
+    "PostgreSQL schema",
+    "MySQL schema",
+    "supporthub-data-generator"
+  ],
+  "manual_validation_status": "PENDING_DEVELOPER_VERIFICATION",
+  "manual_checklist": [
+    "1. 'What is the price of PROD-002?' → Product: AeroTab, Price ₹27,499, MRP ₹32,999",
+    "2. 'What is the status of ORD-025?' → Order ORD-025 CONFIRMED",
+    "3. 'What is the price of PROD-002?' → Product (must NOT return order)",
+    "4. 'Is PROD-001 available?' → Product: NovaPhone",
+    "5. 'Where is my shipment?' → Shipment SHIP-025",
+    "6. 'What is the status of ORD-025?' → Order ORD-025",
+    "7. 'What is the price of PROD-002?' → Product (must NOT return order)",
+    "8. 'What is the status of ORD-003?' → Access Denied",
+    "9. 'Where is my shipment?' → CUST-001's own shipment (must NOT be denied)",
+    "10. 'Tell me about PROD-002.' → Product: AeroTab",
+    "11. 'What is its price?' → AeroTab price ₹27,499 (context follow-up)"
+  ]
+}

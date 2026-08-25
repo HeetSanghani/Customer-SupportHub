@@ -1,0 +1,39 @@
+{
+  "phase": "13.2.4 — Contextual Reference Resolution Remediation",
+  "certification_status": "AUTOMATED_VERIFIED_PENDING_MANUAL",
+  "root_cause_reference": "docs/phase13/13.2.3-context-reference-root-cause.md",
+  "files_changed": [
+    "supporthub-ai-architecture/ai/intent.py",
+    "supporthub-ai-architecture/ai/orchestrator.py",
+    "supporthub-ai-architecture/tests/test_phase13_2_4_context_reference.py"
+  ],
+  "files_not_changed": ["ai/context.py", "ai/router.py", "ai/tools.py", "ai/response.py", "ai/security.py", "auth", "postgresql", "mysql", "rag"],
+  "implementation": {
+    "change_1": {
+      "file": "ai/intent.py",
+      "description": "Added explicit_entities field to IntentResult dataclass. Populated in all IntentClassifier.classify() return paths with only the entities extracted from the current query (never context-inherited)."
+    },
+    "change_2": {
+      "file": "ai/orchestrator.py",
+      "description": "Line 79: changed _explicit_entities from route_decision.intent.entities (merged) to route_decision.intent.explicit_entities (current-query-only). This ensures update_slots_domain_aware() receives only entities explicitly present in the current query."
+    }
+  },
+  "why_context_py_unchanged": "update_slots_domain_aware() logic is correct when given correct (explicit-only) input. The bug was the wrong dict being supplied to it, not the method itself.",
+  "test_results": {
+    "phase_13_2_4_new_suite": {"file": "tests/test_phase13_2_4_context_reference.py", "total": 32, "passed": 32, "failed": 0},
+    "ai_architecture_full": {"total": 99, "passed": 99, "failed": 0},
+    "supporthub_backend_full": {"total": 230, "passed": 228, "failed_pre_existing": 2, "new_regressions": 0},
+    "summary": "32+99+228 = 359 tests passed. 2 pre-existing failures unchanged. 0 new regressions."
+  },
+  "manual_validation_status": "PENDING_DEVELOPER_VERIFICATION",
+  "manual_checklist": [
+    "TEST 1: 'What is the status of ORD-025?' → Order CONFIRMED",
+    "TEST 2: 'Tell me about PROD-002.' → Product AeroTab",
+    "TEST 3: 'What is its price?' → Product AeroTab (MUST NOT be Order ORD-025)",
+    "TEST 4: 'Is it available?' → Product PROD-002 availability",
+    "TEST 5: 'What is the status of ORD-025?' → Order ORD-025",
+    "TEST 6: 'What is the price of PROD-002?' → Product PROD-002",
+    "TEST 7: 'What is the status of ORD-003?' → Access Denied",
+    "TEST 8: 'Where is my shipment?' → Own customer shipment (must NOT be denied)"
+  ]
+}

@@ -1,4 +1,49 @@
 services:
+  nginx:
+    image: nginx:alpine
+    container_name: supporthub_nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - frontend
+      - backend
+    networks:
+      - app_net
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: supporthub_frontend
+    restart: unless-stopped
+    networks:
+      - app_net
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: supporthub_backend
+    restart: unless-stopped
+    environment:
+      - APP_ENV=production
+      - DATABASE_URL=postgresql+asyncpg://supporthub:supporthub_dev@db:5432/supporthub
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://redis:6379/2
+      - FRONTEND_URL=http://localhost
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - app_net
+      - db_net
+
   db:
     image: pgvector/pgvector:pg16
     container_name: supporthub_db
@@ -16,18 +61,26 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    networks:
+      - db_net
 
   redis:
     image: redis:7-alpine
     container_name: supporthub_redis
     restart: unless-stopped
-    ports:
-      - "6381:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
       timeout: 3s
       retries: 5
+    networks:
+      - db_net
 
 volumes:
   pgdata:
+
+networks:
+  app_net:
+    driver: bridge
+  db_net:
+    driver: bridge

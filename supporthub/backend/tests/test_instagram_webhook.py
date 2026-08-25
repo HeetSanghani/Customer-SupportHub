@@ -330,7 +330,8 @@ async def test_process_instagram_webhook_invalid_recipient_skipped():
         ]
     }
 
-    await process_instagram_webhook_background(payload)
+    with patch.object(settings, "instagram_account_id", "28564753216451440"):
+        await process_instagram_webhook_background(payload)
 
     async with AsyncSessionLocal() as db:
         msg = (await db.exec(select(Message).where(Message.external_message_id == test_mid))).first()

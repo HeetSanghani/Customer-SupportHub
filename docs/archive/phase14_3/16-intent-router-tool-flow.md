@@ -1,0 +1,4 @@
+# 16 — Intent Router Tool Flow
+
+- Categories: `ORDERS`, `PRODUCTS`, `PAYMENTS`, `SHIPMENTS`, `RETURNS`, `REFUNDS`, `GENERAL_POLICY`, `KNOWLEDGE`, `HUMAN`, `UNKNOWN`.
+- Routes: `STRUCTURED`, `RAG`, `HYBRID`, `SECURITY`, `HUMAN`.
