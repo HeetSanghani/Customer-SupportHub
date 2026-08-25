@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordRequestForm
 from jose import jwt, JWTError
 import bcrypt
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, field_validator
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 from sqlmodel.ext.asyncio.session import AsyncSession
@@ -33,6 +33,13 @@ class RegisterRequest(BaseModel):
     name: str
     password: str
 
+    @field_validator("password")
+    @classmethod
+    def password_min_length(cls, v: str) -> str:
+        if len(v) < 8:
+            raise ValueError("Password must be at least 8 characters long.")
+        return v
+
 
 class TokenResponse(BaseModel):
     access_token: str
@@ -53,12 +60,32 @@ class MeResponse(BaseModel):
     name: str
     role: str
     status: str
-    avatar_url: Optional[str]
+    avatar_url: Optional[str] = None
+    customer_id: Optional[str] = None
+    phone: Optional[str] = None
+    address: Optional[str] = None
+    city: Optional[str] = None
+    state: Optional[str] = None
+    postal_code: Optional[str] = None
+    country: Optional[str] = None
+    company_id: Optional[str] = None
 
 
 class UpdateMeRequest(BaseModel):
     name: Optional[str] = None
     email: Optional[EmailStr] = None
+    phone: Optional[str] = None
+    address: Optional[str] = None
+    city: Optional[str] = None
+    state: Optional[str] = None
+    postal_code: Optional[str] = None
+    country: Optional[str] = None
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
+    confirm_password: str
 
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -107,12 +134,24 @@ async def register(
     if existing.first():
         raise HTTPException(status_code=400, detail="Email already registered")
 
+    # Automatic User -> Customer Linkage by registered email
+    matched_customer_id = None
+    try:
+        from data_access.customer_service import CustomerService
+        cust_svc = CustomerService()
+        matched_cust = cust_svc.search_customer_by_email(body.email)
+        if matched_cust:
+            matched_customer_id = matched_cust.customer_id
+    except Exception:
+        matched_customer_id = None
+
     user = User(
         email=body.email,
         name=body.name,
         password_hash=hash_password(body.password),
         role=UserRole.customer,
         status=UserStatus.active,
+        customer_id=matched_customer_id,
     )
     session.add(user)
     await session.commit()
@@ -202,6 +241,14 @@ async def me(current_user: User = Depends(get_current_user)):
         role=current_user.role.value,
         status=current_user.status.value,
         avatar_url=current_user.avatar_url,
+        customer_id=current_user.customer_id,
+        phone=current_user.phone,
+        address=current_user.address,
+        city=current_user.city,
+        state=current_user.state,
+        postal_code=current_user.postal_code,
+        country=current_user.country,
+        company_id=current_user.company_id,
     )
 
 
@@ -220,7 +267,20 @@ async def update_me(
             if existing.first():
                 raise HTTPException(status_code=400, detail="Email already in use")
         current_user.email = body.email
+    if body.phone is not None:
+        current_user.phone = body.phone
+    if body.address is not None:
+        current_user.address = body.address
+    if body.city is not None:
+        current_user.city = body.city
+    if body.state is not None:
+        current_user.state = body.state
+    if body.postal_code is not None:
+        current_user.postal_code = body.postal_code
+    if body.country is not None:
+        current_user.country = body.country
 
+    current_user.updated_at = datetime.now()
     session.add(current_user)
     await session.commit()
     await session.refresh(current_user)
@@ -232,7 +292,47 @@ async def update_me(
         role=current_user.role.value,
         status=current_user.status.value,
         avatar_url=current_user.avatar_url,
+        customer_id=current_user.customer_id,
+        phone=current_user.phone,
+        address=current_user.address,
+        city=current_user.city,
+        state=current_user.state,
+        postal_code=current_user.postal_code,
+        country=current_user.country,
+        company_id=current_user.company_id,
     )
+
+
+@router.post("/change-password")
+async def change_password(
+    body: ChangePasswordRequest,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    """Change password for authenticated user."""
+    if not verify_password(body.current_password, current_user.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Incorrect current password"
+        )
+    if body.new_password != body.confirm_password:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="New password and confirmation do not match"
+        )
+    if len(body.new_password) < 8:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Password must be at least 8 characters long."
+        )
+
+    current_user.password_hash = hash_password(body.new_password)
+    current_user.updated_at = datetime.now()
+    session.add(current_user)
+    await session.commit()
+    await session.refresh(current_user)
+
+    return {"message": "Password successfully updated"}
 
 
 @router.get("/users", response_model=list[MeResponse])
