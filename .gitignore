@@ -44,8 +44,9 @@ uploads/
 *.sqlite3
 *.dump
 
-# Audit and Analysis temporary files
-*.resolved
+# Evaluation reports output
+supporthub/backend/app/output/
+app/output/
 
 # OS / IDE
 .DS_Store
