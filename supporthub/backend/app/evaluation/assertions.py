@@ -108,5 +108,51 @@ class EvaluationAssertions:
             message="Response is completely factually grounded."
         )
 
+    @staticmethod
+    def assert_multi_topic(scenario: BenchmarkScenario, response: AIResponse) -> AssertionResult:
+        """Verify multi-question responses address all expected sub-topics/entities."""
+        expected_topics = scenario.metadata.get("expected_topics") or scenario.required_conditions.get("expected_topics")
+        if not expected_topics:
+            return AssertionResult(passed=True, name="MultiTopicAssertion", message="No multi-topic check required.")
+
+        content_lower = response.content.lower()
+        missing = [topic for topic in expected_topics if topic.lower() not in content_lower]
+
+        if missing:
+            return AssertionResult(
+                passed=False,
+                name="MultiTopicAssertion",
+                message=f"Response missing multi-topic components: {missing}",
+                details={"missing": missing, "expected": expected_topics}
+            )
+
+        return AssertionResult(
+            passed=True,
+            name="MultiTopicAssertion",
+            message="Multi-topic components verified in response content."
+        )
+
+    @staticmethod
+    def assert_escalation_context(scenario: BenchmarkScenario, response: AIResponse) -> AssertionResult:
+        """Verify escalation decision retains context (e.g. active_order_id) from query context."""
+        expected_order_id = scenario.required_conditions.get("order_id")
+        if (scenario.expected_route == "HUMAN" or scenario.expected_escalation) and expected_order_id and scenario.category == "mixed_escalation":
+            esc = response.escalation_decision
+            if not esc or esc.active_order_id != expected_order_id:
+                actual_ord = esc.active_order_id if esc else None
+                return AssertionResult(
+                    passed=False,
+                    name="EscalationContextAssertion",
+                    message=f"Escalation context missing active_order_id. Expected '{expected_order_id}', got '{actual_ord}'",
+                    details={"expected_order_id": expected_order_id, "actual_order_id": actual_ord}
+                )
+
+        return AssertionResult(
+            passed=True,
+            name="EscalationContextAssertion",
+            message="Escalation context verified."
+        )
+
 
 assertions = EvaluationAssertions()
+

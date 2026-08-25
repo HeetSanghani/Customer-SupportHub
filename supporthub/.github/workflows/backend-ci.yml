@@ -47,3 +47,20 @@ jobs:
           REDIS_URL: redis://localhost:6379/0
           SECRET_KEY: test_secret_key_not_for_production
         run: uv run pytest tests/ -v
+
+      - name: Seed Database for Evaluation
+        working-directory: supporthub/backend
+        env:
+          DATABASE_URL: postgresql+asyncpg://supporthub:supporthub_dev@localhost:5432/supporthub_test
+          REDIS_URL: redis://localhost:6379/0
+          SECRET_KEY: test_secret_key_not_for_production
+        run: uv run python clean_and_seed.py
+
+      - name: Run Evaluation Benchmark & Regression Gate
+        working-directory: supporthub/backend
+        env:
+          DATABASE_URL: postgresql+asyncpg://supporthub:supporthub_dev@localhost:5432/supporthub_test
+          REDIS_URL: redis://localhost:6379/0
+          SECRET_KEY: test_secret_key_not_for_production
+        run: uv run python app/scripts/test_scenarios.py
+

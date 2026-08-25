@@ -114,7 +114,7 @@ class AIRouter:
             is_hybrid = True
             target_tools = ["get_order", "get_shipment_by_order"]
             rag_query = "Order cancellation policy before dispatch"
-        elif ("can i return" in text or ("return policy" in text and has_entity_ref) or "return request" in text) and (has_entity_ref or intent.category in (IntentCategory.RETURNS, IntentCategory.PRODUCT)):
+        elif ("can i return" in text or "return window" in text or ("return policy" in text and has_entity_ref) or "return request" in text) and (has_entity_ref or intent.category in (IntentCategory.RETURNS, IntentCategory.PRODUCT)):
             is_hybrid = True
             target_tools = ["get_order", "get_product", "get_return_by_order"]
             rag_query = "Return policy window and conditions"
@@ -122,10 +122,14 @@ class AIRouter:
             is_hybrid = True
             target_tools = ["get_refund_by_order", "get_refund", "get_payment_by_order"]
             rag_query = "Refund turnaround timeline by payment method"
-        elif intent.category == IntentCategory.PRODUCT and any(w in text for w in ["warranty", "return", "fit", "modal innerwear"]):
+        elif has_entity_ref and any(w in text for w in ["payment options", "payment methods", "payment supported", "how to pay"]):
+            is_hybrid = True
+            target_tools = ["get_order", "get_shipment_by_order", "get_payment_by_order"]
+            rag_query = "Payment methods and accepted options policy"
+        elif intent.category == IntentCategory.PRODUCT and any(w in text for w in ["warranty", "return", "fit", "modal innerwear", "password", "reset"]):
             is_hybrid = True
             target_tools = ["get_product"]
-            rag_query = "Product warranty and non returnable categories policy"
+            rag_query = "Product return policy and password reset guide"
         elif intent.category == IntentCategory.SHIPMENTS and "change delivery address" in text:
             is_hybrid = True
             target_tools = ["get_shipment_by_order"]

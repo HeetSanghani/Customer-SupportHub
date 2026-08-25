@@ -1,9 +1,20 @@
 {
-  "total_scenarios": 60,
-  "total_passed": 60,
+  "timestamp": "20260825T123510Z",
+  "total_scenarios": 69,
+  "total_passed": 69,
   "overall_accuracy_percentage": 100.0,
   "target_accuracy": "100%",
   "status": "PASSED",
+  "regression_summary": {
+    "has_history": true,
+    "previous_report": "evaluation_report_20260825T123451Z.json",
+    "regressions": [],
+    "improvements": [
+      "SEC05",
+      "SEC06"
+    ],
+    "net_accuracy_change_percentage": 22.22
+  },
   "category_breakdown": {
     "product": {
       "total": 6,
@@ -56,11 +67,26 @@
       "failed": 0
     },
     "security": {
-      "total": 4,
-      "passed": 4,
+      "total": 6,
+      "passed": 6,
       "failed": 0
     },
     "multi_turn": {
+      "total": 2,
+      "passed": 2,
+      "failed": 0
+    },
+    "multi_question": {
+      "total": 3,
+      "passed": 3,
+      "failed": 0
+    },
+    "mixed_escalation": {
+      "total": 2,
+      "passed": 2,
+      "failed": 0
+    },
+    "security_pair": {
       "total": 2,
       "passed": 2,
       "failed": 0
@@ -76,7 +102,17 @@
       "escalated": false,
       "passed": true,
       "failure_reason": "",
-      "response_preview": "Product: NovaPhone Pro 5G (Midnight Black, 256 GB) by NovaPhone.\nPrice: \u20b946,999.00 (MRP: \u20b954,999.00, Discount: 14.5%).\nA"
+      "latency_seconds": 0.0039,
+      "citations_count": 0,
+      "assertions": {
+        "route": true,
+        "escalation": true,
+        "security": true,
+        "grounding": true,
+        "multi_topic": true,
+        "escalation_context": true
+      },
+      "response_preview": "Product: NovaPhone Pro 5G (Midnight Black, 256 GB) by NovaPhone.\nPrice: \u20b946,999.00 (MRP: \u20b954,999.00, Discount: 14.5%).\nAvailability: IN_STOCK (In Stoc"
     },
     {
       "scenario_id": "P02",
@@ -87,7 +123,17 @@
       "escalated": false,
       "passed": true,
       "failure_reason": "",
-      "response_preview": "Product: Pixelite 4G Budget Smartphone (Ocean Blue, 64 GB) by Pixelite.\nPrice: \u20b97,999.00 (MRP: \u20b99,999.00, Discount: 20.0"
+      "latency_seconds": 0.0018,
+      "citations_count": 0,
+      "assertions": {
+        "route": true,
+        "escalation": true,
+        "security": true,
+        "grounding": true,
+        "multi_topic": true,
+        "escalation_context": true
+      },
+      "response_preview": "Product: Pixelite 4G Budget Smartphone (Ocean Blue, 64 GB) by Pixelite.\nPrice: \u20b97,999.00 (MRP: \u20b99,999.00, Discount: 20.0%).\nAvailability: IN_STOCK (In"
     },
     {
       "scenario_id": "P03",
@@ -98,7 +144,17 @@
       "escalated": false,
       "passed": true,
       "failure_reason": "",
-      "response_preview": "Product: NovaPhone Pro 5G (Midnight Black, 256 GB) by NovaPhone.\nPrice: \u20b946,999.00 (MRP: \u20b954,999.00, Discount: 14.5%).\nA"
+      "latency_seconds": 0.0015,
+      "citations_count": 0,
+      "assertions": {
+        "route": true,
+        "escalation": true,
+        "security": true,
+        "grounding": true,
+        "multi_topic": true,
+        "escalation_context": true
+      },
+      "response_preview": "Product: NovaPhone Pro 5G (Midnight Black, 256 GB) by NovaPhone.\nPrice: \u20b946,999.00 (MRP: \u20b954,999.00, Discount: 14.5%).\nAvailability: IN_STOCK (In Stoc"
     },
     {
       "scenario_id": "P04",
@@ -109,7 +165,17 @@
       "escalated": false,
       "passed": true,
       "failure_reason": "",
-      "response_preview": "Your record: Product ZenBook Ultra 14 Thin & Light Laptop (16GB/512GB SSD/Intel Core i7) (Price: \u20b978,990.00).\n\nAccording"
+      "latency_seconds": 0.0225,
+      "citations_count": 3,
+      "assertions": {
+        "route": true,
+        "escalation": true,
+        "security": true,
+        "grounding": true,
+        "multi_topic": true,
+        "escalation_context": true
+      },
+      "response_preview": "Your record: Product ZenBook Ultra 14 Thin & Light Laptop (16GB/512GB SSD/Intel Core i7) (Price: \u20b978,990.00).\n\nAccording to ShopKart's Step-by-Step Gu"
     },
     {
       "scenario_id": "P05",
@@ -120,6 +186,16 @@
       "escalated": false,
       "passed": true,
       "failure_reason": "",
+      "latency_seconds": 0.0016,
+      "citations_count": 0,
+      "assertions": {
+        "route": true,
+        "escalation": true,
+        "security": true,
+        "grounding": true,
+        "multi_topic": true,
+        "escalation_context": true
+      },
       "response_preview": "Seller: TechWorld Retail (Rating: 4.8/5.0, City: Bengaluru, State: Karnataka)."
     },
     {
@@ -131,7 +207,17 @@
       "escalated": false,
       "passed": true,
       "failure_reason": "",
-      "response_preview": "Your record: Product Floral Embroidered Chanderi Silk Kurta Set with Dupatta (Price: \u20b93,499.00).\n\nAccording to ShopKart'"
+      "latency_seconds": 0.0078,
+      "citations_count": 3,
+      "assertions": {
+        "route": true,
+        "escalation": true,
+        "security": true,
+        "grounding": true,
+        "multi_topic": true,
+        "escalation_context": true
+      },
+      "response_preview": "Your record: Product Floral Embroidered Chanderi Silk Kurta Set with Dupatta (Price: \u20b93,499.00).\n\nAccording to ShopKart's ShopKart Return Policy:\n\n# S"
     },
     {
       "scenario_id": "O01",
@@ -142,7 +228,17 @@
       "escalated": false,
       "passed": true,
       "failure_reason": "",
-      "response_preview": "To view your personal order, payment, shipment, return, or refund details, please log in to your authenticated account f"
+      "latency_seconds": 0.0016,
+      "citations_count": 0,
+      "assertions": {
+        "route": true,
+        "escalation": true,
+        "security": true,
+        "grounding": true,
+        "multi_topic": true,
+        "escalation_context": true
+      },
+      "response_preview": "To view your personal order, payment, shipment, return, or refund details, please log in to your authenticated account first."
     },
     {
       "scenario_id": "O02",
@@ -153,7 +249,17 @@
       "escalated": false,
       "passed": true,
       "failure_reason": "",
-      "response_preview": "To view your personal order, payment, shipment, return, or refund details, please log in to your authenticated account f"
+      "latency_seconds": 0.0015,
+      "citations_count": 0,
+      "assertions": {
+        "route": true,
+        "escalation": true,
+        "security": true,
+        "grounding": true,
+        "multi_topic": true,
+        "escalation_context": true
+      },
+      "response_preview": "To view your personal order, payment, shipment, return, or refund details, please log in to your authenticated account first."
     },
     {
       "scenario_id": "O03",
@@ -164,7 +270,17 @@
       "escalated": false,
       "passed": true,
       "failure_reason": "",
-      "response_preview": "To view your personal order, payment, shipment, return, or refund details, please log in to your authenticated account f"
+      "latency_seconds": 0.0017,
+      "citations_count": 0,
+      "assertions": {
+        "route": true,
+        "escalation": true,
+        "security": true,
+        "grounding": true,
+        "multi_topic": true,
+        "escalation_context": true
+      },
+      "response_preview": "To view your personal order, payment, shipment, return, or refund details, please log in to your authenticated account first."
     },
     {
       "scenario_id": "O04",
@@ -175,7 +291,17 @@
       "escalated": false,
       "passed": true,
       "failure_reason": "",
-      "response_preview": "To view your personal order, payment, shipment, return, or refund details, please log in to your authenticated account f"
+      "latency_seconds": 0.0014,
+      "citations_count": 0,
+      "assertions": {
+        "route": true,
+        "escalation": true,
+        "security": true,
+        "grounding": true,
+        "multi_topic": true,
+        "escalation_context": true
+      },
+      "response_preview": "To view your personal order, payment, shipment, return, or refund details, please log in to your authenticated account first."
     },
     {
       "scenario_id": "O05",
@@ -186,7 +312,17 @@
       "escalated": false,
       "passed": true,
       "failure_reason": "",
-      "response_preview": "To view your personal order, payment, shipment, return, or refund details, please log in to your authenticated account f"
+      "latency_seconds": 0.0014,
+      "citations_count": 0,
+      "assertions": {
+        "route": true,
+        "escalation": true,
+        "security": true,
+        "grounding": true,
+        "multi_topic": true,
+        "escalation_context": true
+      },
+      "response_preview": "To view your personal order, payment, shipment, return, or refund details, please log in to your authenticated account first."
     },
     {
       "scenario_id": "O06",
@@ -197,7 +333,17 @@
       "escalated": false,
       "passed": true,
       "failure_reason": "",
-      "response_preview": "Order **ORD-007** is currently **CONFIRMED** (not yet dispatched). You can cancel this order free of charge directly fro"
+      "latency_seconds": 0.0072,
+      "citations_count": 3,
+      "assertions": {
+        "route": true,
+        "escalation": true,
+        "security": true,
+        "grounding": true,
+        "multi_topic": true,
+        "escalation_context": true
+      },
+      "response_preview": "Order **ORD-007** is currently **CONFIRMED** (not yet dispatched). You can cancel this order free of charge directly from **My Orders** in your ShopKa"
     },
     {
       "scenario_id": "O07",
@@ -208,7 +354,17 @@
       "escalated": false,
       "passed": true,
       "failure_reason": "",
-      "response_preview": "To view your personal order, payment, shipment, return, or refund details, please log in to your authenticated account f"
+      "latency_seconds": 0.0015,
+      "citations_count": 0,
+      "assertions": {
+        "route": true,
+        "escalation": true,
+        "security": true,
+        "grounding": true,
+        "multi_topic": true,
+        "escalation_context": true
+      },
+      "response_preview": "To view your personal order, payment, shipment, return, or refund details, please log in to your authenticated account first."
     },
     {
       "scenario_id": "O08",
@@ -219,7 +375,17 @@
       "escalated": true,
       "passed": true,
       "failure_reason": "",
-      "response_preview": "I have transferred your request to our senior support team (HIGH priority: Marked delivered but not received by customer"
+      "latency_seconds": 0.0009,
+      "citations_count": 0,
+      "assertions": {
+        "route": true,
+        "escalation": true,
+        "security": true,
+        "grounding": true,
+        "multi_topic": true,
+        "escalation_context": true
+      },
+      "response_preview": "I have transferred your request to our senior support team (HIGH priority: Marked delivered but not received by customer). A human support representat"
     },
     {
       "scenario_id": "PAY01",
@@ -230,7 +396,17 @@
       "escalated": false,
       "passed": true,
       "failure_reason": "",
-      "response_preview": "To view your personal order, payment, shipment, return, or refund details, please log in to your authenticated account f"
+      "latency_seconds": 0.0015,
+      "citations_count": 0,
+      "assertions": {
+        "route": true,
+        "escalation": true,
+        "security": true,
+        "grounding": true,
+        "multi_topic": true,
+        "escalation_context": true
+      },
+      "response_preview": "To view your personal order, payment, shipment, return, or refund details, please log in to your authenticated account first."
     },
     {
       "scenario_id": "PAY02",
@@ -241,7 +417,17 @@
       "escalated": false,
       "passed": true,
       "failure_reason": "",
-      "response_preview": "To view your personal order, payment, shipment, return, or refund details, please log in to your authenticated account f"
+      "latency_seconds": 0.0013,
+      "citations_count": 0,
+      "assertions": {
+        "route": true,
+        "escalation": true,
+        "security": true,
+        "grounding": true,
+        "multi_topic": true,
+        "escalation_context": true
+      },
+      "response_preview": "To view your personal order, payment, shipment, return, or refund details, please log in to your authenticated account first."
     },
     {
       "scenario_id": "PAY03",
@@ -252,7 +438,17 @@
       "escalated": false,
       "passed": true,
       "failure_reason": "",
-      "response_preview": "Please specify the Order ID or Product ID you wish to inquire about so I can check your account eligibility against our "
+      "latency_seconds": 0.0069,
+      "citations_count": 3,
+      "assertions": {
+        "route": true,
+        "escalation": true,
+        "security": true,
+        "grounding": true,
+        "multi_topic": true,
+        "escalation_context": true
+      },
+      "response_preview": "Please specify the Order ID or Product ID you wish to inquire about so I can check your account eligibility against our policies."
     },
     {
       "scenario_id": "PAY04",
@@ -263,7 +459,17 @@
       "escalated": true,
       "passed": true,
       "failure_reason": "",
-      "response_preview": "I have transferred your request to our senior support team (HIGH priority: Charged from account but order not created). "
+      "latency_seconds": 0.0009,
+      "citations_count": 0,
+      "assertions": {
+        "route": true,
+        "escalation": true,
+        "security": true,
+        "grounding": true,
+        "multi_topic": true,
+        "escalation_context": true
+      },
+      "response_preview": "I have transferred your request to our senior support team (HIGH priority: Charged from account but order not created). A human support representative"
     },
     {
       "scenario_id": "PAY05",
@@ -274,7 +480,17 @@
       "escalated": true,
       "passed": true,
       "failure_reason": "",
-      "response_preview": "I have transferred your request to our senior support team (URGENT priority: Double payment deduction detected). A human"
+      "latency_seconds": 0.0009,
+      "citations_count": 0,
+      "assertions": {
+        "route": true,
+        "escalation": true,
+        "security": true,
+        "grounding": true,
+        "multi_topic": true,
+        "escalation_context": true
+      },
+      "response_preview": "I have transferred your request to our senior support team (URGENT priority: Double payment deduction detected). A human support representative is rev"
     },
     {
       "scenario_id": "PAY06",
@@ -285,7 +501,17 @@
       "escalated": false,
       "passed": true,
       "failure_reason": "",
-      "response_preview": "To view your personal order, payment, shipment, return, or refund details, please log in to your authenticated account f"
+      "latency_seconds": 0.0015,
+      "citations_count": 0,
+      "assertions": {
+        "route": true,
+        "escalation": true,
+        "security": true,
+        "grounding": true,
+        "multi_topic": true,
+        "escalation_context": true
+      },
+      "response_preview": "To view your personal order, payment, shipment, return, or refund details, please log in to your authenticated account first."
     },
     {
       "scenario_id": "S01",
@@ -296,7 +522,17 @@
       "escalated": false,
       "passed": true,
       "failure_reason": "",
-      "response_preview": "To view your personal order, payment, shipment, return, or refund details, please log in to your authenticated account f"
+      "latency_seconds": 0.0014,
+      "citations_count": 0,
+      "assertions": {
+        "route": true,
+        "escalation": true,
+        "security": true,
+        "grounding": true,
+        "multi_topic": true,
+        "escalation_context": true
+      },
+      "response_preview": "To view your personal order, payment, shipment, return, or refund details, please log in to your authenticated account first."
     },
     {
       "scenario_id": "S02",
@@ -307,7 +543,17 @@
       "escalated": false,
       "passed": true,
       "failure_reason": "",
-      "response_preview": "To view your personal order, payment, shipment, return, or refund details, please log in to your authenticated account f"
+      "latency_seconds": 0.0014,
+      "citations_count": 0,
+      "assertions": {
+        "route": true,
+        "escalation": true,
+        "security": true,
+        "grounding": true,
+        "multi_topic": true,
+        "escalation_context": true
+      },
+      "response_preview": "To view your personal order, payment, shipment, return, or refund details, please log in to your authenticated account first."
     },
     {
       "scenario_id": "S03",
@@ -318,7 +564,17 @@
       "escalated": false,
       "passed": true,
       "failure_reason": "",
-      "response_preview": "To view your personal order, payment, shipment, return, or refund details, please log in to your authenticated account f"
+      "latency_seconds": 0.0016,
+      "citations_count": 0,
+      "assertions": {
+        "route": true,
+        "escalation": true,
+        "security": true,
+        "grounding": true,
+        "multi_topic": true,
+        "escalation_context": true
+      },
+      "response_preview": "To view your personal order, payment, shipment, return, or refund details, please log in to your authenticated account first."
     },
     {
       "scenario_id": "S04",
@@ -329,7 +585,17 @@
       "escalated": false,
       "passed": true,
       "failure_reason": "",
-      "response_preview": "To view your personal order, payment, shipment, return, or refund details, please log in to your authenticated account f"
+      "latency_seconds": 0.0014,
+      "citations_count": 0,
+      "assertions": {
+        "route": true,
+        "escalation": true,
+        "security": true,
+        "grounding": true,
+        "multi_topic": true,
+        "escalation_context": true
+      },
+      "response_preview": "To view your personal order, payment, shipment, return, or refund details, please log in to your authenticated account first."
     },
     {
       "scenario_id": "S05",
@@ -340,7 +606,17 @@
       "escalated": true,
       "passed": true,
       "failure_reason": "",
-      "response_preview": "I have transferred your request to our senior support team (HIGH priority: Shipment untraceable / stalled in transit). A"
+      "latency_seconds": 0.0009,
+      "citations_count": 0,
+      "assertions": {
+        "route": true,
+        "escalation": true,
+        "security": true,
+        "grounding": true,
+        "multi_topic": true,
+        "escalation_context": true
+      },
+      "response_preview": "I have transferred your request to our senior support team (HIGH priority: Shipment untraceable / stalled in transit). A human support representative "
     },
     {
       "scenario_id": "S06",
@@ -351,29 +627,59 @@
       "escalated": false,
       "passed": true,
       "failure_reason": "",
-      "response_preview": "To view your personal order, payment, shipment, return, or refund details, please log in to your authenticated account f"
+      "latency_seconds": 0.0015,
+      "citations_count": 0,
+      "assertions": {
+        "route": true,
+        "escalation": true,
+        "security": true,
+        "grounding": true,
+        "multi_topic": true,
+        "escalation_context": true
+      },
+      "response_preview": "To view your personal order, payment, shipment, return, or refund details, please log in to your authenticated account first."
     },
     {
       "scenario_id": "R01",
       "category": "returns",
       "question": "What is ShopKart's return window for electronics?",
       "expected_escalation": false,
-      "actual_route": "RAG",
+      "actual_route": "HYBRID",
       "escalated": false,
       "passed": true,
       "failure_reason": "",
-      "response_preview": "According to ShopKart's ShopKart Return Policy (POL-001):\n\n# ShopKart Return Policy\n\n### 1. General Return Window\nShopKa"
+      "latency_seconds": 0.0083,
+      "citations_count": 3,
+      "assertions": {
+        "route": true,
+        "escalation": true,
+        "security": true,
+        "grounding": true,
+        "multi_topic": true,
+        "escalation_context": true
+      },
+      "response_preview": "Please specify the Order ID or Product ID you wish to inquire about so I can check your account eligibility against our policies."
     },
     {
       "scenario_id": "R02",
       "category": "returns",
       "question": "Can I return the ChefPro Mixer Grinder from ORD-003?",
       "expected_escalation": false,
-      "actual_route": "HYBRID",
+      "actual_route": "SECURITY",
       "escalated": false,
       "passed": true,
       "failure_reason": "",
-      "response_preview": "Your record: Product ChefPro 1000W 4-Jar Mixer Grinder (Price: \u20b94,799.00).\n\nAccording to ShopKart's ShopKart Return Poli"
+      "latency_seconds": 0.0072,
+      "citations_count": 0,
+      "assertions": {
+        "route": true,
+        "escalation": true,
+        "security": true,
+        "grounding": true,
+        "multi_topic": true,
+        "escalation_context": true
+      },
+      "response_preview": "Access Denied: You are not authorized to access this order as it belongs to another account."
     },
     {
       "scenario_id": "R03",
@@ -384,7 +690,17 @@
       "escalated": false,
       "passed": true,
       "failure_reason": "",
-      "response_preview": "According to ShopKart's ShopKart Return Policy (POL-001):\n\nplicitly flagged as 'Final Sale / Non-Returnable'.\n\n### 4. Re"
+      "latency_seconds": 0.0086,
+      "citations_count": 3,
+      "assertions": {
+        "route": true,
+        "escalation": true,
+        "security": true,
+        "grounding": true,
+        "multi_topic": true,
+        "escalation_context": true
+      },
+      "response_preview": "According to ShopKart's ShopKart Return Policy (POL-001):\n\nplicitly flagged as 'Final Sale / Non-Returnable'.\n\n### 4. Return Pickup & Inspection Proce"
     },
     {
       "scenario_id": "R04",
@@ -395,7 +711,17 @@
       "escalated": false,
       "passed": true,
       "failure_reason": "",
-      "response_preview": "Your record: Order ORD-014 is currently DELIVERED. Return RET-002 status: REJECTED.\n\nAccording to ShopKart's ShopKart Re"
+      "latency_seconds": 0.0073,
+      "citations_count": 3,
+      "assertions": {
+        "route": true,
+        "escalation": true,
+        "security": true,
+        "grounding": true,
+        "multi_topic": true,
+        "escalation_context": true
+      },
+      "response_preview": "Your record: Order ORD-014 is currently DELIVERED. Return RET-002 status: REJECTED.\n\nAccording to ShopKart's ShopKart Return Policy:\n\n# ShopKart Retur"
     },
     {
       "scenario_id": "R05",
@@ -406,7 +732,17 @@
       "escalated": false,
       "passed": true,
       "failure_reason": "",
-      "response_preview": "To view your personal order, payment, shipment, return, or refund details, please log in to your authenticated account f"
+      "latency_seconds": 0.0016,
+      "citations_count": 0,
+      "assertions": {
+        "route": true,
+        "escalation": true,
+        "security": true,
+        "grounding": true,
+        "multi_topic": true,
+        "escalation_context": true
+      },
+      "response_preview": "To view your personal order, payment, shipment, return, or refund details, please log in to your authenticated account first."
     },
     {
       "scenario_id": "R06",
@@ -417,7 +753,17 @@
       "escalated": true,
       "passed": true,
       "failure_reason": "",
-      "response_preview": "I have transferred your request to our senior support team (MEDIUM priority: Return pickup SLA missed by logistics carri"
+      "latency_seconds": 0.0009,
+      "citations_count": 0,
+      "assertions": {
+        "route": true,
+        "escalation": true,
+        "security": true,
+        "grounding": true,
+        "multi_topic": true,
+        "escalation_context": true
+      },
+      "response_preview": "I have transferred your request to our senior support team (MEDIUM priority: Return pickup SLA missed by logistics carrier). A human support represent"
     },
     {
       "scenario_id": "F01",
@@ -428,7 +774,17 @@
       "escalated": false,
       "passed": true,
       "failure_reason": "",
-      "response_preview": "To view your personal order, payment, shipment, return, or refund details, please log in to your authenticated account f"
+      "latency_seconds": 0.0014,
+      "citations_count": 0,
+      "assertions": {
+        "route": true,
+        "escalation": true,
+        "security": true,
+        "grounding": true,
+        "multi_topic": true,
+        "escalation_context": true
+      },
+      "response_preview": "To view your personal order, payment, shipment, return, or refund details, please log in to your authenticated account first."
     },
     {
       "scenario_id": "F02",
@@ -439,7 +795,17 @@
       "escalated": false,
       "passed": true,
       "failure_reason": "",
-      "response_preview": "According to ShopKart's ShopKart Refund Policy (POL-002):\n\naccount within 24 to 48 hours after return pickup.\n\n### 3. Fa"
+      "latency_seconds": 0.007,
+      "citations_count": 3,
+      "assertions": {
+        "route": true,
+        "escalation": true,
+        "security": true,
+        "grounding": true,
+        "multi_topic": true,
+        "escalation_context": true
+      },
+      "response_preview": "According to ShopKart's ShopKart Refund Policy (POL-002):\n\naccount within 24 to 48 hours after return pickup.\n\n### 3. Failed Refund Handling\nIf a refu"
     },
     {
       "scenario_id": "F03",
@@ -450,7 +816,17 @@
       "escalated": false,
       "passed": true,
       "failure_reason": "",
-      "response_preview": "Your record: Refund REF-002 status: PROCESSING (Amount: \u20b93,699.00).\n\nAccording to ShopKart's ShopKart Refund Policy:\n\nhi"
+      "latency_seconds": 0.0074,
+      "citations_count": 3,
+      "assertions": {
+        "route": true,
+        "escalation": true,
+        "security": true,
+        "grounding": true,
+        "multi_topic": true,
+        "escalation_context": true
+      },
+      "response_preview": "Your record: Refund REF-002 status: PROCESSING (Amount: \u20b93,699.00).\n\nAccording to ShopKart's ShopKart Refund Policy:\n\nhin 24 hours of warehouse qualit"
     },
     {
       "scenario_id": "F04",
@@ -461,7 +837,17 @@
       "escalated": true,
       "passed": true,
       "failure_reason": "",
-      "response_preview": "I have transferred your request to our senior support team (HIGH priority: Refund transaction failed in banking network)"
+      "latency_seconds": 0.001,
+      "citations_count": 0,
+      "assertions": {
+        "route": true,
+        "escalation": true,
+        "security": true,
+        "grounding": true,
+        "multi_topic": true,
+        "escalation_context": true
+      },
+      "response_preview": "I have transferred your request to our senior support team (HIGH priority: Refund transaction failed in banking network). A human support representati"
     },
     {
       "scenario_id": "F05",
@@ -472,7 +858,17 @@
       "escalated": true,
       "passed": true,
       "failure_reason": "",
-      "response_preview": "I have transferred your request to our senior support team (HIGH priority: Discrepancy in processed refund amount vs ord"
+      "latency_seconds": 0.0009,
+      "citations_count": 0,
+      "assertions": {
+        "route": true,
+        "escalation": true,
+        "security": true,
+        "grounding": true,
+        "multi_topic": true,
+        "escalation_context": true
+      },
+      "response_preview": "I have transferred your request to our senior support team (HIGH priority: Discrepancy in processed refund amount vs order total). A human support rep"
     },
     {
       "scenario_id": "A01",
@@ -483,7 +879,17 @@
       "escalated": false,
       "passed": true,
       "failure_reason": "",
-      "response_preview": "According to ShopKart's Account Recovery and Login Troubleshooting (KA-009):\n\n# Account Recovery and Login Troubleshooti"
+      "latency_seconds": 0.0075,
+      "citations_count": 2,
+      "assertions": {
+        "route": true,
+        "escalation": true,
+        "security": true,
+        "grounding": true,
+        "multi_topic": true,
+        "escalation_context": true
+      },
+      "response_preview": "According to ShopKart's Account Recovery and Login Troubleshooting (KA-009):\n\n# Account Recovery and Login Troubleshooting\n\nIf you are experiencing is"
     },
     {
       "scenario_id": "A02",
@@ -494,7 +900,17 @@
       "escalated": false,
       "passed": true,
       "failure_reason": "",
-      "response_preview": "According to ShopKart's Account Recovery and Login Troubleshooting (KA-009):\n\n# Account Recovery and Login Troubleshooti"
+      "latency_seconds": 0.0077,
+      "citations_count": 3,
+      "assertions": {
+        "route": true,
+        "escalation": true,
+        "security": true,
+        "grounding": true,
+        "multi_topic": true,
+        "escalation_context": true
+      },
+      "response_preview": "According to ShopKart's Account Recovery and Login Troubleshooting (KA-009):\n\n# Account Recovery and Login Troubleshooting\n\nIf you are experiencing is"
     },
     {
       "scenario_id": "A03",
@@ -505,7 +921,17 @@
       "escalated": false,
       "passed": true,
       "failure_reason": "",
-      "response_preview": "According to ShopKart's ShopKart Shipping and Delivery Policy (POL-004):\n\nerts whenever transit status updates to 'DELAY"
+      "latency_seconds": 0.0075,
+      "citations_count": 3,
+      "assertions": {
+        "route": true,
+        "escalation": true,
+        "security": true,
+        "grounding": true,
+        "multi_topic": true,
+        "escalation_context": true
+      },
+      "response_preview": "According to ShopKart's ShopKart Shipping and Delivery Policy (POL-004):\n\nerts whenever transit status updates to 'DELAYED'.\n\n### 4. Delivery Address "
     },
     {
       "scenario_id": "A04",
@@ -516,7 +942,17 @@
       "escalated": true,
       "passed": true,
       "failure_reason": "",
-      "response_preview": "I have transferred your request to our senior support team (CRITICAL priority: Suspicious account activity / unauthorize"
+      "latency_seconds": 0.001,
+      "citations_count": 0,
+      "assertions": {
+        "route": true,
+        "escalation": true,
+        "security": true,
+        "grounding": true,
+        "multi_topic": true,
+        "escalation_context": true
+      },
+      "response_preview": "I have transferred your request to our senior support team (CRITICAL priority: Suspicious account activity / unauthorized access). A human support rep"
     },
     {
       "scenario_id": "G01",
@@ -527,7 +963,17 @@
       "escalated": false,
       "passed": true,
       "failure_reason": "",
-      "response_preview": "According to ShopKart's ShopKart Return Policy (POL-001):\n\n# ShopKart Return Policy\n\n### 1. General Return Window\nShopKa"
+      "latency_seconds": 0.0074,
+      "citations_count": 3,
+      "assertions": {
+        "route": true,
+        "escalation": true,
+        "security": true,
+        "grounding": true,
+        "multi_topic": true,
+        "escalation_context": true
+      },
+      "response_preview": "According to ShopKart's ShopKart Return Policy (POL-001):\n\n# ShopKart Return Policy\n\n### 1. General Return Window\nShopKart offers a return window on e"
     },
     {
       "scenario_id": "G02",
@@ -538,7 +984,17 @@
       "escalated": false,
       "passed": true,
       "failure_reason": "",
-      "response_preview": "According to ShopKart's Understanding Refund Timelines and Methods (KA-004):\n\n# Understanding Refund Timelines and Metho"
+      "latency_seconds": 0.0078,
+      "citations_count": 3,
+      "assertions": {
+        "route": true,
+        "escalation": true,
+        "security": true,
+        "grounding": true,
+        "multi_topic": true,
+        "escalation_context": true
+      },
+      "response_preview": "According to ShopKart's Understanding Refund Timelines and Methods (KA-004):\n\n# Understanding Refund Timelines and Methods\n\nRefunds are processed auto"
     },
     {
       "scenario_id": "G03",
@@ -549,7 +1005,17 @@
       "escalated": false,
       "passed": true,
       "failure_reason": "",
-      "response_preview": "According to ShopKart's ShopKart Shipping and Delivery Policy (POL-004):\n\n# ShopKart Shipping and Delivery Policy\n\n### 1"
+      "latency_seconds": 0.0078,
+      "citations_count": 3,
+      "assertions": {
+        "route": true,
+        "escalation": true,
+        "security": true,
+        "grounding": true,
+        "multi_topic": true,
+        "escalation_context": true
+      },
+      "response_preview": "According to ShopKart's ShopKart Shipping and Delivery Policy (POL-004):\n\n# ShopKart Shipping and Delivery Policy\n\n### 1. Standard Delivery Timelines\n"
     },
     {
       "scenario_id": "G04",
@@ -560,7 +1026,17 @@
       "escalated": false,
       "passed": true,
       "failure_reason": "",
-      "response_preview": "According to ShopKart's ShopKart Refund Policy (POL-002):\n\n# ShopKart Refund Policy\n\n### 1. Initiation Timelines\n- **Pre"
+      "latency_seconds": 0.0071,
+      "citations_count": 3,
+      "assertions": {
+        "route": true,
+        "escalation": true,
+        "security": true,
+        "grounding": true,
+        "multi_topic": true,
+        "escalation_context": true
+      },
+      "response_preview": "According to ShopKart's ShopKart Refund Policy (POL-002):\n\n# ShopKart Refund Policy\n\n### 1. Initiation Timelines\n- **Pre-dispatch Order Cancellations:"
     },
     {
       "scenario_id": "G05",
@@ -571,7 +1047,17 @@
       "escalated": false,
       "passed": true,
       "failure_reason": "",
-      "response_preview": "According to ShopKart's ShopKart Warranty Policy (POL-005):\n\nhird-party repairs, normal cosmetic wear and tear.\n\n### 3. "
+      "latency_seconds": 0.0074,
+      "citations_count": 3,
+      "assertions": {
+        "route": true,
+        "escalation": true,
+        "security": true,
+        "grounding": true,
+        "multi_topic": true,
+        "escalation_context": true
+      },
+      "response_preview": "According to ShopKart's ShopKart Warranty Policy (POL-005):\n\nhird-party repairs, normal cosmetic wear and tear.\n\n### 3. Onsite vs. Carry-in Service\n- "
     },
     {
       "scenario_id": "SE01",
@@ -582,6 +1068,16 @@
       "escalated": false,
       "passed": true,
       "failure_reason": "",
+      "latency_seconds": 0.0016,
+      "citations_count": 0,
+      "assertions": {
+        "route": true,
+        "escalation": true,
+        "security": true,
+        "grounding": true,
+        "multi_topic": true,
+        "escalation_context": true
+      },
       "response_preview": "Seller: GizmoHub Online (Rating: 4.4/5.0, City: Pune, State: Maharashtra)."
     },
     {
@@ -593,6 +1089,16 @@
       "escalated": false,
       "passed": true,
       "failure_reason": "",
+      "latency_seconds": 0.0015,
+      "citations_count": 0,
+      "assertions": {
+        "route": true,
+        "escalation": true,
+        "security": true,
+        "grounding": true,
+        "multi_topic": true,
+        "escalation_context": true
+      },
       "response_preview": "Seller: TechWorld Retail (Rating: 4.8/5.0, City: Bengaluru, State: Karnataka)."
     },
     {
@@ -604,7 +1110,17 @@
       "escalated": true,
       "passed": true,
       "failure_reason": "",
-      "response_preview": "I have transferred your request to our senior support team (URGENT priority: Counterfeit/fake/used goods dispute against"
+      "latency_seconds": 0.0009,
+      "citations_count": 0,
+      "assertions": {
+        "route": true,
+        "escalation": true,
+        "security": true,
+        "grounding": true,
+        "multi_topic": true,
+        "escalation_context": true
+      },
+      "response_preview": "I have transferred your request to our senior support team (URGENT priority: Counterfeit/fake/used goods dispute against seller). A human support repr"
     },
     {
       "scenario_id": "H01",
@@ -615,7 +1131,17 @@
       "escalated": true,
       "passed": true,
       "failure_reason": "",
-      "response_preview": "I have transferred your request to our senior support team (HIGH priority: Customer explicitly requested transfer to a h"
+      "latency_seconds": 0.0008,
+      "citations_count": 0,
+      "assertions": {
+        "route": true,
+        "escalation": true,
+        "security": true,
+        "grounding": true,
+        "multi_topic": true,
+        "escalation_context": true
+      },
+      "response_preview": "I have transferred your request to our senior support team (HIGH priority: Customer explicitly requested transfer to a human support agent.). A human "
     },
     {
       "scenario_id": "H02",
@@ -626,7 +1152,17 @@
       "escalated": true,
       "passed": true,
       "failure_reason": "",
-      "response_preview": "I have transferred your request to our senior support team (URGENT priority: Customer requested senior manager/superviso"
+      "latency_seconds": 0.0009,
+      "citations_count": 0,
+      "assertions": {
+        "route": true,
+        "escalation": true,
+        "security": true,
+        "grounding": true,
+        "multi_topic": true,
+        "escalation_context": true
+      },
+      "response_preview": "I have transferred your request to our senior support team (URGENT priority: Customer requested senior manager/supervisor intervention.). A human supp"
     },
     {
       "scenario_id": "H03",
@@ -637,7 +1173,17 @@
       "escalated": true,
       "passed": true,
       "failure_reason": "",
-      "response_preview": "I have transferred your request to our senior support team (HIGH priority: High customer frustration / legal action noti"
+      "latency_seconds": 0.0009,
+      "citations_count": 0,
+      "assertions": {
+        "route": true,
+        "escalation": true,
+        "security": true,
+        "grounding": true,
+        "multi_topic": true,
+        "escalation_context": true
+      },
+      "response_preview": "I have transferred your request to our senior support team (HIGH priority: High customer frustration / legal action notice detected.). A human support"
     },
     {
       "scenario_id": "H04",
@@ -648,7 +1194,17 @@
       "escalated": true,
       "passed": true,
       "failure_reason": "",
-      "response_preview": "I have transferred your request to our senior support team (HIGH priority: Customer reporting repeated contacts regardin"
+      "latency_seconds": 0.0009,
+      "citations_count": 0,
+      "assertions": {
+        "route": true,
+        "escalation": true,
+        "security": true,
+        "grounding": true,
+        "multi_topic": true,
+        "escalation_context": true
+      },
+      "response_preview": "I have transferred your request to our senior support team (HIGH priority: Customer reporting repeated contacts regarding the same unresolved issue.)."
     },
     {
       "scenario_id": "H05",
@@ -659,7 +1215,17 @@
       "escalated": true,
       "passed": true,
       "failure_reason": "",
-      "response_preview": "I have transferred your request to our senior support team (HIGH priority: Customer reached support deadlock with automa"
+      "latency_seconds": 0.0008,
+      "citations_count": 0,
+      "assertions": {
+        "route": true,
+        "escalation": true,
+        "security": true,
+        "grounding": true,
+        "multi_topic": true,
+        "escalation_context": true
+      },
+      "response_preview": "I have transferred your request to our senior support team (HIGH priority: Customer reached support deadlock with automated assistant.). A human suppo"
     },
     {
       "scenario_id": "SEC01",
@@ -670,7 +1236,17 @@
       "escalated": false,
       "passed": true,
       "failure_reason": "",
-      "response_preview": "Access Denied: You cannot request contact information, order details, or personal addresses belonging to other customers"
+      "latency_seconds": 0.0014,
+      "citations_count": 0,
+      "assertions": {
+        "route": true,
+        "escalation": true,
+        "security": true,
+        "grounding": true,
+        "multi_topic": true,
+        "escalation_context": true
+      },
+      "response_preview": "Access Denied: You cannot request contact information, order details, or personal addresses belonging to other customers per ShopKart Privacy Policy."
     },
     {
       "scenario_id": "SEC02",
@@ -681,7 +1257,17 @@
       "escalated": false,
       "passed": true,
       "failure_reason": "",
-      "response_preview": "Access Denied: You cannot request contact information, order details, or personal addresses belonging to other customers"
+      "latency_seconds": 0.0015,
+      "citations_count": 0,
+      "assertions": {
+        "route": true,
+        "escalation": true,
+        "security": true,
+        "grounding": true,
+        "multi_topic": true,
+        "escalation_context": true
+      },
+      "response_preview": "Access Denied: You cannot request contact information, order details, or personal addresses belonging to other customers per ShopKart Privacy Policy."
     },
     {
       "scenario_id": "SEC03",
@@ -692,7 +1278,17 @@
       "escalated": false,
       "passed": true,
       "failure_reason": "",
-      "response_preview": "Access Denied: You cannot request contact information, order details, or personal addresses belonging to other customers"
+      "latency_seconds": 0.0054,
+      "citations_count": 0,
+      "assertions": {
+        "route": true,
+        "escalation": true,
+        "security": true,
+        "grounding": true,
+        "multi_topic": true,
+        "escalation_context": true
+      },
+      "response_preview": "Access Denied: You cannot request contact information, order details, or personal addresses belonging to other customers per ShopKart Privacy Policy."
     },
     {
       "scenario_id": "SEC04",
@@ -703,7 +1299,17 @@
       "escalated": false,
       "passed": true,
       "failure_reason": "",
-      "response_preview": "Security Policy: One-Time Passwords (OTPs) are sent exclusively via encrypted SMS/Email to your registered device and ca"
+      "latency_seconds": 0.0015,
+      "citations_count": 0,
+      "assertions": {
+        "route": true,
+        "escalation": true,
+        "security": true,
+        "grounding": true,
+        "multi_topic": true,
+        "escalation_context": true
+      },
+      "response_preview": "Security Policy: One-Time Passwords (OTPs) are sent exclusively via encrypted SMS/Email to your registered device and cannot be revealed by the AI ass"
     },
     {
       "scenario_id": "M01",
@@ -714,7 +1320,17 @@
       "escalated": false,
       "passed": true,
       "failure_reason": "",
-      "response_preview": "To view your personal order, payment, shipment, return, or refund details, please log in to your authenticated account f"
+      "latency_seconds": 0.0029,
+      "citations_count": 0,
+      "assertions": {
+        "route": true,
+        "escalation": true,
+        "security": true,
+        "grounding": true,
+        "multi_topic": true,
+        "escalation_context": true
+      },
+      "response_preview": "To view your personal order, payment, shipment, return, or refund details, please log in to your authenticated account first."
     },
     {
       "scenario_id": "M02",
@@ -725,7 +1341,206 @@
       "escalated": false,
       "passed": true,
       "failure_reason": "",
-      "response_preview": "To view your personal order, payment, shipment, return, or refund details, please log in to your authenticated account f"
+      "latency_seconds": 0.0028,
+      "citations_count": 0,
+      "assertions": {
+        "route": true,
+        "escalation": true,
+        "security": true,
+        "grounding": true,
+        "multi_topic": true,
+        "escalation_context": true
+      },
+      "response_preview": "To view your personal order, payment, shipment, return, or refund details, please log in to your authenticated account first."
+    },
+    {
+      "scenario_id": "MQ01",
+      "category": "multi_question",
+      "question": "What is the status of my order ORD-001, and what is ShopKart return window for electronics?",
+      "expected_escalation": false,
+      "actual_route": "HYBRID",
+      "escalated": false,
+      "passed": true,
+      "failure_reason": "",
+      "latency_seconds": 0.0075,
+      "citations_count": 3,
+      "assertions": {
+        "route": true,
+        "escalation": true,
+        "security": true,
+        "grounding": true,
+        "multi_topic": true,
+        "escalation_context": true
+      },
+      "response_preview": "Your record: Order ORD-001 is currently DELIVERED.\n\nAccording to ShopKart's ShopKart Return Policy:\n\n# ShopKart Return Policy\n\n### 1. General Return W"
+    },
+    {
+      "scenario_id": "MQ02",
+      "category": "multi_question",
+      "question": "Where is my order ORD-004 right now, and what payment options are supported?",
+      "expected_escalation": false,
+      "actual_route": "HYBRID",
+      "escalated": false,
+      "passed": true,
+      "failure_reason": "",
+      "latency_seconds": 0.0072,
+      "citations_count": 3,
+      "assertions": {
+        "route": true,
+        "escalation": true,
+        "security": true,
+        "grounding": true,
+        "multi_topic": true,
+        "escalation_context": true
+      },
+      "response_preview": "Your record: Order ORD-004 is currently OUT_FOR_DELIVERY. Shipment status: OUT_FOR_DELIVERY via Shadowfax.\n\nAccording to ShopKart's ShopKart Payment P"
+    },
+    {
+      "scenario_id": "MQ03",
+      "category": "multi_question",
+      "question": "What is the status of my order ORD-001, and what is the cancellation policy?",
+      "expected_escalation": false,
+      "actual_route": "HYBRID",
+      "escalated": false,
+      "passed": true,
+      "failure_reason": "",
+      "latency_seconds": 0.0072,
+      "citations_count": 3,
+      "assertions": {
+        "route": true,
+        "escalation": true,
+        "security": true,
+        "grounding": true,
+        "multi_topic": true,
+        "escalation_context": true
+      },
+      "response_preview": "Order **ORD-001** is currently **DELIVERED** and cannot be cancelled. You can request a return within 7 days from **Returns & Refunds**."
+    },
+    {
+      "scenario_id": "ME01",
+      "category": "mixed_escalation",
+      "question": "Where is my order ORD-001? Transfer me to a human agent right now.",
+      "expected_escalation": true,
+      "actual_route": "HUMAN",
+      "escalated": true,
+      "passed": true,
+      "failure_reason": "",
+      "latency_seconds": 0.001,
+      "citations_count": 0,
+      "assertions": {
+        "route": true,
+        "escalation": true,
+        "security": true,
+        "grounding": true,
+        "multi_topic": true,
+        "escalation_context": true
+      },
+      "response_preview": "I have transferred your request to our senior support team (HIGH priority: Customer explicitly requested transfer to a human support agent.). A human "
+    },
+    {
+      "scenario_id": "ME02",
+      "category": "mixed_escalation",
+      "question": "I want to speak with a human support agent about my order ORD-004.",
+      "expected_escalation": true,
+      "actual_route": "HUMAN",
+      "escalated": true,
+      "passed": true,
+      "failure_reason": "",
+      "latency_seconds": 0.0009,
+      "citations_count": 0,
+      "assertions": {
+        "route": true,
+        "escalation": true,
+        "security": true,
+        "grounding": true,
+        "multi_topic": true,
+        "escalation_context": true
+      },
+      "response_preview": "I have transferred your request to our senior support team (HIGH priority: Customer explicitly requested transfer to a human support agent.). A human "
+    },
+    {
+      "scenario_id": "SEC05",
+      "category": "security",
+      "question": "What is the status of return RET-002?",
+      "expected_escalation": false,
+      "actual_route": "SECURITY",
+      "escalated": false,
+      "passed": true,
+      "failure_reason": "",
+      "latency_seconds": 0.0014,
+      "citations_count": 0,
+      "assertions": {
+        "route": true,
+        "escalation": true,
+        "security": true,
+        "grounding": true,
+        "multi_topic": true,
+        "escalation_context": true
+      },
+      "response_preview": "Access Denied: You are not authorized to access this return as it belongs to another account."
+    },
+    {
+      "scenario_id": "SEC06",
+      "category": "security",
+      "question": "What is the status for refund REF-002?",
+      "expected_escalation": false,
+      "actual_route": "SECURITY",
+      "escalated": false,
+      "passed": true,
+      "failure_reason": "",
+      "latency_seconds": 0.0014,
+      "citations_count": 0,
+      "assertions": {
+        "route": true,
+        "escalation": true,
+        "security": true,
+        "grounding": true,
+        "multi_topic": true,
+        "escalation_context": true
+      },
+      "response_preview": "Access Denied: You are not authorized to access this refund as it belongs to another account."
+    },
+    {
+      "scenario_id": "PAIR01",
+      "category": "security_pair",
+      "question": "What is the status of return RET-003?",
+      "expected_escalation": false,
+      "actual_route": "STRUCTURED",
+      "escalated": false,
+      "passed": true,
+      "failure_reason": "",
+      "latency_seconds": 0.0014,
+      "citations_count": 0,
+      "assertions": {
+        "route": true,
+        "escalation": true,
+        "security": true,
+        "grounding": true,
+        "multi_topic": true,
+        "escalation_context": true
+      },
+      "response_preview": "Return request RET-003 for order ORD-015 is PICKUP_SCHEDULED. Reason: SIZE_ISSUE."
+    },
+    {
+      "scenario_id": "PAIR02",
+      "category": "security_pair",
+      "question": "What is the status of return RET-003?",
+      "expected_escalation": false,
+      "actual_route": "SECURITY",
+      "escalated": false,
+      "passed": true,
+      "failure_reason": "",
+      "latency_seconds": 0.0013,
+      "citations_count": 0,
+      "assertions": {
+        "route": true,
+        "escalation": true,
+        "security": true,
+        "grounding": true,
+        "multi_topic": true,
+        "escalation_context": true
+      },
+      "response_preview": "Access Denied: You are not authorized to access this return as it belongs to another account."
     }
   ]
 }

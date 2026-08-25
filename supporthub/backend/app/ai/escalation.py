@@ -68,6 +68,12 @@ class EscalationEvaluator:
         """Evaluate if incoming query or session state warrants human escalation."""
         text = query.lower().strip()
 
+        if not active_order_id:
+            import re
+            m = re.search(r"\bORD-\d{3,5}\b", query, re.IGNORECASE)
+            if m:
+                active_order_id = m.group(0).upper()
+
         # 1. Explicit Human Agent Request (H01)
         if any(kw in text for kw in self.HUMAN_KEYWORDS):
             return EscalationDecision(

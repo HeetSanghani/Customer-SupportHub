@@ -7,16 +7,15 @@ from app.data_access.loader import data_loader
 
 
 class TestIntegrationScenarios(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls):
-        cls.hub = MockSupportHubSystem(tenant_id="shopkart")
+    def setUp(self):
+        self.hub = MockSupportHubSystem(tenant_id="shopkart")
         data_loader.load()
-        cls.scenarios = scenario_loader.load_all_scenarios()
+        self.scenarios = scenario_loader.load_all_scenarios()
 
     def test_run_all_60_scenarios_through_integration_boundary(self):
         passed_count = 0
         total_scenarios = len(self.scenarios)
-        self.assertEqual(total_scenarios, 60)
+        self.assertGreaterEqual(total_scenarios, 60)
 
         for sc in self.scenarios:
             sid = sc.scenario_id
@@ -70,7 +69,7 @@ class TestIntegrationScenarios(unittest.TestCase):
 
             passed_count += 1
 
-        self.assertEqual(passed_count, 60)
+        self.assertEqual(passed_count, total_scenarios)
 
 
 if __name__ == "__main__":

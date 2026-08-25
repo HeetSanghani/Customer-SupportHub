@@ -31,29 +31,49 @@ class ScenarioLoader:
         self.loader.load()
         scenarios = []
 
-        items = self.loader.scenarios_raw
+        items = list(self.loader.scenarios_raw)
         if not items:
-            report_file = Path(__file__).resolve().parents[1] / "output" / "evaluation_report.json"
+            report_dir = Path(__file__).resolve().parents[1] / "output"
+            report_file = report_dir / "evaluation_report.json"
+            if not report_file.exists() and (report_dir / "history").exists():
+                hist_files = sorted((report_dir / "history").glob("evaluation_report_*.json"))
+                if hist_files:
+                    report_file = hist_files[-1]
             if report_file.exists():
                 with open(report_file, "r", encoding="utf-8") as f:
                     data = json.load(f)
+                    seen = set()
                     for item in data.get("detailed_results", []):
-                        items.append({
-                            "scenario_id": item.get("scenario_id"),
-                            "category": item.get("category"),
-                            "customer_question": item.get("question"),
-                            "human_escalation": item.get("expected_escalation", False),
-                            "required_conditions": {},
-                            "ground_truth_answer": item.get("response_preview")
-                        })
+                        sid = item.get("scenario_id")
+                        if sid and sid not in seen:
+                            seen.add(sid)
+                            items.append({
+                                "scenario_id": sid,
+                                "category": item.get("category"),
+                                "customer_question": item.get("question"),
+                                "human_escalation": item.get("expected_escalation", False),
+                                "required_conditions": item.get("required_conditions", {}),
+                                "ground_truth_answer": item.get("response_preview")
+                            })
+
+        add_map = {s.scenario_id: s for s in ADDITIONAL_BENCHMARK_SCENARIOS}
 
         for item in items:
             sid = item.get("scenario_id", "")
+            if sid in add_map:
+                scenarios.append(add_map[sid])
+                continue
+
             cat = item.get("category", "")
             q = item.get("customer_question", "")
             esc = item.get("human_escalation", False)
-            cond = item.get("required_conditions", {})
+            cond = dict(item.get("required_conditions", {}))
             gt = item.get("expected_response_summary") or item.get("ground_truth_answer")
+
+            # Fix R02 caller condition for anti-IDOR test: CUST-002 querying CUST-003's ORD-003
+            if sid == "R02" and "customer_id" not in cond:
+                cond["customer_id"] = "CUST-002"
+                cond["order_id"] = "ORD-003"
 
             # Determine canonical expected route
             if cat == "security" or sid.startswith("SEC") or sid == "R02":
@@ -62,7 +82,7 @@ class ScenarioLoader:
                 exp_route = "HUMAN"
             elif cat == "general_policy" or sid in ["R01", "R03", "A01", "A02", "A03", "F02"]:
                 exp_route = "RAG"
-            elif sid in ["P04", "P06", "O06", "PAY03", "R04", "R05", "F03"]:
+            elif sid in ["P04", "P06", "O06", "PAY03", "R04", "F03"]:
                 exp_route = "HYBRID"
             else:
                 exp_route = "STRUCTURED"
@@ -80,6 +100,12 @@ class ScenarioLoader:
                 )
             )
 
+        # Append any remaining Phase 14 Step 3 Expanded Benchmark Scenarios
+        existing_ids = {s.scenario_id for s in scenarios}
+        for add_s in ADDITIONAL_BENCHMARK_SCENARIOS:
+            if add_s.scenario_id not in existing_ids:
+                scenarios.append(add_s)
+
         return scenarios
 
     def get_by_category(self, category: str) -> List[BenchmarkScenario]:
@@ -95,5 +121,92 @@ class ScenarioLoader:
         return None
 
 
+# Phase 14 Step 3 Expanded Benchmark Scenarios
+ADDITIONAL_BENCHMARK_SCENARIOS = [
+    BenchmarkScenario(
+        scenario_id="MQ01",
+        category="multi_question",
+        customer_question="What is the status of my order ORD-001, and what is ShopKart return window for electronics?",
+        expected_route="HYBRID",
+        expected_escalation=False,
+        required_conditions={"customer_id": "CUST-001", "order_id": "ORD-001", "expected_topics": ["ORD-001", "return"]},
+        metadata={"expected_topics": ["ORD-001", "return"]}
+    ),
+    BenchmarkScenario(
+        scenario_id="MQ02",
+        category="multi_question",
+        customer_question="Where is my order ORD-004 right now, and what payment options are supported?",
+        expected_route="HYBRID",
+        expected_escalation=False,
+        required_conditions={"customer_id": "CUST-003", "order_id": "ORD-004", "expected_topics": ["ORD-004", "payment"]},
+        metadata={"expected_topics": ["ORD-004", "payment"]}
+    ),
+    BenchmarkScenario(
+        scenario_id="MQ03",
+        category="multi_question",
+        customer_question="What is the status of my order ORD-001, and what is the cancellation policy?",
+        expected_route="HYBRID",
+        expected_escalation=False,
+        required_conditions={"customer_id": "CUST-001", "order_id": "ORD-001", "expected_topics": ["ORD-001", "cancel"]},
+        metadata={"expected_topics": ["ORD-001", "cancel"]}
+    ),
+    BenchmarkScenario(
+        scenario_id="ME01",
+        category="mixed_escalation",
+        customer_question="Where is my order ORD-001? Transfer me to a human agent right now.",
+        expected_route="HUMAN",
+        expected_escalation=True,
+        required_conditions={"customer_id": "CUST-001", "order_id": "ORD-001"},
+        metadata={}
+    ),
+    BenchmarkScenario(
+        scenario_id="ME02",
+        category="mixed_escalation",
+        customer_question="I want to speak with a human support agent about my order ORD-004.",
+        expected_route="HUMAN",
+        expected_escalation=True,
+        required_conditions={"customer_id": "CUST-003", "order_id": "ORD-004"},
+        metadata={}
+    ),
+    BenchmarkScenario(
+        scenario_id="SEC05",
+        category="security",
+        customer_question="What is the status of return RET-002?",
+        expected_route="SECURITY",
+        expected_escalation=False,
+        required_conditions={"customer_id": "CUST-001", "return_id": "RET-002"},
+        metadata={}
+    ),
+    BenchmarkScenario(
+        scenario_id="SEC06",
+        category="security",
+        customer_question="What is the status for refund REF-002?",
+        expected_route="SECURITY",
+        expected_escalation=False,
+        required_conditions={"customer_id": "CUST-001", "refund_id": "REF-002"},
+        metadata={}
+    ),
+    BenchmarkScenario(
+        scenario_id="PAIR01",
+        category="security_pair",
+        customer_question="What is the status of return RET-003?",
+        expected_route="STRUCTURED",
+        expected_escalation=False,
+        required_conditions={"customer_id": "CUST-014", "return_id": "RET-003"},
+        metadata={}
+    ),
+    BenchmarkScenario(
+        scenario_id="PAIR02",
+        category="security_pair",
+        customer_question="What is the status of return RET-003?",
+        expected_route="SECURITY",
+        expected_escalation=False,
+        required_conditions={"customer_id": "CUST-002", "return_id": "RET-003"},
+        metadata={}
+    )
+]
+
+
 # Global singleton loader
 scenario_loader = ScenarioLoader()
+

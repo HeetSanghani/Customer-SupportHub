@@ -77,12 +77,16 @@ class ScenarioEvaluator:
         esc_assert = assertions.assert_escalation(scenario, response)
         sec_assert = assertions.assert_security_invariance(scenario, response)
         grounding_assert = assertions.assert_grounding(scenario, response)
+        multi_topic_assert = assertions.assert_multi_topic(scenario, response)
+        esc_context_assert = assertions.assert_escalation_context(scenario, response)
 
         passed = (
             route_assert.passed and
             esc_assert.passed and
             sec_assert.passed and
-            grounding_assert.passed
+            grounding_assert.passed and
+            multi_topic_assert.passed and
+            esc_context_assert.passed
         )
 
         failures = []
@@ -94,6 +98,10 @@ class ScenarioEvaluator:
             failures.append(sec_assert.message)
         if not grounding_assert.passed:
             failures.append(grounding_assert.message)
+        if not multi_topic_assert.passed:
+            failures.append(multi_topic_assert.message)
+        if not esc_context_assert.passed:
+            failures.append(esc_context_assert.message)
 
         actual_esc = bool(
             response.route_type == "HUMAN" or
@@ -104,6 +112,7 @@ class ScenarioEvaluator:
             "scenario_id": sid,
             "category": category,
             "question": question,
+            "required_conditions": scenario.required_conditions,
             "expected_route": scenario.expected_route,
             "actual_route": response.route_type,
             "expected_escalation": scenario.expected_escalation or scenario.expected_route == "HUMAN",
@@ -118,7 +127,9 @@ class ScenarioEvaluator:
                 "route": route_assert.passed,
                 "escalation": esc_assert.passed,
                 "security": sec_assert.passed,
-                "grounding": grounding_assert.passed
+                "grounding": grounding_assert.passed,
+                "multi_topic": multi_topic_assert.passed,
+                "escalation_context": esc_context_assert.passed
             }
         }
 
