@@ -177,9 +177,9 @@ Open **3 terminal windows**:
 #### Terminal 1 — FastAPI Backend
 ```bash
 cd supporthub/backend
-uv run uvicorn app.main:app --reload --port 8001
+uv run uvicorn app.main:app --reload --port 8000
 ```
-*API Swagger documentation available at: `http://localhost:8001/docs`*
+*API Swagger documentation available at: `http://localhost:8000/docs`*
 
 #### Terminal 2 — React Frontend
 ```bash
@@ -191,7 +191,7 @@ npm run dev
 
 #### Terminal 3 — ngrok Webhook Tunnel
 ```bash
-ngrok http 8001
+ngrok http 8000
 ```
 *Forward your ngrok HTTPS URL to Meta and Mailgun webhooks.*
 

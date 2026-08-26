@@ -22,10 +22,10 @@ docker compose up -d
 ### Terminal 2 — Start Backend (FastAPI)
 ```bash
 cd supporthub/backend
-uv run uvicorn app.main:app --reload --port 8001
+uv run uvicorn app.main:app --reload --port 8000
 ```
 
-> API docs: `http://localhost:8001/api/docs`
+> API docs: `http://localhost:8000/api/docs`
 
 ### Terminal 3 — Start Frontend (React)
 ```bash
@@ -54,7 +54,7 @@ To connect live WhatsApp messaging to SupportHub:
 
 3. **Start Webhook Tunnel**:
    ```bash
-   ngrok http 8001
+   ngrok http 8000
    ```
 
 4. **Register Webhook in Meta Dashboard**:

@@ -1,7 +1,7 @@
 import requests
 import uuid
 
-WEBHOOK_URL = "http://localhost:8001/api/v1/webhooks/email"
+WEBHOOK_URL = "http://localhost:8000/api/v1/webhooks/email"
 IMAGE_PATH = "/home/python/.gemini/antigravity/brain/e6d4f91f-8203-44cb-bdf5-14e0e03fe596/broken_router_1786533778457.png"
 
 def simulate_mailgun_webhook():

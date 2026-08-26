@@ -105,7 +105,7 @@ Open **4 separate terminals** and run one command in each:
 ### Terminal 1 — Backend API
 ```bash
 cd supporthub/backend
-uv run uvicorn app.main:app --reload --port 8001
+uv run uvicorn app.main:app --reload --port 8000
 ```
 
 ### Terminal 2 — Frontend Dev Server
@@ -118,7 +118,7 @@ npm run dev
 ### Terminal 3 — ngrok Tunnel (for Email/WhatsApp Webhooks)
 ```bash
 ngrok config add-authtoken <your_ngrok_authtoken>   # first time only
-ngrok http 8001
+ngrok http 8000
 ```
 
 > After ngrok starts, copy the `https://xxxx.ngrok.io` URL and update:
