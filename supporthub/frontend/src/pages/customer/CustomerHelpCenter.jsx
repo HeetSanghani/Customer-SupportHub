@@ -1,10 +1,10 @@
 import React, { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, Link } from 'react-router-dom'
 import { 
   Search, BookOpen, ThumbsUp, Eye, MessageSquare, 
   HelpCircle, ChevronDown, ChevronUp, Sparkles, CheckCircle2,
-  ShieldCheck, CreditCard, Wrench, User
+  ShieldCheck, CreditCard, Wrench, User, ArrowLeft
 } from 'lucide-react'
 import { knowledgeApi } from '../../api/knowledge'
 
@@ -64,47 +64,52 @@ export default function CustomerHelpCenter() {
   }
 
   return (
-    <div className="flex-1 bg-[#F8FAFC] min-h-screen overflow-y-auto text-[#1C1B2E]">
+    <div className="flex-1 h-full bg-[#F8FAFC] overflow-y-auto text-[#0F172A]">
       {/* Hero Header */}
-      <div className="relative bg-gradient-to-r from-[#4F46E5] via-[#6366F1] to-[#818CF8] text-white px-8 py-12 shadow-md">
-        <div className="max-w-4xl mx-auto text-center space-y-4">
-          <div className="inline-flex items-center gap-2 bg-white/10 backdrop-blur-md px-3.5 py-1 rounded-full text-xs font-semibold tracking-wide border border-white/20">
-            <Sparkles size={14} className="text-amber-300" /> SupportHub Help Center
-          </div>
-          <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight">
-            How can we help you today?
-          </h1>
-          <p className="text-indigo-100 text-sm md:text-base max-w-xl mx-auto font-medium">
-            Search our knowledge base, guides, and FAQs for instant answers to common questions.
-          </p>
+      <div className="relative bg-gradient-to-r from-indigo-700 via-indigo-600 to-purple-600 text-white px-6 md:px-8 py-10 shadow-md">
+        <div className="max-w-4xl mx-auto space-y-4">
+          <Link to="/customer" className="inline-flex items-center gap-1.5 text-xs font-extrabold text-indigo-100 hover:text-white mb-2 transition-colors">
+            <ArrowLeft size={14} /> Back to AI Chat
+          </Link>
+          <div className="text-center space-y-3">
+            <div className="inline-flex items-center gap-2 bg-white/10 backdrop-blur-md px-3.5 py-1 rounded-full text-xs font-semibold tracking-wide border border-white/20">
+              <Sparkles size={14} className="text-amber-300" /> SupportHub Help Center
+            </div>
+            <h1 className="text-2xl md:text-4xl font-black tracking-tight">
+              How can we help you today?
+            </h1>
+            <p className="text-indigo-100 text-xs md:text-sm max-w-xl mx-auto font-medium">
+              Search our knowledge base, guides, and FAQs for instant answers to common questions.
+            </p>
 
-          {/* Search Input */}
-          <div className="relative max-w-2xl mx-auto mt-6">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
-            <input
-              type="text"
-              placeholder="Search by keyword, billing, live chat, 2FA..."
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-              className="w-full pl-12 pr-4 py-4 rounded-2xl bg-white text-[#1C1B2E] placeholder-gray-400 text-sm font-medium shadow-xl border-0 focus:ring-4 focus:ring-indigo-300 outline-none transition-all"
-            />
-            {searchQuery && (
-              <button
-                onClick={() => setSearchQuery('')}
-                className="absolute right-4 top-1/2 -translate-y-1/2 text-xs text-gray-400 hover:text-gray-600 bg-gray-100 px-2 py-1 rounded-md"
-              >
-                Clear
-              </button>
-            )}
+            {/* Search Input */}
+            <div className="relative max-w-2xl mx-auto mt-6">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
+              <input
+                type="text"
+                placeholder="Search by keyword, billing, live chat, 2FA..."
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                className="w-full pl-12 pr-4 py-3.5 rounded-2xl bg-white text-[#0F172A] placeholder-gray-400 text-sm font-medium shadow-xl border-0 focus:ring-4 focus:ring-indigo-300 outline-none transition-all"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-xs text-gray-400 hover:text-gray-600 bg-gray-100 px-2 py-1 rounded-md"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
           </div>
         </div>
       </div>
 
       {/* Main Content Area */}
-      <div className="max-w-5xl mx-auto px-6 py-10 space-y-8">
+      <div className="max-w-5xl mx-auto px-6 py-8 space-y-8">
         
         {/* Category Pills */}
-        <div className="flex flex-wrap items-center justify-center gap-3">
+        <div className="flex flex-wrap items-center justify-center gap-2.5">
           {categories.map(cat => {
             const Icon = cat.icon
             const isSelected = selectedCategory === cat.id
@@ -118,8 +123,8 @@ export default function CustomerHelpCenter() {
                 onClick={() => setSelectedCategory(cat.id)}
                 className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all shadow-xs ${
                   isSelected 
-                    ? 'bg-[#6366F1] text-white shadow-md scale-105' 
-                    : 'bg-white text-[#6C7089] hover:bg-indigo-50/60 hover:text-indigo-600 border border-[#E5E7F3]'
+                    ? 'bg-indigo-600 text-white shadow-md scale-105' 
+                    : 'bg-white text-[#64748B] hover:bg-indigo-50/60 hover:text-indigo-600 border border-[#E2E8F0]'
                 }`}
               >
                 <Icon size={16} />
@@ -135,21 +140,21 @@ export default function CustomerHelpCenter() {
         {/* FAQs List */}
         <div className="space-y-4">
           <div className="flex items-center justify-between px-1">
-            <h2 className="text-lg font-bold text-[#1C1B2E] flex items-center gap-2">
+            <h2 className="text-lg font-bold text-[#0F172A] flex items-center gap-2">
               <BookOpen size={18} className="text-indigo-600" />
               {selectedCategory === 'All' ? 'Frequently Asked Questions' : `${selectedCategory} Articles`}
             </h2>
-            <span className="text-xs text-[#9598B0] font-semibold">
+            <span className="text-xs text-[#94A3B8] font-semibold">
               Showing {filteredArticles.length} article{filteredArticles.length === 1 ? '' : 's'}
             </span>
           </div>
 
           {isLoading ? (
-            <div className="bg-white rounded-2xl p-12 text-center text-gray-400 font-medium border border-gray-200">
+            <div className="bg-white rounded-3xl p-12 text-center text-gray-400 font-medium border border-gray-200">
               Loading knowledge base articles...
             </div>
           ) : filteredArticles.length === 0 ? (
-            <div className="bg-white rounded-2xl p-12 text-center space-y-3 border border-gray-200 shadow-xs">
+            <div className="bg-white rounded-3xl p-12 text-center space-y-3 border border-gray-200 shadow-2xs">
               <HelpCircle size={40} className="mx-auto text-gray-300" />
               <h3 className="text-base font-bold text-gray-700">No matching articles found</h3>
               <p className="text-xs text-gray-500 max-w-md mx-auto">
@@ -157,9 +162,9 @@ export default function CustomerHelpCenter() {
               </p>
               <button
                 onClick={() => navigate('/customer/chat')}
-                className="inline-flex items-center gap-2 bg-[#6366F1] hover:bg-[#4F46E5] text-white text-xs font-bold px-5 py-2.5 rounded-xl transition-colors mt-2"
+                className="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-5 py-2.5 rounded-xl transition-colors mt-2"
               >
-                <MessageSquare size={16} /> Ask AI Assistant / Support Agent
+                <MessageSquare size={16} /> Ask SupportHub AI
               </button>
             </div>
           ) : (
@@ -171,8 +176,8 @@ export default function CustomerHelpCenter() {
                 return (
                   <div
                     key={article.id}
-                    className={`bg-white rounded-2xl border transition-all overflow-hidden ${
-                      isExpanded ? 'border-indigo-300 shadow-md ring-2 ring-indigo-50/50' : 'border-[#E5E7F3] hover:border-indigo-200 shadow-xs'
+                    className={`bg-white rounded-3xl border transition-all overflow-hidden ${
+                      isExpanded ? 'border-indigo-300 shadow-md ring-2 ring-indigo-50/50' : 'border-[#E2E8F0] hover:border-indigo-200 shadow-2xs'
                     }`}
                   >
                     {/* Header Bar */}
@@ -185,10 +190,10 @@ export default function CustomerHelpCenter() {
                           <HelpCircle size={18} />
                         </div>
                         <div>
-                          <h3 className="text-sm font-bold text-[#1C1B2E] group-hover:text-indigo-600 transition-colors">
+                          <h3 className="text-sm font-bold text-[#0F172A] group-hover:text-indigo-600 transition-colors">
                             {article.title}
                           </h3>
-                          <div className="flex items-center gap-3 mt-1.5 text-xs text-[#9598B0]">
+                          <div className="flex items-center gap-3 mt-1.5 text-xs text-[#94A3B8]">
                             <span className="bg-slate-100 text-slate-700 font-semibold px-2 py-0.5 rounded-md text-[10px] uppercase">
                               {article.category}
                             </span>
@@ -209,7 +214,7 @@ export default function CustomerHelpCenter() {
                     {/* Article Body */}
                     {isExpanded && (
                       <div className="px-6 pb-6 pt-2 border-t border-gray-100 space-y-4">
-                        <div className="text-sm text-gray-700 leading-relaxed whitespace-pre-line bg-gray-50/70 p-4 rounded-xl border border-gray-100 font-normal">
+                        <div className="text-sm text-gray-700 leading-relaxed whitespace-pre-line bg-gray-50/70 p-4 rounded-2xl border border-gray-100 font-normal">
                           {article.body}
                         </div>
 
@@ -271,7 +276,7 @@ export default function CustomerHelpCenter() {
             </div>
             <button
               onClick={() => navigate('/customer/chat')}
-              className="bg-[#6366F1] hover:bg-[#4F46E5] text-white px-5 py-2.5 rounded-xl text-xs font-bold shadow-md hover:shadow-indigo-500/30 transition-all flex items-center justify-center gap-2"
+              className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl text-xs font-bold shadow-md transition-all flex items-center justify-center gap-2"
             >
               <MessageSquare size={16} /> Open Web Live Chat
             </button>
@@ -294,7 +299,7 @@ export default function CustomerHelpCenter() {
               href="https://wa.me/15552041051?text=Hi%20SupportHub%20AI%20Assistant,%20I%20need%20help."
               target="_blank"
               rel="noopener noreferrer"
-              className="bg-emerald-500 hover:bg-emerald-600 text-white px-5 py-2.5 rounded-xl text-xs font-bold shadow-md hover:shadow-emerald-500/30 transition-all flex items-center justify-center gap-2"
+              className="bg-emerald-500 hover:bg-emerald-600 text-white px-5 py-2.5 rounded-xl text-xs font-bold shadow-md transition-all flex items-center justify-center gap-2"
             >
               <span>Launch WhatsApp Chat</span>
             </a>

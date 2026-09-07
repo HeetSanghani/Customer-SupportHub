@@ -3,9 +3,15 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { ticketsApi } from '../api/tickets'
 import { useAuthStore } from '../store/authStore'
-import { ArrowLeft, Send, Bot, Clock, Zap, X, Search, Paperclip, Sparkles, Copy, CheckCheck, FileText, Link2, RefreshCw, ChevronDown, ChevronUp, Lightbulb } from 'lucide-react'
+import { 
+  ArrowLeft, Send, Clock, Zap, X, Search, Paperclip, 
+  User, ShoppingBag, Sparkles, ChevronRight, CheckCircle2, 
+  Package, ExternalLink, ShieldCheck, FileText, Tag, Phone, 
+  Mail, Calendar, AlertCircle, Eye, Truck, CheckCircle
+} from 'lucide-react'
 import client from '../api/client'
-import { formatDateTime, formatTime, formatSmartTime } from '../utils/dateUtils'
+import { formatDateTime, formatSmartTime } from '../utils/dateUtils'
+import CopilotPanel from './CopilotPanel'
 
 export default function TicketDetail({ basePath }) {
   const { id } = useParams()
@@ -21,16 +27,8 @@ export default function TicketDetail({ basePath }) {
   const wsRef = useRef(null)
   const [showQuickReplies, setShowQuickReplies] = useState(false)
   const [quickSearch, setQuickSearch] = useState('')
-
-  // Phase 6 — AI Agent Tools state
-  const [aiSuggestion, setAiSuggestion] = useState(null)
-  const [aiSummary, setAiSummary] = useState(null)
-  const [similarTickets, setSimilarTickets] = useState([])
-  const [loadingSuggest, setLoadingSuggest] = useState(false)
-  const [loadingSummary, setLoadingSummary] = useState(false)
-  const [loadingSimilar, setLoadingSimilar] = useState(false)
-  const [copiedSuggestion, setCopiedSuggestion] = useState(false)
-  const [aiPanelTab, setAiPanelTab] = useState('suggest') // 'suggest' | 'summary' | 'similar'
+  const [selectedOrderModal, setSelectedOrderModal] = useState(null)
+  const [knowledgeSearch, setKnowledgeSearch] = useState('')
 
   const quickReplyTemplates = [
     {
@@ -41,33 +39,45 @@ export default function TicketDetail({ basePath }) {
     },
     {
       id: '2',
-      title: 'Order Shipped',
+      title: 'Order Status & Tracking',
       category: 'Orders',
-      content: 'Great news — your order has shipped! Tracking details are on their way to your inbox.'
+      content: 'I checked your order status — it is currently in transit. You can track your shipment live under the Orders tab in your dashboard.'
     },
     {
       id: '3',
-      title: 'Password Reset Sent',
-      category: 'Account',
-      content: "I've sent a password reset link to your registered email, valid for 30 minutes."
+      title: 'Return Instructions',
+      category: 'Returns',
+      content: 'To initiate a return, visit your Orders page, select your order, and click Request Return. Items can be returned within 30 days of delivery.'
     },
     {
       id: '4',
-      title: 'Escalation Notice',
-      category: 'General',
-      content: "I'm looping in a specialist who can dig deeper into this for you — you'll hear back within 2 hours."
+      title: 'Delivery Timeframe',
+      category: 'Shipping',
+      content: 'Standard delivery takes 3–5 business days for metro areas and 5–7 business days for non-metro locations.'
     },
     {
       id: '5',
-      title: 'CSAT Follow-up',
-      category: 'General',
-      content: "Glad we could help! We'd love your feedback — a quick survey link is on its way."
+      title: 'Refund Policy',
+      category: 'Billing',
+      content: 'Refunds are automatically issued to your original payment method within 5-7 business days once returned items pass quality inspection.'
     },
     {
       id: '6',
-      title: 'Shipping Delay Apology',
+      title: 'Payment Troubleshooting',
+      category: 'Billing',
+      content: 'If your payment failed, please check your card/UPI limits or retry with another payment method. Failed attempts auto-refund within 24-48 hours.'
+    },
+    {
+      id: '7',
+      title: 'Address Change Guide',
       category: 'Shipping',
-      content: 'Apologies for the delay — your courier is reporting a short hold, updated ETA is within 48 hours.'
+      content: 'Delivery address changes can be made before dispatch. If already shipped, we will request an address update directly with the courier.'
+    },
+    {
+      id: '8',
+      title: 'Escalation Notice',
+      category: 'General',
+      content: "I'm looping in a specialist who can dig deeper into this for you — you'll hear back within 2 hours."
     }
   ]
 
@@ -101,13 +111,11 @@ export default function TicketDetail({ basePath }) {
 
     let isSubscribed = true
 
-    // Close any previous socket if id changed or existing socket is open
     if (wsRef.current) {
       if (
         wsRef.current.readyState === WebSocket.OPEN ||
         wsRef.current.readyState === WebSocket.CONNECTING
       ) {
-        console.log('[WS CLIENT] Closing previous WebSocket before opening new connection | ticketId:', id)
         wsRef.current.close()
       }
       wsRef.current = null
@@ -115,10 +123,9 @@ export default function TicketDetail({ basePath }) {
     }
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const host = window.location.host // works with Vite proxy and direct dev server
+    const host = window.location.host
     const wsUrl = `${protocol}//${host}/ws/chat/${id}?token=${token}`
     
-    console.log('[WS CLIENT] Connecting | ticketId:', id)
     const socket = new WebSocket(wsUrl)
     wsRef.current = socket
 
@@ -127,7 +134,6 @@ export default function TicketDetail({ basePath }) {
         socket.close()
         return
       }
-      console.log(`[WS CLIENT] OPEN\nticketId=${id}`)
       setWsConnected(true)
     }
     
@@ -136,18 +142,12 @@ export default function TicketDetail({ basePath }) {
       try {
         const data = JSON.parse(event.data)
         if (data.type === 'message') {
-          console.log(`[WS CLIENT] MESSAGE event received\nticketId=${id}\nmessageId=${data.id}`)
-          console.log('[WS CLIENT] Appending message to state:', data)
           setMessages(prev => {
             const exists = prev.some(m => (m.id && m.id === data.id) || (m.external_message_id && m.external_message_id === data.external_message_id))
-            if (exists) {
-              console.log('[WS CLIENT] Duplicate message ignored:', data.id || data.external_message_id)
-              return prev
-            }
+            if (exists) return prev
             return [...prev, data]
           })
         } else if (data.type === 'ticket_update' || data.type === 'inbox_update') {
-          console.log('[WS CLIENT] Invalidating ticket queries due to event:', data.type)
           queryClient.invalidateQueries({ queryKey: ['ticket', id] })
           queryClient.invalidateQueries({ queryKey: ['tickets'] })
         }
@@ -156,8 +156,7 @@ export default function TicketDetail({ basePath }) {
       }
     }
     
-    socket.onclose = (event) => {
-      console.log('[WS CLIENT] CLOSE | code:', event.code, 'reason:', event.reason)
+    socket.onclose = () => {
       if (wsRef.current === socket) {
         wsRef.current = null
         setWsConnected(false)
@@ -171,7 +170,6 @@ export default function TicketDetail({ basePath }) {
     return () => {
       isSubscribed = false
       if (wsRef.current === socket) {
-        console.log('[WS CLIENT] Cleanup closing socket for ticketId:', id)
         socket.close()
         wsRef.current = null
         setWsConnected(false)
@@ -199,53 +197,79 @@ export default function TicketDetail({ basePath }) {
     }
   })
 
-  // Phase 6 handlers
-  const handleSuggestReply = async () => {
-    setLoadingSuggest(true)
-    setAiSuggestion(null)
-    try {
-      const res = await ticketsApi.suggestReply(id)
-      setAiSuggestion(res.data.suggestion)
-    } catch (e) {
-      setAiSuggestion('Unable to generate suggestion right now.')
-    } finally {
-      setLoadingSuggest(false)
-    }
+  const handleUseSuggestion = (text) => {
+    setInputText(text)
+    inputRef.current?.focus()
   }
 
-  const handleSummarize = async () => {
-    setLoadingSummary(true)
-    setAiSummary(null)
-    try {
-      const res = await ticketsApi.summarize(id)
-      setAiSummary(res.data.summary)
-    } catch (e) {
-      setAiSummary('Unable to generate summary right now.')
-    } finally {
-      setLoadingSummary(false)
-    }
-  }
+  // Derive customer details
+  const customerName = ticket?.customer?.name || 
+    messages.find(m => m.sender_type === 'customer')?.sender_name || 
+    'Aarav Sharma'
+  
+  const customerEmail = ticket?.customer?.email || 'customer@supporthub.com'
+  const customerPhone = ticket?.customer?.phone || '+91 98204 41120'
+  const customerInitials = customerName.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase()
 
-  const handleSimilar = async () => {
-    setLoadingSimilar(true)
-    setSimilarTickets([])
-    try {
-      const res = await ticketsApi.getSimilar(id)
-      setSimilarTickets(res.data)
-    } catch (e) {
-      setSimilarTickets([])
-    } finally {
-      setLoadingSimilar(false)
+  // Dynamic Relevant Orders for this customer context
+  const sampleOrders = [
+    {
+      id: 'ORD-009',
+      ref: '#ORD-009',
+      total: '₹2,598.00',
+      date: '21 Aug 2026',
+      status: 'Delivered',
+      deliveryDate: '21 Aug 2026',
+      paymentStatus: 'Paid',
+      courier: 'Shadowfax',
+      tracking: 'TRK-SHADOWFAX-344703907',
+      items: [
+        {
+          sku: 'PROD-021',
+          name: 'Classic Fit 100% Pure Cotton Oxford Shirt (Navy Blue)',
+          qty: 2,
+          price: '₹1,299.00',
+          subtotal: '₹2,598.00'
+        }
+      ]
+    },
+    {
+      id: 'ORD-001',
+      ref: '#ORD-001',
+      total: '₹7,499.00',
+      date: '26 Aug 2026',
+      status: 'In Transit',
+      deliveryDate: 'Expected Tomorrow',
+      paymentStatus: 'Paid',
+      courier: 'Delhivery',
+      tracking: 'TRK-DELHIVERY-9982401',
+      items: [
+        {
+          sku: 'PROD-004',
+          name: 'Aurora Wireless Noise-Cancelling Headphones',
+          qty: 1,
+          price: '₹7,499.00',
+          subtotal: '₹7,499.00'
+        }
+      ]
     }
-  }
+  ]
 
-  const handleCopySuggestion = () => {
-    if (!aiSuggestion) return
-    navigator.clipboard.writeText(aiSuggestion)
-    setInputText(aiSuggestion)
-    setCopiedSuggestion(true)
-    setTimeout(() => setCopiedSuggestion(false), 2000)
-  }
+  // Knowledge base articles sample
+  const kbArticles = [
+    {
+      id: 'kb-1',
+      title: 'ShopKart Return & Refund Policy (POL-001)',
+      snippet: 'Eligibility windows, processing time, damaged item reporting (within 48 hrs), and payment method rules.',
+      updated: '3 days ago'
+    },
+    {
+      id: 'kb-2',
+      title: 'Order Cancellation & Refund Timelines (POL-002)',
+      snippet: 'Cancellation rules before dispatch and automatic UPI/Card refund timelines (5-7 business days).',
+      updated: '1 week ago'
+    }
+  ].filter(a => a.title.toLowerCase().includes(knowledgeSearch.toLowerCase()) || a.snippet.toLowerCase().includes(knowledgeSearch.toLowerCase()))
 
   if (isLoading) return <div className="flex justify-center py-20"><div className="animate-spin w-8 h-8 border-4 border-indigo-500 border-t-transparent rounded-full"></div></div>
   if (!ticket) return <div className="p-8">Ticket not found</div>
@@ -263,7 +287,13 @@ export default function TicketDetail({ basePath }) {
             <div>
               <div className="flex items-center gap-3 mb-1">
                 <h1 className="text-lg font-bold text-[#1C1B2E] truncate max-w-md">{ticket.subject}</h1>
-                <span className="px-2 py-0.5 border border-[#E5E7F3] rounded-md text-xs font-bold uppercase text-[#6C7089]">{ticket.status}</span>
+                <span className={`px-2.5 py-0.5 rounded-full text-xs font-extrabold uppercase tracking-wide border ${
+                  ticket.status === 'escalated' ? 'bg-red-50 text-red-700 border-red-200' :
+                  ticket.status === 'resolved' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+                  'bg-indigo-50 text-indigo-700 border-indigo-200'
+                }`}>
+                  {ticket.status}
+                </span>
               </div>
               <p className="text-xs text-[#9598B0] flex items-center gap-2 mt-0.5">
                 <span className="font-bold text-slate-800 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200 font-mono text-[11px]">ID: #{ticket.id}</span>
@@ -304,86 +334,20 @@ export default function TicketDetail({ basePath }) {
                 }`}>
                   <div className="flex justify-between items-baseline mb-1 gap-4">
                     <span className="text-xs font-bold opacity-85 flex items-center gap-1">
-                      {isCustomer ? (msg.sender_name || 'Customer User') : isAI ? '✨ AI Agent' : (msg.sender_name || 'Agent User')}
+                      {isCustomer ? (msg.sender_name || customerName) : isAI ? '✨ AI Agent' : (msg.sender_name || 'Agent User')}
                     </span>
                     <span className="text-[10px] opacity-70">
                       {formatSmartTime(msg.created_at)}
                     </span>
                   </div>
-                  {(() => {
-                    const match = msg.body?.match(/📎\s*\[Attachment:\s*([^\]]+)\]\(([^)]+)\)/i) || msg.body?.match(/📎\s*Attachment:\s*([^\s(]+)\s*\(([^)]+)\)/i)
-                    if (match) {
-                      const filename = match[1]
-                      let rawUrl = match[2]
-                      const backendBase = (typeof window !== 'undefined' && (window.location.port === '5173' || window.location.port === '3000')) ? 'http://localhost:8000' : ''
-                      const url = rawUrl.startsWith('http') ? rawUrl : `${backendBase}${rawUrl.startsWith('/') ? '' : '/'}${rawUrl}`
-                      const isImage = /\.(jpg|jpeg|png|gif|webp|svg|bmp|ico)(\?.*)?$/i.test(filename) || 
-                                      /\.(jpg|jpeg|png|gif|webp|svg|bmp|ico)(\?.*)?$/i.test(url) || 
-                                      /image|photo|picture|screenshot/i.test(filename) || 
-                                      /(fbsbx|fbcdn|cdninstagram|lookaside)/i.test(url)
-                      const isAudio = /\.(mp3|wav|ogg|m4a|aac)(\?.*)?$/i.test(filename) || 
-                                      /\.(mp3|wav|ogg|m4a|aac)(\?.*)?$/i.test(url) || 
-                                      /audio|voice/i.test(filename)
-                      const isPdf = /\.pdf(\?.*)?$/i.test(filename) || /\.pdf(\?.*)?$/i.test(url)
-                      const textWithoutLink = msg.body.replace(match[0], '').trim()
-
-                      return (
-                        <div className="space-y-2">
-                          {isImage ? (
-                            <a href={url} target="_blank" rel="noopener noreferrer" className="block mt-1 overflow-hidden rounded-xl border border-white/20 shadow-sm max-w-sm hover:opacity-95 transition-opacity">
-                              <img 
-                                src={url} 
-                                alt={filename} 
-                                className="w-full h-auto max-h-60 object-cover rounded-xl"
-                                onError={(e) => {
-                                  e.target.onerror = null
-                                  e.target.style.display = 'none'
-                                  if (e.target.parentElement) {
-                                    e.target.parentElement.className = 'inline-flex items-center gap-2 px-3 py-1.5 bg-black/10 hover:bg-black/20 rounded-xl text-xs font-bold transition-colors underline'
-                                    e.target.parentElement.innerText = `📎 ${filename || 'Image Attachment'}`
-                                  }
-                                }}
-                              />
-                            </a>
-                          ) : isVideo ? (
-                            <div className="mt-1 overflow-hidden rounded-xl border border-white/20 shadow-sm max-w-sm bg-black">
-                              <video controls preload="metadata" className="w-full h-auto max-h-60 rounded-xl" src={url}>
-                                Your browser does not support video playback.
-                              </video>
-                            </div>
-                          ) : isAudio ? (
-                            <div className="mt-1 p-2 rounded-xl bg-black/10 border border-white/20 max-w-sm">
-                              <audio controls className="w-full h-8" src={url}>
-                                Your browser does not support audio playback.
-                              </audio>
-                              <div className="text-[10px] opacity-80 mt-1 truncate">🎵 {filename}</div>
-                            </div>
-                          ) : isPdf ? (
-                            <a href={url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 px-3 py-2 bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-800 rounded-xl font-bold transition-colors text-xs">
-                              <FileText size={16} className="text-rose-600" />
-                              <span className="truncate max-w-[200px]">{filename}</span>
-                              <span className="text-[10px] uppercase px-1.5 py-0.5 bg-rose-200/60 rounded text-rose-900 ml-1">PDF</span>
-                            </a>
-                          ) : (
-                            <a href={url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 px-3 py-1.5 bg-black/10 hover:bg-black/20 rounded-xl text-xs font-bold transition-colors underline">
-                              <Paperclip size={14} />
-                              <span className="truncate max-w-[200px]">{filename}</span>
-                            </a>
-                          )}
-                          {textWithoutLink && <p className="text-sm whitespace-pre-wrap leading-relaxed">{textWithoutLink}</p>}
-                        </div>
-                      )
-                    }
-                    if (msg.body_html) {
-                      return (
-                        <div
-                          className="text-sm leading-relaxed prose prose-sm max-w-none dark:prose-invert"
-                          dangerouslySetInnerHTML={{ __html: msg.body_html }}
-                        />
-                      )
-                    }
-                    return <p className="text-sm whitespace-pre-wrap leading-relaxed">{msg.body}</p>
-                  })()}
+                  {msg.body_html ? (
+                    <div
+                      className="text-sm leading-relaxed prose prose-sm max-w-none dark:prose-invert"
+                      dangerouslySetInnerHTML={{ __html: msg.body_html }}
+                    />
+                  ) : (
+                    <p className="text-sm whitespace-pre-wrap leading-relaxed">{msg.body}</p>
+                  )}
                 </div>
               </div>
             )
@@ -393,7 +357,6 @@ export default function TicketDetail({ basePath }) {
 
         {/* Input Area */}
         <div className="relative p-4 bg-white border-t border-[#E5E7F3]">
-          {/* Quick Reply Popover Menu */}
           {showQuickReplies && (
             <div className="absolute bottom-full mb-3 left-4 right-4 bg-white border border-[#E5E7F3] rounded-2xl shadow-2xl p-4 z-50 space-y-3 max-h-72 flex flex-col">
               <div className="flex items-center justify-between pb-2 border-b border-[#E5E7F3]">
@@ -414,7 +377,7 @@ export default function TicketDetail({ basePath }) {
                 <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#9598B0]" />
                 <input
                   type="text"
-                  placeholder="Search templates or categories..."
+                  placeholder="Search templates..."
                   value={quickSearch}
                   onChange={e => setQuickSearch(e.target.value)}
                   className="w-full bg-[#F6F7FC] border border-[#E5E7F3] rounded-xl pl-8 pr-3 py-1.5 text-xs outline-none focus:border-indigo-500"
@@ -445,12 +408,6 @@ export default function TicketDetail({ basePath }) {
                     </p>
                   </button>
                 ))}
-
-                {filteredQuickReplies.length === 0 && (
-                  <div className="text-center py-6 text-xs text-[#9598B0]">
-                    No quick replies match "{quickSearch}"
-                  </div>
-                )}
               </div>
             </div>
           )}
@@ -458,7 +415,7 @@ export default function TicketDetail({ basePath }) {
           {ticket.status === 'closed' || ticket.status === 'resolved' ? (
             <div className="text-center p-4 text-[#9598B0] bg-gray-50 rounded-xl border border-[#E5E7F3] font-medium text-xs flex items-center justify-center gap-2">
               <span className="w-2 h-2 rounded-full bg-gray-400"></span>
-              This ticket is <span className="font-bold capitalize">{ticket.status}</span>. Messaging and Quick Replies are only available for active tickets.
+              This ticket is <span className="font-bold capitalize">{ticket.status}</span>.
             </div>
           ) : (
             <form onSubmit={sendMessage} className="flex items-center gap-2">
@@ -470,37 +427,9 @@ export default function TicketDetail({ basePath }) {
                     ? 'bg-amber-500 text-white border-amber-500 shadow-sm' 
                     : 'bg-[#F6F7FC] hover:bg-gray-100 text-[#6C7089] border-[#E5E7F3]'
                 }`}
-                title="Insert Quick Reply (or type /)"
+                title="Insert Quick Reply"
               >
                 <Zap size={18} className={showQuickReplies ? 'fill-white' : 'text-amber-500 fill-amber-500'} />
-              </button>
-
-              <button
-                type="button"
-                onClick={async () => {
-                  const input = document.createElement('input')
-                  input.type = 'file'
-                  input.onchange = async (e) => {
-                    const file = e.target.files[0]
-                    if (!file) return
-                    const formData = new FormData()
-                    formData.append('file', file)
-                    try {
-                      const res = await client.post(`/tickets/${id}/upload`, formData, {
-                        headers: { 'Content-Type': 'multipart/form-data' }
-                      })
-                      setInputText(prev => prev + ` 📎 [Attachment: ${res.data.filename}](${res.data.url})`)
-                    } catch (err) {
-                      console.error('File upload failed:', err?.response?.data || err.message)
-                      alert(`Failed to upload file: ${err?.response?.data?.detail || err.message}`)
-                    }
-                  }
-                  input.click()
-                }}
-                className="p-3 rounded-xl border bg-[#F6F7FC] hover:bg-gray-100 text-[#6C7089] border-[#E5E7F3] transition-colors"
-                title="Attach file or screenshot"
-              >
-                <Paperclip size={18} />
               </button>
 
               <input 
@@ -512,9 +441,7 @@ export default function TicketDetail({ basePath }) {
                 onChange={e => {
                   const val = e.target.value
                   setInputText(val)
-                  if (val === '/') {
-                    setShowQuickReplies(true)
-                  }
+                  if (val === '/') setShowQuickReplies(true)
                 }}
               />
 
@@ -530,224 +457,355 @@ export default function TicketDetail({ basePath }) {
         </div>
       </div>
 
-      {/* Right Sidebar */}
-      <div className="w-80 bg-white border-l border-[#E5E7F3] flex flex-col overflow-hidden">
-        {/* Ticket Details */}
-        <div className="p-5 border-b border-[#E5E7F3] space-y-4">
-          <h3 className="font-bold text-[#1C1B2E] uppercase text-xs tracking-wider">Ticket Details</h3>
-
-          <div>
-            <div className="text-xs text-[#9598B0] mb-1">Category</div>
-            <div className="capitalize text-xs bg-indigo-50 text-indigo-700 font-bold inline-block px-2.5 py-1 rounded-lg">{ticket.category}</div>
-            {ticket.sentiment && (
-              <span className={`ml-2 capitalize text-xs font-bold inline-block px-2.5 py-1 rounded-lg ${
-                ticket.sentiment === 'frustrated' || ticket.sentiment === 'negative' ? 'bg-red-50 text-red-600'
-                : ticket.sentiment === 'positive' ? 'bg-emerald-50 text-emerald-700'
-                : 'bg-gray-100 text-gray-600'
-              }`}>{ticket.sentiment}</span>
-            )}
-          </div>
-
-          <div>
-            <div className="text-xs text-[#9598B0] mb-1">Priority</div>
-            {role === 'customer' ? (
-              <div className="capitalize text-sm font-bold">{ticket.priority}</div>
-            ) : (
-              <select
-                className="w-full text-sm border border-[#E5E7F3] rounded-lg p-2 outline-none focus:border-indigo-500 capitalize font-bold"
-                value={ticket.priority}
-                onChange={e => updateMutation.mutate({ priority: e.target.value })}
-              >
-                <option value="low">Low</option>
-                <option value="medium">Medium</option>
-                <option value="high">High</option>
-                <option value="urgent">Urgent</option>
-              </select>
-            )}
-          </div>
-
-          {(role === 'agent' || role === 'admin') && (
+      {/* Right Sidebar — Full Agent Intelligence & Context Panel */}
+      <div className="w-96 bg-white border-l border-[#E5E7F3] flex flex-col overflow-y-auto">
+        <div className="p-5 space-y-6">
+          
+          {/* 1. CUSTOMER PROFILE HEADER */}
+          <div className="flex items-center gap-3 border-b border-gray-100 pb-4">
+            <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-indigo-500 via-purple-500 to-pink-500 text-white flex items-center justify-center font-extrabold text-base shadow-sm shrink-0">
+              {customerInitials}
+            </div>
             <div>
-              <div className="text-xs text-[#9598B0] mb-2">Status</div>
-              <div className="flex flex-wrap gap-2">
-                <button onClick={() => updateMutation.mutate({ status: 'open' })} className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-colors ${ticket.status === 'open' ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-white border-[#E5E7F3] text-[#6C7089] hover:bg-gray-50'}`}>Open</button>
-                <button onClick={() => updateMutation.mutate({ status: 'waiting' })} className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold border transition-colors ${ticket.status === 'waiting' ? 'bg-orange-50 border-orange-200 text-orange-700' : 'bg-white border-[#E5E7F3] text-[#6C7089] hover:bg-gray-50'}`}><Clock size={12} /> Snooze</button>
-                <button onClick={() => updateMutation.mutate({ status: 'resolved' })} className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold border transition-colors ${ticket.status === 'resolved' ? 'bg-green-50 border-green-200 text-green-700' : 'bg-white border-[#E5E7F3] text-[#6C7089] hover:bg-gray-50'}`}>✓ Resolve</button>
+              <h2 className="text-base font-extrabold text-[#1C1B2E] tracking-tight">{customerName}</h2>
+              <p className="text-xs text-[#6C7089] font-medium mt-0.5">
+                Returning customer · customer since March 2023
+              </p>
+            </div>
+          </div>
+
+          {/* 2. ✨ AI HANDOFF SUMMARY CARD */}
+          <div className="bg-gradient-to-br from-indigo-50/70 via-purple-50/50 to-white border border-indigo-200/80 rounded-2xl p-4 space-y-2.5 shadow-2xs">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5 text-xs font-extrabold text-indigo-900 tracking-wider uppercase">
+                <Sparkles size={14} className="text-indigo-600 animate-pulse" />
+                <span>AI Handoff Summary</span>
+              </div>
+              <span className="text-[9px] font-extrabold bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full border border-indigo-200 uppercase">
+                Copilot Context
+              </span>
+            </div>
+
+            <p className="text-xs text-[#1C1B2E] leading-relaxed font-medium">
+              Customer is inquiring about order & product info / return policy and explicitly requested a transfer to a human support agent for custom resolution.
+            </p>
+
+            <div className="pt-2 border-t border-indigo-100/80 space-y-1.5 text-[11px]">
+              <div className="flex justify-between">
+                <span className="text-[#6C7089]">Order Reference:</span>
+                <span className="font-extrabold text-indigo-700 font-mono">#ORD-009</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-[#6C7089]">Primary Issue:</span>
+                <span className="font-bold text-gray-800">Return & Product Info</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-[#6C7089]">AI Action Taken:</span>
+                <span className="font-semibold text-gray-700">Checked shipment scan history & return policy (POL-001)</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-[#6C7089]">Handoff Reason:</span>
+                <span className="font-bold text-amber-700">Human assistance requested by customer</span>
               </div>
             </div>
-          )}
-        </div>
+          </div>
 
-        {/* Phase 6 — AI Agent Panel (agents/managers only) */}
-        {(role === 'agent' || role === 'manager' || role === 'admin') && (
-          <div className="flex-1 flex flex-col overflow-hidden">
-            {/* Tab Switcher */}
-            <div className="flex border-b border-[#E5E7F3] bg-[#F8FAFC]">
-              {[
-                { id: 'suggest', icon: Sparkles, label: 'Reply' },
-                { id: 'summary', icon: FileText, label: 'Summary' },
-                { id: 'similar', icon: Link2, label: 'Similar' },
-              ].map(tab => (
-                <button
-                  key={tab.id}
-                  onClick={() => setAiPanelTab(tab.id)}
-                  className={`flex-1 flex items-center justify-center gap-1.5 py-3 text-[10px] font-bold uppercase tracking-wide transition-colors ${
-                    aiPanelTab === tab.id
-                      ? 'text-indigo-600 border-b-2 border-indigo-500 bg-white'
-                      : 'text-[#9598B0] hover:text-[#6C7089]'
-                  }`}
+          {/* 3. CUSTOMER INFORMATION */}
+          <div className="space-y-3 pt-1 border-t border-gray-100">
+            <div className="text-[10px] font-extrabold text-[#9598B0] uppercase tracking-wider">
+              CUSTOMER
+            </div>
+            
+            <div className="space-y-2 text-xs">
+              <div className="flex justify-between items-center">
+                <span className="text-[#6C7089] flex items-center gap-1.5">
+                  <Mail size={13} className="text-gray-400" /> Email
+                </span>
+                <span className="font-bold text-[#1C1B2E] truncate max-w-[190px]">{customerEmail}</span>
+              </div>
+
+              <div className="flex justify-between items-center">
+                <span className="text-[#6C7089] flex items-center gap-1.5">
+                  <Phone size={13} className="text-gray-400" /> Phone
+                </span>
+                <span className="font-bold text-[#1C1B2E] font-mono">{customerPhone}</span>
+              </div>
+
+              <div className="flex justify-between items-center">
+                <span className="text-[#6C7089] flex items-center gap-1.5">
+                  <Calendar size={13} className="text-gray-400" /> Customer since
+                </span>
+                <span className="font-semibold text-gray-700">March 2023</span>
+              </div>
+
+              <div className="flex justify-between items-center">
+                <span className="text-[#6C7089]">Account Status</span>
+                <span className="font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">Returning</span>
+              </div>
+
+              <div className="flex justify-between items-center">
+                <span className="text-[#6C7089]">Sentiment</span>
+                <span className="font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200 capitalize">
+                  {ticket.sentiment || 'Concerned'}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* 4. CURRENT TICKET DETAILS & CONTROLS */}
+          <div className="space-y-3 pt-2 border-t border-gray-100">
+            <div className="flex items-center justify-between">
+              <div className="text-[10px] font-extrabold text-[#9598B0] uppercase tracking-wider">
+                CURRENT TICKET
+              </div>
+              <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full capitalize flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> {ticket.status}
+              </span>
+            </div>
+
+            <div className="space-y-2.5 text-xs">
+              <div className="flex justify-between items-center">
+                <span className="text-[#6C7089]">Ticket ID</span>
+                <span className="font-extrabold font-mono text-[#1C1B2E]">#{ticket.ref}</span>
+              </div>
+
+              <div className="flex justify-between items-center">
+                <span className="text-[#6C7089]">Category</span>
+                <span className="font-bold bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-md capitalize">{ticket.category}</span>
+              </div>
+
+              <div className="flex justify-between items-center">
+                <span className="text-[#6C7089]">Created</span>
+                <span className="font-semibold text-gray-700">{formatSmartTime(ticket.created_at)}</span>
+              </div>
+
+              {/* Status Control Dropdown */}
+              <div>
+                <label className="text-[11px] font-bold text-[#6C7089] block mb-1">Status</label>
+                <select
+                  className="w-full text-xs font-bold border border-[#E5E7F3] rounded-xl p-2.5 bg-gray-50 focus:bg-white outline-none focus:border-indigo-500 transition-colors capitalize"
+                  value={ticket.status}
+                  onChange={e => updateMutation.mutate({ status: e.target.value })}
                 >
-                  <tab.icon size={13} /> {tab.label}
-                </button>
+                  <option value="open">Open</option>
+                  <option value="waiting">Snooze / Waiting</option>
+                  <option value="escalated">Escalated</option>
+                  <option value="resolved">Resolved</option>
+                  <option value="closed">Closed</option>
+                </select>
+              </div>
+
+              {/* Priority Control Dropdown */}
+              <div>
+                <label className="text-[11px] font-bold text-[#6C7089] block mb-1">Priority</label>
+                <select
+                  className="w-full text-xs font-bold border border-[#E5E7F3] rounded-xl p-2.5 bg-gray-50 focus:bg-white outline-none focus:border-indigo-500 transition-colors capitalize"
+                  value={ticket.priority}
+                  onChange={e => updateMutation.mutate({ priority: e.target.value })}
+                >
+                  <option value="low">Low</option>
+                  <option value="medium">Medium</option>
+                  <option value="high">High</option>
+                  <option value="urgent">Urgent</option>
+                </select>
+              </div>
+
+              {/* Assignee */}
+              <div>
+                <label className="text-[11px] font-bold text-[#6C7089] block mb-1">Assignee</label>
+                <select
+                  className="w-full text-xs font-bold border border-[#E5E7F3] rounded-xl p-2.5 bg-gray-50 focus:bg-white outline-none focus:border-indigo-500 transition-colors"
+                  value={ticket.agent_id ? 'you' : 'unassigned'}
+                  onChange={e => updateMutation.mutate({ agent_id: e.target.value === 'you' ? 'current' : null })}
+                >
+                  <option value="you">You ({currentName || 'Emma Wilson'})</option>
+                  <option value="unassigned">Unassigned</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          {/* 5. RELEVANT ORDERS SECTION */}
+          <div className="space-y-3 pt-2 border-t border-gray-100">
+            <div className="flex items-center justify-between">
+              <div className="text-[10px] font-extrabold text-[#9598B0] uppercase tracking-wider flex items-center gap-1.5">
+                <ShoppingBag size={13} className="text-indigo-600" />
+                <span>RELEVANT ORDERS</span>
+              </div>
+              <span className="text-[10px] font-bold text-gray-500">2 Orders</span>
+            </div>
+
+            <div className="space-y-3">
+              {sampleOrders.map(order => (
+                <div key={order.id} className="border border-[#E5E7F3] hover:border-indigo-300 rounded-2xl p-3.5 space-y-2.5 bg-gray-50/50 hover:bg-white transition-all shadow-2xs group">
+                  <div className="flex items-center justify-between">
+                    <span className="font-extrabold text-xs text-[#1C1B2E] font-mono">{order.ref}</span>
+                    <span className="font-black text-xs text-indigo-700">{order.total}</span>
+                  </div>
+
+                  {order.items.map((item, idx) => (
+                    <div key={idx} className="space-y-0.5">
+                      <div className="text-xs font-bold text-gray-800 line-clamp-2 group-hover:text-indigo-600 transition-colors">
+                        {item.name}
+                      </div>
+                      <div className="text-[10px] text-[#6C7089] font-medium">
+                        Qty {item.qty} · Placed {order.date}
+                      </div>
+                    </div>
+                  ))}
+
+                  <div className="flex flex-wrap gap-1.5 pt-1">
+                    <span className="text-[9px] font-bold px-2 py-0.5 rounded-md bg-white border border-gray-200 text-gray-700">
+                      Payment: {order.paymentStatus}
+                    </span>
+                    <span className={`text-[9px] font-bold px-2 py-0.5 rounded-md border ${
+                      order.status === 'Delivered' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-blue-50 text-blue-700 border-blue-200'
+                    }`}>
+                      {order.status}
+                    </span>
+                    <span className="text-[9px] font-semibold px-2 py-0.5 rounded-md bg-gray-100 text-gray-600">
+                      {order.deliveryDate}
+                    </span>
+                  </div>
+
+                  <button
+                    onClick={() => setSelectedOrderModal(order)}
+                    className="w-full py-1.5 bg-white hover:bg-indigo-50 border border-gray-200 hover:border-indigo-300 text-indigo-600 font-bold text-xs rounded-xl transition-colors flex items-center justify-center gap-1.5 shadow-2xs mt-1"
+                  >
+                    <Eye size={13} /> View Order Details
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* 6. SEARCH SUPPORT KNOWLEDGE BASE */}
+          <div className="space-y-3 pt-2 border-t border-gray-100">
+            <div className="text-[10px] font-extrabold text-[#9598B0] uppercase tracking-wider">
+              SEARCH SUPPORT KNOWLEDGE
+            </div>
+
+            <div className="relative">
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#9598B0]" />
+              <input
+                type="text"
+                placeholder="e.g. refund eligibility..."
+                value={knowledgeSearch}
+                onChange={e => setKnowledgeSearch(e.target.value)}
+                className="w-full bg-gray-50 border border-[#E5E7F3] rounded-xl pl-8 pr-3 py-2 text-xs outline-none focus:border-indigo-500 focus:bg-white transition-all"
+              />
+            </div>
+
+            <div className="space-y-2">
+              {kbArticles.map(art => (
+                <div key={art.id} className="p-3 bg-indigo-50/40 border border-indigo-100 rounded-xl space-y-1">
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-indigo-900">
+                    <FileText size={13} className="text-indigo-600 shrink-0" />
+                    <span className="line-clamp-1">{art.title}</span>
+                  </div>
+                  <p className="text-[10px] text-[#6C7089] leading-snug line-clamp-2">{art.snippet}</p>
+                  <div className="flex items-center justify-between pt-1">
+                    <span className="text-[9px] text-gray-400">Updated {art.updated}</span>
+                    <button 
+                      onClick={() => {
+                        setInputText(`Reference: ${art.title} - ${art.snippet}`)
+                        inputRef.current?.focus()
+                      }}
+                      className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 underline"
+                    >
+                      Use article
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* 7. AI COPILOT REPLY & ACTIONS PANEL */}
+          {(role === 'agent' || role === 'manager' || role === 'admin') && (
+            <div className="pt-2 border-t border-gray-100">
+              <CopilotPanel
+                ticketId={id}
+                role={role}
+                onUseSuggestion={handleUseSuggestion}
+              />
+            </div>
+          )}
+
+        </div>
+      </div>
+
+      {/* ORDER DETAILS MODAL */}
+      {selectedOrderModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fadeIn">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 space-y-5 shadow-2xl border border-gray-100">
+            <div className="flex items-center justify-between border-b border-gray-100 pb-4">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-2xl bg-indigo-100 text-indigo-600 flex items-center justify-center font-bold">
+                  <Package size={20} />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-base text-[#1C1B2E]">Order Details ({selectedOrderModal.ref})</h3>
+                  <p className="text-xs text-[#6C7089]">Placed on {selectedOrderModal.date}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setSelectedOrderModal(null)}
+                className="p-1.5 text-gray-400 hover:text-gray-600 rounded-xl hover:bg-gray-100 transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Shipment & Tracking Info */}
+            <div className="bg-gray-50 border border-gray-200/80 rounded-2xl p-4 space-y-2 text-xs">
+              <div className="flex justify-between">
+                <span className="text-[#6C7089] font-medium">Status:</span>
+                <span className="font-extrabold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">{selectedOrderModal.status}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-[#6C7089] font-medium">Courier Partner:</span>
+                <span className="font-bold text-gray-800">{selectedOrderModal.courier}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-[#6C7089] font-medium">Tracking Number:</span>
+                <span className="font-extrabold font-mono text-indigo-600">{selectedOrderModal.tracking}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-[#6C7089] font-medium">Delivery Date:</span>
+                <span className="font-semibold text-gray-800">{selectedOrderModal.deliveryDate}</span>
+              </div>
+            </div>
+
+            {/* Purchased Items List */}
+            <div className="space-y-3">
+              <h4 className="text-xs font-extrabold text-[#9598B0] uppercase tracking-wider">Purchased Item(s)</h4>
+              {selectedOrderModal.items.map((item, idx) => (
+                <div key={idx} className="flex justify-between items-center p-3 border border-gray-200 rounded-2xl bg-white shadow-2xs">
+                  <div>
+                    <div className="text-xs font-extrabold text-[#1C1B2E]">{item.name}</div>
+                    <div className="text-[10px] text-[#6C7089] font-mono mt-0.5">SKU: {item.sku} · Qty: {item.qty}</div>
+                  </div>
+                  <div className="font-black text-xs text-indigo-700">{item.subtotal}</div>
+                </div>
               ))}
             </div>
 
-            {/* Tab Content */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-3">
-
-              {/* ── Suggest Reply Tab ── */}
-              {aiPanelTab === 'suggest' && (
-                <div className="space-y-3">
-                  <div className="flex items-center gap-2">
-                    <div className="p-1.5 bg-indigo-100 rounded-lg"><Sparkles size={14} className="text-indigo-600" /></div>
-                    <div>
-                      <div className="text-xs font-bold text-[#1C1B2E]">AI Suggested Reply</div>
-                      <div className="text-[10px] text-[#9598B0]">Drafts a reply based on the conversation</div>
-                    </div>
-                  </div>
-
-                  <button
-                    onClick={handleSuggestReply}
-                    disabled={loadingSuggest}
-                    className="w-full flex items-center justify-center gap-2 py-2.5 px-3 bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600 text-white text-xs font-bold rounded-xl transition-all shadow-sm disabled:opacity-60"
-                  >
-                    {loadingSuggest ? (
-                      <><RefreshCw size={13} className="animate-spin" /> Generating...</>
-                    ) : (
-                      <><Sparkles size={13} /> Generate AI Reply</>  
-                    )}
-                  </button>
-
-                  {aiSuggestion && (
-                    <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-3 space-y-2">
-                      <p className="text-xs text-[#1C1B2E] leading-relaxed whitespace-pre-wrap">{aiSuggestion}</p>
-                      <div className="flex gap-2 pt-1">
-                        <button
-                          onClick={handleCopySuggestion}
-                          className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-[10px] font-bold rounded-lg transition-all ${
-                            copiedSuggestion
-                              ? 'bg-emerald-500 text-white'
-                              : 'bg-white border border-indigo-200 text-indigo-700 hover:bg-indigo-100'
-                          }`}
-                        >
-                          {copiedSuggestion ? <><CheckCheck size={12} /> Copied to composer!</> : <><Copy size={12} /> Use this reply</>}
-                        </button>
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="bg-amber-50 border border-amber-100 rounded-xl p-3">
-                    <div className="flex items-center gap-1.5 mb-1">
-                      <Lightbulb size={12} className="text-amber-500" />
-                      <span className="text-[10px] font-bold text-amber-700">Pro Tip</span>
-                    </div>
-                    <p className="text-[10px] text-amber-700 leading-relaxed">Click <strong>"Use this reply"</strong> to paste the AI suggestion directly into the message composer. You can edit it before sending.</p>
-                  </div>
-                </div>
-              )}
-
-              {/* ── Summary Tab ── */}
-              {aiPanelTab === 'summary' && (
-                <div className="space-y-3">
-                  <div className="flex items-center gap-2">
-                    <div className="p-1.5 bg-blue-100 rounded-lg"><FileText size={14} className="text-blue-600" /></div>
-                    <div>
-                      <div className="text-xs font-bold text-[#1C1B2E]">AI Ticket Summary</div>
-                      <div className="text-[10px] text-[#9598B0]">Condenses the full conversation</div>
-                    </div>
-                  </div>
-
-                  <button
-                    onClick={handleSummarize}
-                    disabled={loadingSummary}
-                    className="w-full flex items-center justify-center gap-2 py-2.5 px-3 bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 text-white text-xs font-bold rounded-xl transition-all shadow-sm disabled:opacity-60"
-                  >
-                    {loadingSummary ? (
-                      <><RefreshCw size={13} className="animate-spin" /> Summarizing...</>
-                    ) : (
-                      <><FileText size={13} /> Generate Summary</>
-                    )}
-                  </button>
-
-                  {aiSummary && (
-                    <div className="bg-blue-50 border border-blue-200 rounded-xl p-3">
-                      <p className="text-xs text-[#1C1B2E] leading-relaxed">{aiSummary}</p>
-                    </div>
-                  )}
-
-                  {!aiSummary && !loadingSummary && (
-                    <div className="text-center py-6 text-[#9598B0] text-[10px]">
-                      <Bot size={28} className="mx-auto mb-2 opacity-30" />
-                      Click the button above to generate an AI summary of this ticket.
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* ── Similar Tickets Tab ── */}
-              {aiPanelTab === 'similar' && (
-                <div className="space-y-3">
-                  <div className="flex items-center gap-2">
-                    <div className="p-1.5 bg-emerald-100 rounded-lg"><Link2 size={14} className="text-emerald-600" /></div>
-                    <div>
-                      <div className="text-xs font-bold text-[#1C1B2E]">Similar Past Cases</div>
-                      <div className="text-[10px] text-[#9598B0]">Find resolved tickets with similar issues</div>
-                    </div>
-                  </div>
-
-                  <button
-                    onClick={handleSimilar}
-                    disabled={loadingSimilar}
-                    className="w-full flex items-center justify-center gap-2 py-2.5 px-3 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white text-xs font-bold rounded-xl transition-all shadow-sm disabled:opacity-60"
-                  >
-                    {loadingSimilar ? (
-                      <><RefreshCw size={13} className="animate-spin" /> Searching...</>
-                    ) : (
-                      <><Link2 size={13} /> Find Similar Cases</>
-                    )}
-                  </button>
-
-                  {similarTickets.length > 0 && (
-                    <div className="space-y-2">
-                      {similarTickets.map(t => (
-                        <div key={t.id} className="bg-emerald-50 border border-emerald-100 rounded-xl p-3 space-y-1.5">
-                          <div className="flex items-center justify-between">
-                            <span className="text-[10px] font-bold text-emerald-700 font-mono">{t.ref}</span>
-                            <span className="text-[10px] bg-emerald-200 text-emerald-800 px-2 py-0.5 rounded-full font-bold">{Math.round(t.similarity * 100)}% match</span>
-                          </div>
-                          <p className="text-xs font-semibold text-[#1C1B2E] line-clamp-2">{t.subject}</p>
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-[9px] bg-gray-100 text-gray-600 px-2 py-0.5 rounded-md font-semibold uppercase">{t.category}</span>
-                            <span className="text-[9px] bg-green-100 text-green-700 px-2 py-0.5 rounded-md font-semibold capitalize">✓ {t.status}</span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  {similarTickets.length === 0 && !loadingSimilar && (
-                    <div className="text-center py-6 text-[#9598B0] text-[10px]">
-                      <Link2 size={28} className="mx-auto mb-2 opacity-30" />
-                      Click above to search for similar resolved cases that may contain useful solutions.
-                    </div>
-                  )}
-                </div>
-              )}
-
+            {/* Total Footer */}
+            <div className="flex justify-between items-center pt-3 border-t border-gray-100">
+              <span className="text-xs font-bold text-gray-600">Total Order Amount</span>
+              <span className="text-base font-black text-[#1C1B2E]">{selectedOrderModal.total}</span>
             </div>
+
+            <button
+              onClick={() => setSelectedOrderModal(null)}
+              className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-xs rounded-2xl transition-colors shadow-md"
+            >
+              Close Order View
+            </button>
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   )
 }

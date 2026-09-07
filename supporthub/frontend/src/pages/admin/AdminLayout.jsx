@@ -1,5 +1,6 @@
 import { Routes, Route, Navigate, Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../../store/authStore'
+import { queryClient } from '../../api/queryClient'
 import {
   LayoutDashboard,
   Users,
@@ -41,6 +42,9 @@ export default function AdminLayout() {
   }
 
   const handleRoleChange = (newRole) => {
+    try {
+      queryClient.clear()
+    } catch (e) {}
     setRole(newRole)
     if (newRole === 'manager') navigate('/manager')
     else if (newRole === 'agent') navigate('/agent')

@@ -9,9 +9,9 @@ export default function AgentTicketQueue() {
   const [searchTerm, setSearchTerm] = useState('')
 
   const { data: tickets = [], isLoading } = useQuery({
-    queryKey: ['tickets', 'queue'],
+    queryKey: ['tickets', 'agent-queue-human-only'],
     queryFn: async () => {
-      const res = await ticketsApi.list()
+      const res = await ticketsApi.list({ human_only: true })
       return res.data
     }
   })
@@ -30,10 +30,10 @@ export default function AgentTicketQueue() {
   const resolvedTickets = filtered.filter(t => t.status === 'resolved' || t.status === 'closed')
 
   const columns = [
-    { id: 'new', label: 'New', color: 'bg-blue-500', count: newTickets.length, tickets: newTickets },
-    { id: 'open', label: 'Open', color: 'bg-purple-500', count: openTickets.length, tickets: openTickets },
-    { id: 'waiting', label: 'Waiting', color: 'bg-amber-500', count: waitingTickets.length, tickets: waitingTickets },
-    { id: 'escalated', label: 'Escalated', color: 'bg-rose-500', count: escalatedTickets.length, tickets: escalatedTickets },
+    { id: 'new', label: 'New Requests', color: 'bg-blue-500', count: newTickets.length, tickets: newTickets },
+    { id: 'open', label: 'In Progress', color: 'bg-purple-500', count: openTickets.length, tickets: openTickets },
+    { id: 'waiting', label: 'Waiting Customer', color: 'bg-amber-500', count: waitingTickets.length, tickets: waitingTickets },
+    { id: 'escalated', label: 'Escalated / Urgent', color: 'bg-rose-500', count: escalatedTickets.length, tickets: escalatedTickets },
     { id: 'resolved', label: 'Resolved', color: 'bg-emerald-500', count: resolvedTickets.length, tickets: resolvedTickets },
   ]
 
@@ -55,7 +55,12 @@ export default function AgentTicketQueue() {
     <div className="flex-1 flex flex-col h-screen bg-[#F6F7FC] overflow-hidden text-[#1C1B2E]">
       {/* Top Header Bar */}
       <div className="h-16 bg-white border-b border-[#E5E7F3] px-8 flex items-center justify-between shrink-0">
-        <h1 className="text-xl font-bold font-['Plus_Jakarta_Sans']">Ticket Queue</h1>
+        <div className="flex items-center gap-3">
+          <h1 className="text-xl font-bold font-['Plus_Jakarta_Sans']">Ticket Queue</h1>
+          <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
+            👤 Human Agent Queue
+          </span>
+        </div>
         <div className="flex items-center gap-4">
           <div className="relative w-80">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-[#9598B0]" size={16} />
@@ -80,8 +85,8 @@ export default function AgentTicketQueue() {
       {/* Main Kanban Content Area */}
       <div className="flex-1 overflow-x-auto p-8">
         <div className="mb-6">
-          <h2 className="text-2xl font-bold font-['Plus_Jakarta_Sans']">Ticket Queue</h2>
-          <p className="text-[#6C7089] text-xs mt-0.5">Drag-and-drop kanban view of all tickets by status.</p>
+          <h2 className="text-2xl font-bold font-['Plus_Jakarta_Sans']">Human Support Kanban</h2>
+          <p className="text-[#6C7089] text-xs mt-0.5">Showing tickets requiring human assistance. Autonomous AI conversations are hidden.</p>
         </div>
 
         {isLoading ? (

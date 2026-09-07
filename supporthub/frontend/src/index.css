@@ -42,3 +42,51 @@ h1, h2, h3, h4 {
 
 /* Selection */
 ::selection { background: #DDD6FE; }
+
+/* ── Custom Animations ─────────────────────────────────────── */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideInLeft {
+  from { opacity: 0; transform: translateX(-100%); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.95); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+@keyframes pulseDot {
+  0%, 100% { transform: scale(1);   opacity: 1; }
+  50%      { transform: scale(1.4); opacity: 0.7; }
+}
+
+.animate-fadeIn   { animation: fadeIn 200ms ease both; }
+.animate-slideUp  { animation: slideUp 250ms ease both; }
+.animate-slideDown{ animation: slideDown 200ms ease both; }
+.animate-slideInLeft { animation: slideInLeft 300ms ease both; }
+.animate-scaleIn  { animation: scaleIn 200ms ease both; }
+.animate-pulseDot { animation: pulseDot 1.2s ease-in-out infinite; }
+
+/* Stagger helpers for message lists */
+.msg-enter { animation: slideUp 220ms ease both; }
+
+/* Mobile drawer overlay */
+.drawer-overlay {
+  position: fixed; inset: 0; z-index: 40;
+  background: rgba(0,0,0,0.4);
+  backdrop-filter: blur(2px);
+}

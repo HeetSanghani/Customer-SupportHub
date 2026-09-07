@@ -163,9 +163,9 @@ export default function FacebookInbox({ basePath = '/agent' }) {
 
   // 1. Query Facebook Tickets
   const { data: rawTickets = [], isLoading: loadingTickets } = useQuery({
-    queryKey: ['facebook-tickets'],
+    queryKey: ['facebook-tickets', 'human-only'],
     queryFn: async () => {
-      const res = await ticketsApi.list({ channel: 'facebook' })
+      const res = await ticketsApi.list({ channel: 'facebook', human_only: true })
       return res.data
     },
     refetchInterval: 5000,

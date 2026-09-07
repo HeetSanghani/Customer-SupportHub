@@ -182,9 +182,9 @@ export default function WhatsAppInbox({ basePath = '/agent' }) {
 
   // 1. Query WhatsApp Tickets
   const { data: rawTickets = [], isLoading: loadingTickets } = useQuery({
-    queryKey: ['whatsapp-tickets'],
+    queryKey: ['whatsapp-tickets', 'human-only'],
     queryFn: async () => {
-      const res = await ticketsApi.list({ channel: 'whatsapp' })
+      const res = await ticketsApi.list({ channel: 'whatsapp', human_only: true })
       return res.data
     },
     refetchInterval: 5000,

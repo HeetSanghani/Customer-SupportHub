@@ -144,9 +144,9 @@ export default function InstagramInbox({ basePath = '/agent' }) {
 
   // 1. Query Instagram Tickets
   const { data: rawTickets = [], isLoading: loadingTickets } = useQuery({
-    queryKey: ['instagram-tickets'],
+    queryKey: ['instagram-tickets', 'human-only'],
     queryFn: async () => {
-      const res = await ticketsApi.list({ channel: 'instagram' })
+      const res = await ticketsApi.list({ channel: 'instagram', human_only: true })
       return res.data
     },
     refetchInterval: 5000,

@@ -241,12 +241,12 @@ export default function EmailInbox({ basePath = '/agent' }) {
 
   // 1. Query Email Tickets
   const { data: rawTickets = [], isLoading: loadingTickets } = useQuery({
-    queryKey: ['email-tickets'],
+    queryKey: ['email-tickets', 'human-only'],
     queryFn: async () => {
-      const res = await ticketsApi.list({ channel: 'email' })
+      const res = await ticketsApi.list({ channel: 'email', human_only: true })
       if (res.data && res.data.length > 0) return res.data
-      // Fallback: if no channel=email specific tickets, return all tickets
-      const allRes = await ticketsApi.list()
+      // Fallback: if no channel=email specific tickets, return human_only tickets
+      const allRes = await ticketsApi.list({ human_only: true })
       const emailFiltered = allRes.data.filter(t => t.channel === 'email')
       return emailFiltered.length > 0 ? emailFiltered : allRes.data
     },

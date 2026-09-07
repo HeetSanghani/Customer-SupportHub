@@ -1,106 +1,256 @@
-import { useQuery } from '@tanstack/react-query'
-import { useNavigate } from 'react-router-dom'
-import { ticketsApi } from '../../api/tickets'
-import { Star, MessageSquare, ArrowRight, CheckCircle2 } from 'lucide-react'
-import { formatDate } from '../../utils/dateUtils'
+import { useState } from 'react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { ordersApi } from '../../api/orders'
+import { Star, MessageSquare, ArrowLeft, CheckCircle2, Sparkles, ShoppingBag } from 'lucide-react'
+import { Link } from 'react-router-dom'
 
 export default function CustomerReviews() {
-  const navigate = useNavigate()
+  const queryClient = useQueryClient()
+  const [rating, setRating] = useState(5)
+  const [hoverRating, setHoverRating] = useState(0)
+  const [comment, setComment] = useState('')
+  const [orderId, setOrderId] = useState('')
+  const [activeFilter, setActiveFilter] = useState('ALL')
+  const [submitSuccess, setSubmitSuccess] = useState(false)
+  const [localReviews, setLocalReviews] = useState([])
 
-  const { data: reviews = [], isLoading } = useQuery({
-    queryKey: ['my-csat-reviews'],
+  // Fetch logged in customer's purchased orders
+  const { data: myOrders = [], isLoading: isLoadingOrders } = useQuery({
+    queryKey: ['orders', 'me'],
     queryFn: async () => {
-      const res = await ticketsApi.getMyCsat()
-      return res.data
-    }
+      const res = await ordersApi.getMyOrders()
+      return res.data || []
+    },
+  })
+
+  // Fetch reviews from server
+  const { data: serverReviews = [], isLoading: isLoadingReviews } = useQuery({
+    queryKey: ['reviews', 'me'],
+    queryFn: async () => {
+      const res = await ordersApi.getMyReviews()
+      return res.data || []
+    },
+  })
+
+  // Combine server and locally submitted reviews
+  const allReviews = [...localReviews, ...serverReviews]
+
+  const submitMutation = useMutation({
+    mutationFn: async (payload) => {
+      const res = await ordersApi.createReview(payload)
+      return res.data || payload
+    },
+    onSuccess: (newReview, variables) => {
+      const createdItem = {
+        id: 'REV-' + Date.now(),
+        review_id: 'REV-' + Date.now(),
+        order_id: variables.order_id || orderId,
+        rating: variables.rating,
+        comment: variables.comment,
+        created_at: new Date().toISOString(),
+      }
+      setLocalReviews(prev => [createdItem, ...prev])
+      queryClient.invalidateQueries({ queryKey: ['reviews', 'me'] })
+      setComment('')
+      setOrderId('')
+      setRating(5)
+      setSubmitSuccess(true)
+      setTimeout(() => setSubmitSuccess(false), 4000)
+    },
+  })
+
+  const handleSubmit = (e) => {
+    e.preventDefault()
+    if (!comment.trim()) return
+    submitMutation.mutate({
+      order_id: orderId || (myOrders[0]?.order_id || 'ORD-001'),
+      rating,
+      comment,
+    })
+  }
+
+  const filteredReviews = allReviews.filter(r => {
+    if (activeFilter === '5STARS') return r.rating === 5
+    if (activeFilter === 'CRITICAL') return r.rating <= 3
+    return true
   })
 
   return (
-    <div className="flex-1 overflow-auto bg-[#F9FAFB] p-8 text-[#1C1B2E]">
-      <div className="mb-6 flex justify-between items-center">
+    <div className="flex-1 h-full overflow-y-auto bg-[#F8FAFC] p-4 md:p-8 space-y-6 text-[#0F172A]">
+      {/* Header */}
+      <div className="bg-white p-6 rounded-3xl border border-[#E2E8F0] shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold font-['Plus_Jakarta_Sans']">My Reviews & Feedback</h1>
-          <p className="text-[#6C7089] text-sm">View all ratings and feedback submitted for your support tickets.</p>
+          <Link to="/customer" className="inline-flex items-center gap-1.5 text-xs font-extrabold text-indigo-600 hover:text-indigo-700 mb-2 transition-colors">
+            <ArrowLeft size={14} /> Back to AI Chat
+          </Link>
+          <h1 className="text-2xl font-black text-[#0F172A] tracking-tight flex items-center gap-2">
+            My Reviews & Feedback
+            <span className="text-xs font-bold bg-amber-50 text-amber-700 px-2.5 py-0.5 rounded-full border border-amber-200">
+              {allReviews.length} Published
+            </span>
+          </h1>
+          <p className="text-xs md:text-sm text-[#64748B] mt-0.5">Share your experience, rate purchased products, and view feedback history.</p>
         </div>
-        <span className="bg-indigo-50 text-indigo-600 font-bold text-xs px-4 py-2 rounded-full border border-indigo-100 flex items-center gap-1.5">
-          <Star size={14} className="fill-indigo-600 text-indigo-600" />
-          {reviews.length} {reviews.length === 1 ? 'Review Submitted' : 'Reviews Submitted'}
-        </span>
-      </div>
 
-      {isLoading ? (
-        <div className="bg-white p-12 rounded-2xl border border-[#E5E7F3] text-center text-xs text-[#9598B0]">
-          Loading your reviews...
-        </div>
-      ) : reviews.length === 0 ? (
-        <div className="bg-white p-12 rounded-2xl border border-dashed border-[#E5E7F3] text-center space-y-3">
-          <div className="w-12 h-12 rounded-full bg-amber-50 text-amber-500 mx-auto flex items-center justify-center">
-            <Star size={24} />
-          </div>
-          <h3 className="font-bold text-base text-[#1C1B2E]">No reviews submitted yet</h3>
-          <p className="text-xs text-[#6C7089] max-w-sm mx-auto">
-            Once a support ticket is completed, you can rate your experience and provide feedback. Your reviews will appear here!
-          </p>
-          <button
-            onClick={() => navigate('/customer')}
-            className="mt-2 inline-flex items-center gap-2 bg-[#6366F1] text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-[#4F46E5] transition-colors"
-          >
-            <MessageSquare size={14} /> Go to Support Chat
-          </button>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {reviews.map(rev => (
-            <div
-              key={rev.id}
-              onClick={() => navigate(`/customer/chat/${rev.ticket_id}`)}
-              className="bg-white p-6 rounded-2xl border border-[#E5E7F3] shadow-sm hover:shadow-md hover:border-indigo-200 transition-all cursor-pointer group flex flex-col justify-between space-y-4"
+        {/* Filter Pills */}
+        <div className="flex items-center gap-2">
+          {[
+            { id: 'ALL', label: 'All Reviews' },
+            { id: '5STARS', label: '5-Star Ratings' },
+            { id: 'CRITICAL', label: 'Critical' }
+          ].map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveFilter(tab.id)}
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all ${
+                activeFilter === tab.id
+                  ? 'bg-indigo-600 text-white shadow-md'
+                  : 'bg-[#F8FAFC] text-[#64748B] hover:bg-gray-100 border border-[#E2E8F0]'
+              }`}
             >
-              <div>
-                {/* Header info */}
-                <div className="flex justify-between items-start gap-4 mb-3">
-                  <div>
-                    <h3 className="font-bold text-base text-[#1C1B2E] group-hover:text-indigo-600 transition-colors flex items-center gap-2">
-                      {rev.ticket_subject}
-                      <ArrowRight size={14} className="opacity-0 group-hover:opacity-100 text-indigo-600 transition-opacity" />
-                    </h3>
-                    <span className="text-[11px] font-mono font-bold text-[#9598B0]">Ticket Ref: {rev.ticket_ref}</span>
-                  </div>
-
-                  {/* Rating Stars */}
-                  <div className="flex items-center gap-1 bg-amber-50 border border-amber-200 px-3 py-1 rounded-xl shrink-0">
-                    {[1, 2, 3, 4, 5].map(star => (
-                      <Star
-                        key={star}
-                        size={14}
-                        className={star <= rev.rating ? "fill-amber-400 text-amber-400" : "text-gray-300"}
-                      />
-                    ))}
-                    <span className="text-xs font-bold text-amber-800 ml-1">{rev.rating}/5</span>
-                  </div>
-                </div>
-
-                {/* Comment box */}
-                {rev.comment ? (
-                  <p className="text-xs text-[#4B5563] bg-[#F9FAFB] p-3.5 rounded-xl border border-[#E5E7F3] italic">
-                    "{rev.comment}"
-                  </p>
-                ) : (
-                  <p className="text-xs text-[#9598B0] italic">No text feedback provided.</p>
-                )}
-              </div>
-
-              {/* Footer */}
-              <div className="flex justify-between items-center text-[11px] text-[#9598B0] border-t border-[#E5E7F3] pt-3 font-medium">
-                <span className="flex items-center gap-1 text-emerald-600 font-semibold">
-                  <CheckCircle2 size={13} /> Completed & Reviewed
-                </span>
-                <span>{formatDate(rev.created_at)}</span>
-              </div>
-            </div>
+              {tab.label}
+            </button>
           ))}
         </div>
-      )}
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Submit Review Card */}
+        <div className="lg:col-span-1 bg-white border border-[#E2E8F0] rounded-3xl p-6 shadow-2xs space-y-4 self-start">
+          <h2 className="text-base font-extrabold text-[#0F172A] flex items-center gap-2 border-b border-[#F1F5F9] pb-3">
+            <Sparkles size={18} className="text-amber-500" /> Write a Product Review
+          </h2>
+
+          {submitSuccess && (
+            <div className="p-3.5 bg-emerald-50 text-emerald-800 border border-emerald-200 rounded-2xl text-xs font-bold flex items-center gap-2">
+              <CheckCircle2 size={16} /> Thank you! Your review has been published.
+            </div>
+          )}
+
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {/* Purchased Order Dropdown Option */}
+            <div>
+              <label className="block text-xs font-bold text-[#0F172A] mb-1.5 flex items-center gap-1.5">
+                <ShoppingBag size={14} className="text-indigo-600" />
+                Select Purchased Order <span className="text-rose-500">*</span>
+              </label>
+
+              <select
+                value={orderId}
+                onChange={e => setOrderId(e.target.value)}
+                className="w-full px-3.5 py-3 bg-[#F8FAFC] border border-[#E2E8F0] rounded-2xl text-xs font-mono font-bold focus:outline-none focus:border-indigo-500 text-[#0F172A]"
+                required
+              >
+                <option value="">-- Choose a Purchased Order --</option>
+                {isLoadingOrders ? (
+                  <option disabled>Loading your orders...</option>
+                ) : myOrders.length === 0 ? (
+                  <option disabled>No purchased orders found</option>
+                ) : (
+                  myOrders.map(order => (
+                    <option key={order.order_id || order.id} value={order.order_id}>
+                      {order.order_id} ({order.status}) - ₹{Number(order.total_amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                    </option>
+                  ))
+                )}
+              </select>
+              <p className="text-[11px] text-[#64748B] mt-1">
+                Reviews can only be submitted for orders associated with your account.
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-[#0F172A] mb-1.5">Rating Score</label>
+              <div className="flex items-center gap-1 bg-[#F8FAFC] p-3 rounded-2xl border border-[#E2E8F0]">
+                {[1, 2, 3, 4, 5].map((star) => (
+                  <button
+                    key={star}
+                    type="button"
+                    onClick={() => setRating(star)}
+                    onMouseEnter={() => setHoverRating(star)}
+                    onMouseLeave={() => setHoverRating(0)}
+                    className="p-1 transition-transform hover:scale-110"
+                  >
+                    <Star
+                      size={22}
+                      className={(hoverRating || rating) >= star ? 'fill-amber-400 text-amber-400' : 'text-gray-300'}
+                    />
+                  </button>
+                ))}
+                <span className="text-xs font-black text-[#0F172A] ml-2 font-mono">
+                  {rating}.0 / 5.0
+                </span>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-[#0F172A] mb-1.5">Your Feedback</label>
+              <textarea
+                rows={4}
+                value={comment}
+                onChange={e => setComment(e.target.value)}
+                placeholder="Describe your product experience, quality, fitting, or delivery service..."
+                className="w-full px-3.5 py-2.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded-2xl text-xs focus:outline-none focus:border-indigo-500 font-medium resize-none"
+                required
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={submitMutation.isPending}
+              className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl text-xs font-extrabold shadow-md transition-all active:scale-95 disabled:opacity-50"
+            >
+              {submitMutation.isPending ? 'Submitting Review...' : 'Publish Feedback'}
+            </button>
+          </form>
+        </div>
+
+        {/* Existing Reviews List */}
+        <div className="lg:col-span-2 space-y-4">
+          {isLoadingReviews ? (
+            <div className="bg-white border border-[#E2E8F0] rounded-3xl p-12 text-center text-[#94A3B8] font-medium">
+              Loading customer reviews...
+            </div>
+          ) : filteredReviews.length === 0 ? (
+            <div className="bg-white border border-[#E2E8F0] rounded-3xl p-12 text-center shadow-2xs space-y-2">
+              <MessageSquare size={36} className="mx-auto text-gray-300 mb-2" />
+              <h3 className="font-bold text-[#0F172A] text-base">No Feedback Found</h3>
+              <p className="text-xs text-[#64748B] max-w-sm mx-auto">
+                No reviews match your selected filter criteria. Select an order from the dropdown on the left and publish your feedback.
+              </p>
+            </div>
+          ) : (
+            filteredReviews.map(r => (
+              <div key={r.review_id || r.id} className="bg-white border border-[#E2E8F0] rounded-3xl p-6 shadow-2xs hover:border-indigo-200 transition-all space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1">
+                    {[1, 2, 3, 4, 5].map((star) => (
+                      <Star
+                        key={star}
+                        size={16}
+                        className={r.rating >= star ? 'fill-amber-400 text-amber-400' : 'text-gray-200'}
+                      />
+                    ))}
+                    <span className="text-xs font-black text-[#0F172A] ml-2">{r.rating}.0</span>
+                  </div>
+                  <span className="text-[10px] font-extrabold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200 flex items-center gap-1">
+                    <CheckCircle2 size={12} /> Verified Purchase
+                  </span>
+                </div>
+
+                <p className="text-xs md:text-sm text-[#334155] leading-relaxed font-medium bg-[#F8FAFC] p-4 rounded-2xl border border-[#F1F5F9]">
+                  "{r.comment}"
+                </p>
+
+                <div className="flex items-center justify-between text-[11px] text-[#94A3B8] pt-1">
+                  <span>Order Reference: <strong className="font-mono text-[#0F172A]">{r.order_id || 'N/A'}</strong></span>
+                  <span>{r.created_at ? new Date(r.created_at).toLocaleDateString('en-IN', { dateStyle: 'medium' }) : 'Recently'}</span>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
     </div>
   )
 }

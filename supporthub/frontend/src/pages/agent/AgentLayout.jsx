@@ -1,9 +1,10 @@
 import { useState } from 'react'
 import { Routes, Route, Navigate, Link, useNavigate, useLocation } from 'react-router-dom'
 import { useAuthStore } from '../../store/authStore'
-import { useQuery } from '@tanstack/react-query'
-import { ticketsApi } from '../../api/tickets'
-import { Inbox, CheckCircle, Clock, LogOut, Search, Filter, LayoutDashboard, ListFilter, Zap, BookOpen, MessageSquare, Mail, Smartphone, Instagram, Facebook } from 'lucide-react'
+import { 
+  Inbox, CheckCircle, Clock, LogOut, LayoutDashboard, 
+  ListFilter, Zap, BookOpen, MessageSquare, User, Shield, FileText
+} from 'lucide-react'
 
 import UnifiedInbox from '../../components/UnifiedInbox'
 import WhatsAppInbox from '../../components/WhatsAppInbox'
@@ -14,14 +15,15 @@ import AgentOverview from './AgentOverview'
 import AgentTicketQueue from './AgentTicketQueue'
 import AgentQuickReplies from './AgentQuickReplies'
 import AgentHelpCenter from './AgentHelpCenter'
+import AgentProfile from './AgentProfile'
 import TicketDetail from '../../components/TicketDetail'
+import AgentHeader from '../../components/AgentHeader'
 
 export default function AgentLayout() {
   const { role, logout, name, isAuthenticated } = useAuthStore()
   const location = useLocation()
   const navigate = useNavigate()
   const [agentStatus, setAgentStatus] = useState('online') // 'online' | 'away' | 'offline'
-  const [showStatusDropdown, setShowStatusDropdown] = useState(false)
 
   if (!isAuthenticated || (role !== 'agent' && role !== 'admin' && role !== 'manager')) {
     return <Navigate to="/login" replace />
@@ -32,155 +34,170 @@ export default function AgentLayout() {
     navigate('/login', { replace: true })
   }
 
-  const getStatusBadge = () => {
-    switch (agentStatus) {
-      case 'online':
-        return <span className="text-[10px] text-emerald-400 font-bold">● Online</span>
-      case 'away':
-        return <span className="text-[10px] text-amber-400 font-bold">● Away</span>
-      case 'offline':
-        return <span className="text-[10px] text-gray-400 font-bold">● Offline</span>
-      default:
-        return <span className="text-[10px] text-emerald-400 font-bold">● Online</span>
-    }
-  }
+  const userInitials = name
+    ? name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase()
+    : 'EW'
 
   return (
     <div className="flex h-screen bg-[#F6F7FC] overflow-hidden">
-      {/* Sidebar */}
-      <aside className="w-64 bg-[#1C1B2E] flex flex-col text-white z-20">
-        <div className="p-6 flex items-center gap-2">
-          <div className="w-8 h-8 rounded-lg flex items-center justify-center text-white font-bold text-xs" style={{ background: 'linear-gradient(135deg,#6366F1 0%,#A855F7 100%)' }}>S</div>
-          <div>
-            <div className="font-bold tracking-tight leading-none" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>SupportHub</div>
-            <div className="text-[9px] text-[#9598B0] uppercase tracking-widest mt-1">AI Omnichannel Platform</div>
-          </div>
-        </div>
-        
-        {/* Viewing As Dropdown Badge */}
-        <div className="relative px-4 py-2 mx-4 bg-white/5 rounded-xl border border-white/10 mb-2">
-          <div className="text-[9px] font-bold text-[#9598B0] uppercase tracking-wider mb-1">Demo — Viewing As</div>
-          <button 
-            onClick={() => setShowStatusDropdown(!showStatusDropdown)}
-            className="w-full text-xs font-bold text-white flex items-center justify-between hover:opacity-80 transition-opacity outline-none"
-          >
-            <span>Support Agent</span>
-            {getStatusBadge()}
-          </button>
-
-          {/* Interactive Agent Status Dropdown */}
-          {showStatusDropdown && (
-            <div className="absolute left-0 right-0 top-full mt-1 bg-[#28273F] border border-white/10 rounded-xl shadow-xl z-50 p-1.5 space-y-1 text-xs">
-              <button
-                onClick={() => { setAgentStatus('online'); setShowStatusDropdown(false); }}
-                className={`w-full flex items-center justify-between px-3 py-1.5 rounded-lg text-left font-medium transition-colors ${agentStatus === 'online' ? 'bg-indigo-600/40 text-white font-bold' : 'text-gray-300 hover:bg-white/5'}`}
-              >
-                <span>Online</span>
-                <span className="text-[10px] text-emerald-400">● Available</span>
-              </button>
-              <button
-                onClick={() => { setAgentStatus('away'); setShowStatusDropdown(false); }}
-                className={`w-full flex items-center justify-between px-3 py-1.5 rounded-lg text-left font-medium transition-colors ${agentStatus === 'away' ? 'bg-indigo-600/40 text-white font-bold' : 'text-gray-300 hover:bg-white/5'}`}
-              >
-                <span>Away</span>
-                <span className="text-[10px] text-amber-400">● In a meeting</span>
-              </button>
-              <button
-                onClick={() => { setAgentStatus('offline'); setShowStatusDropdown(false); }}
-                className={`w-full flex items-center justify-between px-3 py-1.5 rounded-lg text-left font-medium transition-colors ${agentStatus === 'offline' ? 'bg-indigo-600/40 text-white font-bold' : 'text-gray-300 hover:bg-white/5'}`}
-              >
-                <span>Offline</span>
-                <span className="text-[10px] text-gray-400">● Offline</span>
-              </button>
+      {/* Modern Dark Sidebar */}
+      <aside className="w-64 bg-[#1C1B2E] flex flex-col text-white z-20 shrink-0 shadow-lg">
+        {/* Brand Logo & App Header */}
+        <div className="p-5 flex items-center justify-between border-b border-white/10">
+          <Link to="/agent" className="flex items-center gap-2.5 group">
+            <div 
+              className="w-9 h-9 rounded-xl flex items-center justify-center text-white font-extrabold text-sm shadow-md transition-transform group-hover:scale-105" 
+              style={{ background: 'linear-gradient(135deg,#6366F1 0%,#A855F7 100%)' }}
+            >
+              S
             </div>
-          )}
+            <div>
+              <div className="font-bold tracking-tight leading-none text-base" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
+                SupportHub
+              </div>
+              <div className="text-[9px] text-[#9598B0] uppercase tracking-widest mt-1">AI Omnichannel Platform</div>
+            </div>
+          </Link>
         </div>
 
-        <nav className="flex-1 px-4 space-y-1.5 mt-2 overflow-y-auto">
-          <div className="text-[9px] font-bold text-[#9598B0] uppercase tracking-wider px-3 mb-1">Workspace</div>
+        {/* Sidebar Nav Links */}
+        <nav className="flex-1 px-3.5 space-y-1 mt-4 overflow-y-auto">
+          {/* MAIN WORKSPACE */}
+          <div className="text-[9px] font-extrabold text-[#9598B0] uppercase tracking-wider px-3 mb-1.5">
+            Main Workspace
+          </div>
           
-          <Link to="/agent" className={`flex items-center justify-between px-3 py-2 rounded-lg text-xs font-semibold transition-colors ${location.pathname === '/agent' ? 'bg-[#6366F1] text-white shadow-sm' : 'text-[#9598B0] hover:bg-white/5'}`}>
-            <div className="flex items-center gap-2.5"><LayoutDashboard size={16} /> Dashboard</div>
+          <Link 
+            to="/agent" 
+            className={`flex items-center justify-between px-3 py-2 rounded-xl text-xs font-bold transition-all ${
+              location.pathname === '/agent' ? 'bg-[#6366F1] text-white shadow-md shadow-indigo-500/20' : 'text-[#9598B0] hover:bg-white/5 hover:text-white'
+            }`}
+          >
+            <div className="flex items-center gap-2.5">
+              <LayoutDashboard size={16} /> Dashboard
+            </div>
           </Link>
 
-          <Link to="/agent/whatsapp" className={`flex items-center justify-between px-3 py-2 rounded-lg text-xs font-semibold transition-colors ${location.pathname === '/agent/whatsapp' ? 'bg-emerald-600 text-white shadow-sm' : 'text-[#9598B0] hover:bg-white/5'}`}>
-            <div className="flex items-center gap-2.5"><Smartphone size={16} className="text-emerald-400" /> WhatsApp Inbox</div>
+          <Link 
+            to="/agent/inbox" 
+            className={`flex items-center justify-between px-3 py-2 rounded-xl text-xs font-bold transition-all ${
+              location.pathname === '/agent/inbox' ? 'bg-[#6366F1] text-white shadow-md shadow-indigo-500/20' : 'text-[#9598B0] hover:bg-white/5 hover:text-white'
+            }`}
+          >
+            <div className="flex items-center gap-2.5">
+              <MessageSquare size={16} /> All Tickets
+            </div>
           </Link>
 
-          <Link to="/agent/instagram" className={`flex items-center justify-between px-3 py-2 rounded-lg text-xs font-semibold transition-colors ${location.pathname === '/agent/instagram' ? 'bg-gradient-to-r from-rose-500 to-purple-600 text-white shadow-sm' : 'text-[#9598B0] hover:bg-white/5'}`}>
-            <div className="flex items-center gap-2.5"><Instagram size={16} className="text-pink-400" /> Instagram Inbox</div>
+          <Link 
+            to="/agent/queue" 
+            className={`flex items-center justify-between px-3 py-2 rounded-xl text-xs font-bold transition-all ${
+              location.pathname === '/agent/queue' ? 'bg-[#6366F1] text-white shadow-md shadow-indigo-500/20' : 'text-[#9598B0] hover:bg-white/5 hover:text-white'
+            }`}
+          >
+            <div className="flex items-center gap-2.5">
+              <ListFilter size={16} /> Ticket Queue
+            </div>
           </Link>
 
-          <Link to="/agent/facebook" className={`flex items-center justify-between px-3 py-2 rounded-lg text-xs font-semibold transition-colors ${location.pathname === '/agent/facebook' ? 'bg-[#1877F2] text-white shadow-sm' : 'text-[#9598B0] hover:bg-white/5'}`}>
-            <div className="flex items-center gap-2.5"><Facebook size={16} className="text-blue-400" /> Facebook Inbox</div>
+          {/* KNOWLEDGE & POLICIES SECTION */}
+          <div className="text-[9px] font-extrabold text-[#9598B0] uppercase tracking-wider px-3 pt-3 mb-1.5">
+            Knowledge & Policies
+          </div>
+
+          <Link 
+            to="/agent/help-center" 
+            className={`flex items-center justify-between px-3 py-2 rounded-xl text-xs font-bold transition-all ${
+              location.pathname === '/agent/help-center' ? 'bg-[#6366F1] text-white shadow-md shadow-indigo-500/20' : 'text-[#9598B0] hover:bg-white/5 hover:text-white'
+            }`}
+          >
+            <div className="flex items-center gap-2.5">
+              <BookOpen size={16} /> Knowledge Base & Policies
+            </div>
           </Link>
 
-          <Link to="/agent/email" className={`flex items-center justify-between px-3 py-2 rounded-lg text-xs font-semibold transition-colors ${location.pathname === '/agent/email' ? 'bg-indigo-600 text-white shadow-sm' : 'text-[#9598B0] hover:bg-white/5'}`}>
-            <div className="flex items-center gap-2.5"><Mail size={16} className="text-indigo-400" /> Email Inbox</div>
-          </Link>
-          
-          <Link to="/agent/inbox" className={`flex items-center justify-between px-3 py-2 rounded-lg text-xs font-semibold transition-colors ${location.pathname === '/agent/inbox' ? 'bg-[#6366F1] text-white shadow-sm' : 'text-[#9598B0] hover:bg-white/5'}`}>
-            <div className="flex items-center gap-2.5"><MessageSquare size={16} /> All Tickets</div>
-          </Link>
-
-          <Link to="/agent/queue" className={`flex items-center justify-between px-3 py-2 rounded-lg text-xs font-semibold transition-colors ${location.pathname === '/agent/queue' ? 'bg-[#6366F1] text-white shadow-sm' : 'text-[#9598B0] hover:bg-white/5'}`}>
-            <div className="flex items-center gap-2.5"><ListFilter size={16} /> Ticket Queue</div>
-          </Link>
-
-          <Link to="/agent/quick-replies" className={`flex items-center justify-between px-3 py-2 rounded-lg text-xs font-semibold transition-colors ${location.pathname === '/agent/quick-replies' ? 'bg-[#6366F1] text-white shadow-sm' : 'text-[#9598B0] hover:bg-white/5'}`}>
-            <div className="flex items-center gap-2.5"><Zap size={16} /> Quick Replies</div>
+          <Link 
+            to="/agent/quick-replies" 
+            className={`flex items-center justify-between px-3 py-2 rounded-xl text-xs font-bold transition-all ${
+              location.pathname === '/agent/quick-replies' ? 'bg-[#6366F1] text-white shadow-md shadow-indigo-500/20' : 'text-[#9598B0] hover:bg-white/5 hover:text-white'
+            }`}
+          >
+            <div className="flex items-center gap-2.5">
+              <Zap size={16} /> Quick Replies
+            </div>
           </Link>
 
-          <Link to="/agent/help-center" className={`flex items-center justify-between px-3 py-2 rounded-lg text-xs font-semibold transition-colors ${location.pathname === '/agent/help-center' ? 'bg-[#6366F1] text-white shadow-sm' : 'text-[#9598B0] hover:bg-white/5'}`}>
-            <div className="flex items-center gap-2.5"><BookOpen size={16} /> Help Center</div>
+          {/* STATUS FILTERS */}
+          <div className="text-[9px] font-extrabold text-[#9598B0] uppercase tracking-wider px-3 pt-3 mb-1.5">
+            Status Filters
+          </div>
+
+          <Link 
+            to="/agent/active" 
+            className={`flex items-center justify-between px-3 py-2 rounded-xl text-xs font-bold transition-all ${
+              location.pathname === '/agent/active' ? 'bg-[#6366F1] text-white shadow-md shadow-indigo-500/20' : 'text-[#9598B0] hover:bg-white/5 hover:text-white'
+            }`}
+          >
+            <div className="flex items-center gap-2.5">
+              <Clock size={16} /> Active Tickets
+            </div>
           </Link>
 
-          <div className="text-[9px] font-bold text-[#9598B0] uppercase tracking-wider px-3 pt-3 mb-1">Status Filters</div>
-
-          <Link to="/agent/active" className={`flex items-center justify-between px-3 py-2 rounded-lg text-xs font-semibold transition-colors ${location.pathname === '/agent/active' ? 'bg-[#6366F1] text-white shadow-sm' : 'text-[#9598B0] hover:bg-white/5'}`}>
-            <div className="flex items-center gap-2.5"><Clock size={16} /> Active Tickets</div>
-          </Link>
-
-          <Link to="/agent/resolved" className={`flex items-center justify-between px-3 py-2 rounded-lg text-xs font-semibold transition-colors ${location.pathname === '/agent/resolved' ? 'bg-[#6366F1] text-white shadow-sm' : 'text-[#9598B0] hover:bg-white/5'}`}>
-            <div className="flex items-center gap-2.5"><CheckCircle size={16} /> Total Resolved</div>
+          <Link 
+            to="/agent/resolved" 
+            className={`flex items-center justify-between px-3 py-2 rounded-xl text-xs font-bold transition-all ${
+              location.pathname === '/agent/resolved' ? 'bg-[#6366F1] text-white shadow-md shadow-indigo-500/20' : 'text-[#9598B0] hover:bg-white/5 hover:text-white'
+            }`}
+          >
+            <div className="flex items-center gap-2.5">
+              <CheckCircle size={16} /> Total Resolved
+            </div>
           </Link>
         </nav>
         
-        <div className="p-4 border-t border-white/10">
-          <div className="flex items-center justify-between">
+        {/* Footer Profile Bar */}
+        <div className="p-4 border-t border-white/10 bg-[#171626]">
+          <Link to="/agent/profile" className="flex items-center justify-between group hover:opacity-90 transition-opacity">
             <div className="flex items-center gap-2.5">
-              <div className="w-7 h-7 rounded-full bg-indigo-600 text-white font-bold text-[10px] flex items-center justify-center">
-                EW
+              <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-indigo-500 via-purple-500 to-pink-500 text-white font-extrabold text-xs flex items-center justify-center shadow-xs">
+                {userInitials}
               </div>
-              <div>
-                <div className="text-xs font-bold truncate max-w-[120px]">{name || 'Emma Wilson'}</div>
-                <div className="text-[9px] text-[#9598B0]">Support Agent</div>
+              <div className="text-left">
+                <div className="text-xs font-bold text-white truncate max-w-[110px] group-hover:text-indigo-300 transition-colors">
+                  {name || 'Emma Wilson'}
+                </div>
+                <div className="text-[10px] text-emerald-400 font-bold flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> Profile & Settings
+                </div>
               </div>
             </div>
-            <button onClick={handleLogout} className="text-[#9598B0] hover:text-white p-1.5 rounded-md hover:bg-white/10 transition-colors" title="Log out">
-              <LogOut size={16} />
-            </button>
-          </div>
+            <User size={16} className="text-[#9598B0] group-hover:text-white transition-colors" />
+          </Link>
         </div>
       </aside>
 
       {/* Main Content Area */}
-      <main className="flex-1 flex flex-col min-w-0">
-        <Routes>
-          <Route path="/" element={<AgentOverview />} />
-          <Route path="/whatsapp" element={<WhatsAppInbox basePath="/agent" />} />
-          <Route path="/instagram" element={<InstagramInbox basePath="/agent" />} />
-          <Route path="/facebook" element={<FacebookInbox basePath="/agent" />} />
-          <Route path="/email" element={<EmailInbox basePath="/agent" />} />
-          <Route path="/inbox" element={<UnifiedInbox filter="all" basePath="/agent" />} />
-          <Route path="/active" element={<UnifiedInbox filter="active" basePath="/agent" />} />
-          <Route path="/queue" element={<AgentTicketQueue />} />
-          <Route path="/quick-replies" element={<AgentQuickReplies />} />
-          <Route path="/help-center" element={<AgentHelpCenter />} />
-          <Route path="/resolved" element={<UnifiedInbox filter="resolved" basePath="/agent" />} />
-          <Route path="/tickets/:id" element={<TicketDetail basePath="/agent" />} />
-          <Route path="*" element={<Navigate to="/agent" replace />} />
-        </Routes>
+      <main className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
+        <AgentHeader agentStatus={agentStatus} setAgentStatus={setAgentStatus} />
+        
+        <div className="flex-1 overflow-y-auto">
+          <Routes>
+            <Route path="/" element={<AgentOverview />} />
+            <Route path="/profile" element={<AgentProfile />} />
+            <Route path="/whatsapp" element={<WhatsAppInbox basePath="/agent" />} />
+            <Route path="/instagram" element={<InstagramInbox basePath="/agent" />} />
+            <Route path="/facebook" element={<FacebookInbox basePath="/agent" />} />
+            <Route path="/email" element={<EmailInbox basePath="/agent" />} />
+            <Route path="/inbox" element={<UnifiedInbox filter="all" basePath="/agent" />} />
+            <Route path="/active" element={<UnifiedInbox filter="active" basePath="/agent" />} />
+            <Route path="/queue" element={<AgentTicketQueue />} />
+            <Route path="/quick-replies" element={<AgentQuickReplies />} />
+            <Route path="/help-center" element={<AgentHelpCenter />} />
+            <Route path="/resolved" element={<UnifiedInbox filter="resolved" basePath="/agent" />} />
+            <Route path="/tickets/:id" element={<TicketDetail basePath="/agent" />} />
+            <Route path="*" element={<Navigate to="/agent" replace />} />
+          </Routes>
+        </div>
       </main>
     </div>
   )

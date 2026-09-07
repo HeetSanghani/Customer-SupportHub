@@ -14,33 +14,45 @@ export default function AgentQuickReplies() {
     },
     {
       id: '2',
-      title: 'Order Shipped',
+      title: 'Order Status & Tracking',
       category: 'Orders',
-      content: 'Great news — your order has shipped! Tracking details are on their way to your inbox.'
+      content: 'I checked your order status — it is currently in transit. You can track your shipment live under the Orders tab in your dashboard.'
     },
     {
       id: '3',
-      title: 'Password Reset Sent',
-      category: 'Account',
-      content: "I've sent a password reset link to your registered email, valid for 30 minutes."
+      title: 'Return Instructions',
+      category: 'Returns',
+      content: 'To initiate a return, visit your Orders page, select your order, and click Request Return. Items can be returned within 30 days of delivery.'
     },
     {
       id: '4',
-      title: 'Escalation Notice',
-      category: 'General',
-      content: "I'm looping in a specialist who can dig deeper into this for you — you'll hear back within 2 hours."
+      title: 'Delivery Timeframe',
+      category: 'Shipping',
+      content: 'Standard delivery takes 3–5 business days for metro areas and 5–7 business days for non-metro locations.'
     },
     {
       id: '5',
-      title: 'CSAT Follow-up',
-      category: 'General',
-      content: "Glad we could help! We'd love your feedback — a quick survey link is on its way."
+      title: 'Refund Policy',
+      category: 'Billing',
+      content: 'Refunds are automatically issued to your original payment method within 5-7 business days once returned items pass quality inspection.'
     },
     {
       id: '6',
-      title: 'Shipping Delay Apology',
+      title: 'Payment Troubleshooting',
+      category: 'Billing',
+      content: 'If your payment failed, please check your card/UPI limits or retry with another payment method. Failed attempts auto-refund within 24-48 hours.'
+    },
+    {
+      id: '7',
+      title: 'Address Change Guide',
       category: 'Shipping',
-      content: 'Apologies for the delay — your courier is reporting a short hold, updated ETA is within 48 hours.'
+      content: 'Delivery address changes can be made before dispatch. If already shipped, we will request an address update directly with the courier.'
+    },
+    {
+      id: '8',
+      title: 'Escalation Notice',
+      category: 'General',
+      content: "I'm looping in a specialist who can dig deeper into this for you — you'll hear back within 2 hours."
     }
   ]
 

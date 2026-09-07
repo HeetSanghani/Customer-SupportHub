@@ -10,6 +10,9 @@ export const ticketsApi = {
   getMessages: (id) =>
     client.get(`/tickets/${id}/messages`),
 
+  addMessage: (id, data) =>
+    client.post(`/tickets/${id}/messages`, data),
+
   create: (data) =>
     client.post('/tickets/', data),
 
@@ -35,11 +38,19 @@ export const ticketsApi = {
   suggestReply: (id) =>
     client.post(`/tickets/${id}/suggest-reply`),
 
+  // Phase B.5 — Copilot: tone-aware suggest reply
+  suggestReplyWithTone: (id, tone = 'formal') =>
+    client.post(`/tickets/${id}/suggest-reply?tone=${encodeURIComponent(tone)}`),
+
   summarize: (id) =>
     client.post(`/tickets/${id}/summarize`),
 
   getSimilar: (id) =>
     client.get(`/tickets/${id}/similar`),
+
+  // Phase B.5 — Copilot: Next-Best-Action
+  getNextAction: (id) =>
+    client.post(`/tickets/${id}/next-action`),
 
   // Phase 15.5 — Action Lifecycle Endpoints
   escalate: (id) =>
@@ -54,4 +65,3 @@ export const ticketsApi = {
   reopen: (id) =>
     client.post(`/tickets/${id}/reopen`),
 }
-

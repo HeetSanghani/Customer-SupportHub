@@ -12,9 +12,9 @@ export default function AgentOverview() {
   const [showReviewsModal, setShowReviewsModal] = useState(false)
 
   const { data: tickets = [], isLoading } = useQuery({
-    queryKey: ['tickets', 'all'],
+    queryKey: ['tickets', 'agent-human-only'],
     queryFn: async () => {
-      const res = await ticketsApi.list()
+      const res = await ticketsApi.list({ human_only: true })
       return res.data
     }
   })
@@ -66,7 +66,12 @@ export default function AgentOverview() {
     <div className="flex-1 overflow-auto bg-[#F6F7FC] p-8 text-[#1C1B2E]">
       <div className="mb-6">
         <h1 className="text-2xl font-bold font-['Plus_Jakarta_Sans']">Good morning, {name ? name.split(' ')[0] : 'Agent'}</h1>
-        <p className="text-[#6C7089] text-sm">You have {myTickets.length} active tickets assigned in your queue.</p>
+        <div className="flex items-center gap-2 mt-1 flex-wrap">
+          <p className="text-[#6C7089] text-sm">You have {myTickets.length} active human intervention tickets in your queue.</p>
+          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
+            👤 Human Support Requested
+          </span>
+        </div>
       </div>
 
       {/* Top Stats Cards */}

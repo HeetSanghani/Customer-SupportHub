@@ -13,9 +13,12 @@ export default function UnifiedInbox({ filter, basePath }) {
   const [selectedChannel, setSelectedChannel] = useState('all')
 
   const { data: rawTickets = [], isLoading } = useQuery({
-    queryKey: ['tickets', basePath, filter],
+    queryKey: ['tickets', basePath, filter, 'human-only'],
     queryFn: async () => {
-      const params = (filter !== 'all' && filter !== 'active' && filter !== 'closed' && filter !== 'resolved') ? { status: filter } : {}
+      const params = {
+        ...(filter !== 'all' && filter !== 'active' && filter !== 'closed' && filter !== 'resolved' ? { status: filter } : {}),
+        human_only: true
+      }
       const res = await ticketsApi.list(params)
       return res.data
     },
@@ -163,7 +166,12 @@ export default function UnifiedInbox({ filter, basePath }) {
     <div className="flex-1 flex flex-col h-screen bg-[#F6F7FC] overflow-hidden text-[#1C1B2E]">
       {/* Top Header Bar */}
       <div className="h-16 bg-white border-b border-[#E5E7F3] px-8 flex items-center justify-between shrink-0">
-        <h1 className="text-xl font-bold font-['Plus_Jakarta_Sans']">{pageTitle}</h1>
+        <div className="flex items-center gap-3">
+          <h1 className="text-xl font-bold font-['Plus_Jakarta_Sans']">{pageTitle}</h1>
+          <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
+            👤 Human Requests Only
+          </span>
+        </div>
         <div className="flex items-center gap-4">
           <div className="relative w-80">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-[#9598B0]" size={16} />

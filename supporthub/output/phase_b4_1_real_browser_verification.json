@@ -1,0 +1,123 @@
+{
+  "phase": "B.4.1",
+  "execution_date": "2026-09-01T06:15:00Z",
+  "verdict": "CERTIFIED",
+  "score": 1.0,
+  "summary": {
+    "total_scenarios": 15,
+    "passed": 15,
+    "failed": 0,
+    "skipped": 0
+  },
+  "environment": {
+    "frontend_url": "http://localhost:5173",
+    "backend_url": "http://localhost:8000",
+    "websocket_url": "ws://localhost:8000/api/v1/ws",
+    "database": "postgresql://supporthub:supporthub_dev@localhost:5433/supporthub",
+    "redis": "redis://localhost:6381/0"
+  },
+  "accounts": {
+    "customer_a": "customer@supporthub.com",
+    "customer_b": "sarah.j@example.com",
+    "agent_a": "agent@supporthub.com",
+    "agent_b": "emma.wilson@supporthub.com"
+  },
+  "verification_matrix": [
+    {
+      "id": "TC-01",
+      "name": "Customer Auth & Dashboard",
+      "status": "PASS",
+      "details": "Customer A logged in, profile CUST-001 and orders loaded."
+    },
+    {
+      "id": "TC-02",
+      "name": "Anti-IDOR Customer Data Isolation",
+      "status": "PASS",
+      "details": "Customer B orders hidden from Customer A; API returns 403/404 on cross-account fetch."
+    },
+    {
+      "id": "TC-03",
+      "name": "AI Structured DB Query",
+      "status": "PASS",
+      "details": "ORD-001 status DELIVERED returned with tracking TRK-DELHIVERY-764130526."
+    },
+    {
+      "id": "TC-04",
+      "name": "AI RAG Policy Retrieval",
+      "status": "PASS",
+      "details": "POL-001 return policy retrieved and formatted."
+    },
+    {
+      "id": "TC-05",
+      "name": "Hybrid Intent Synthesis",
+      "status": "PASS",
+      "details": "Combined ORD-001 DELIVERED status with POL-001 7-day electronics return window."
+    },
+    {
+      "id": "TC-06",
+      "name": "Multi-Turn Pronoun Resolution",
+      "status": "PASS",
+      "details": "Resolved 'it' to ORD-001 across conversational turns."
+    },
+    {
+      "id": "TC-07",
+      "name": "Human Escalation Trigger",
+      "status": "PASS",
+      "details": "Escalated to HIGH priority, created TCK-22179 in OPEN status."
+    },
+    {
+      "id": "TC-08",
+      "name": "Real-Time Agent Queue Sync",
+      "status": "PASS",
+      "details": "Ticket TCK-22179 appeared in Agent A workspace inbox."
+    },
+    {
+      "id": "TC-09",
+      "name": "Full Timeline Rendering",
+      "status": "PASS",
+      "details": "Agent workspace rendered full customer-AI chat history."
+    },
+    {
+      "id": "TC-10",
+      "name": "Agent Response & Broadcast",
+      "status": "PASS",
+      "details": "Agent message delivered via WebSocket and displayed in customer chat."
+    },
+    {
+      "id": "TC-11",
+      "name": "AI Suppression during Human Reply",
+      "status": "PASS",
+      "details": "AI auto-reply suppressed during human agent active intervention."
+    },
+    {
+      "id": "TC-12",
+      "name": "Ticket Resolution Lifecycle",
+      "status": "PASS",
+      "details": "Ticket status updated to RESOLVED; chat input locked."
+    },
+    {
+      "id": "TC-13",
+      "name": "CSAT Delivery & Storage",
+      "status": "PASS",
+      "details": "CSAT rating prompt delivered and customer score persisted."
+    },
+    {
+      "id": "TC-14",
+      "name": "Prompt Injection Defense",
+      "status": "PASS",
+      "details": "System prompt boundaries enforced against override attempts."
+    },
+    {
+      "id": "TC-15",
+      "name": "Database State Persistence",
+      "status": "PASS",
+      "details": "11 messages and ticket state RESOLVED verified in PostgreSQL."
+    }
+  ],
+  "pytest_regression": {
+    "total_collected": 628,
+    "runnable_passed": 602,
+    "skipped": 26,
+    "failed": 0
+  }
+}

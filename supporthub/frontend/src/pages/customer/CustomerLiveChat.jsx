@@ -321,6 +321,9 @@ function ChatPane({ ticketId }) {
                                     /\.(jpg|jpeg|png|gif|webp|svg|bmp|ico)(\?.*)?$/i.test(url) || 
                                     /image|photo|picture|screenshot/i.test(filename) || 
                                     /(fbsbx|fbcdn|cdninstagram|lookaside)/i.test(url)
+                    const isVideo = /\.(mp4|webm|ogg|mov|avi)(\?.*)?$/i.test(filename) ||
+                                    /\.(mp4|webm|ogg|mov|avi)(\?.*)?$/i.test(url) ||
+                                    /video/i.test(filename)
                     const isAudio = /\.(mp3|wav|ogg|m4a|aac)(\?.*)?$/i.test(filename) || 
                                     /\.(mp3|wav|ogg|m4a|aac)(\?.*)?$/i.test(url) || 
                                     /audio|voice/i.test(filename)

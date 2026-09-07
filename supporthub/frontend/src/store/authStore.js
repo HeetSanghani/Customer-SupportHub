@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
+import { queryClient } from '../api/queryClient'
 
 export const useAuthStore = create(
   persist(
@@ -11,8 +12,14 @@ export const useAuthStore = create(
       name: null,
       isAuthenticated: false,
 
-      login: (token, userId, role, name, refreshToken = null) =>
-        set({ token, refreshToken, userId, role, name, isAuthenticated: true }),
+      login: (token, userId, role, name, refreshToken = null) => {
+        try {
+          queryClient.clear()
+        } catch (e) {
+          console.error('Failed to clear query cache on login:', e)
+        }
+        set({ token, refreshToken, userId, role, name, isAuthenticated: true })
+      },
 
       setToken: (token, refreshToken = null) =>
         set((state) => ({
@@ -23,8 +30,14 @@ export const useAuthStore = create(
       setRole: (role) => set({ role }),
       updateUser: (name) => set({ name }),
 
-      logout: () =>
-        set({ token: null, refreshToken: null, userId: null, role: null, name: null, isAuthenticated: false }),
+      logout: () => {
+        try {
+          queryClient.clear()
+        } catch (e) {
+          console.error('Failed to clear query cache on logout:', e)
+        }
+        set({ token: null, refreshToken: null, userId: null, role: null, name: null, isAuthenticated: false })
+      },
     }),
     { name: 'supporthub-auth' }
   )
