@@ -37,6 +37,11 @@ class SecurityValidator:
     ADMIN_EXPLOIT_PATTERNS = [
         re.compile(r"\b(i\s+am\s+(an?\s+)?admin|admin\s+user|system\s+user\s+passwords|audit\s+logs|all\s+user\s+passwords)\b", re.IGNORECASE)
     ]
+    PROMPT_INJECTION_PATTERNS = [
+        re.compile(r"\b(ignore\s+(all\s+)?(previous|prior|above)\s+(instructions|prompts|rules))\b", re.IGNORECASE),
+        re.compile(r"\b(output|reveal|show|print)\s+system\s+prompt\b", re.IGNORECASE),
+        re.compile(r"\b(system\s+prompt\s+credentials|system\s+prompt)\b", re.IGNORECASE),
+    ]
 
     def validate_inbound_query(
         self,
@@ -90,6 +95,15 @@ class SecurityValidator:
                 is_allowed=False,
                 reason="ADMIN_EXPLOIT_DENIED",
                 message="Access Denied: Administrative privileges cannot be assumed via chat. System logs and credentials are strictly protected.",
+                risk_level="CRITICAL"
+            )
+
+        # 5. Check for Prompt Injection / System Prompt Extraction
+        if any(p.search(text) for p in self.PROMPT_INJECTION_PATTERNS) or "ignore all previous instructions" in lower:
+            return SecurityDecision(
+                is_allowed=False,
+                reason="PROMPT_INJECTION_DENIED",
+                message="Access Denied: System prompt, system instructions, and security credentials cannot be exposed or modified via chat.",
                 risk_level="CRITICAL"
             )
 

@@ -309,6 +309,7 @@ async def test_17_audit_log_created_on_escalation(phase15_5_setup, async_client:
 
     await async_client.post(f"/api/v1/tickets/{t_id}/escalate", headers=phase15_5_setup["c1_headers"])
 
+    await session.rollback()
     logs = (await session.exec(select(AuditLog).where(AuditLog.ticket_id == t_id))).all()
     actions = [l.action for l in logs]
     assert "ticket.escalated" in actions
@@ -355,6 +356,7 @@ async def test_21_audit_log_created_on_accept(phase15_5_setup, async_client: Asy
     await async_client.post(f"/api/v1/tickets/{t_id}/escalate", headers=phase15_5_setup["c1_headers"])
     await async_client.post(f"/api/v1/tickets/{t_id}/accept", headers=phase15_5_setup["a1_headers"])
 
+    await session.rollback()
     logs = (await session.exec(select(AuditLog).where(AuditLog.ticket_id == t_id))).all()
     actions = [l.action for l in logs]
     assert "ticket.accepted" in actions
@@ -438,10 +440,12 @@ async def test_27_agent_posts_resolution_answer(phase15_5_setup, async_client: A
 
 @pytest.mark.asyncio
 async def test_28_message_timestamps_and_order(phase15_5_setup, async_client: AsyncClient):
+    import asyncio
     t_res = await async_client.post("/api/v1/tickets/", json={"subject": "Ordering Test", "category": "general", "channel": "website_chat"}, headers=phase15_5_setup["c1_headers"])
     t_id = uuid.UUID(t_res.json()["id"])
 
     await async_client.post(f"/api/v1/tickets/{t_id}/messages", json={"body": "First message"}, headers=phase15_5_setup["c1_headers"])
+    await asyncio.sleep(0.02)
     await async_client.post(f"/api/v1/tickets/{t_id}/messages", json={"body": "Second message"}, headers=phase15_5_setup["a1_headers"])
 
     res = await async_client.get(f"/api/v1/tickets/{t_id}/messages", headers=phase15_5_setup["c1_headers"])

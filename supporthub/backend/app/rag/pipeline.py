@@ -29,7 +29,8 @@ class RAGPipeline:
 
         self.documents = self.processor.process_all_documents()
         self.chunks = self.chunker.chunk_all(self.documents)
-        self.retriever.index_chunks(self.chunks)
+        if not getattr(self.retriever, "_is_indexed", False) or force:
+            self.retriever.index_chunks(self.chunks, force=force)
         self._initialized = True
 
     def retrieve(
@@ -61,10 +62,13 @@ class RAGPipeline:
                 f"[{r.chunk.source_id}: {r.chunk.title}]\n{r.chunk.text}"
             )
 
+        method = getattr(self.retriever.embedding_provider, "embedding_method", "unknown")
+
         return {
             "query": question,
             "has_knowledge": len(results) > 0,
             "results_count": len(results),
+            "embedding_method": method,
             "citations": citations,
             "context_text": "\n\n".join(formatted_context_blocks),
             "retrieved_chunks": results

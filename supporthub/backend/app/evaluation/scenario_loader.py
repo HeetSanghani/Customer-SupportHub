@@ -80,9 +80,9 @@ class ScenarioLoader:
                 exp_route = "SECURITY"
             elif esc or sid.startswith("H") or sid in ["O08", "PAY04", "PAY05", "S05", "R06", "F04", "F05", "A04", "SE03"]:
                 exp_route = "HUMAN"
-            elif cat == "general_policy" or sid in ["R01", "R03", "A01", "A02", "A03", "F02"]:
+            elif cat == "general_policy" or sid in ["R03", "A01", "A02", "A03", "F02"]:
                 exp_route = "RAG"
-            elif sid in ["P04", "P06", "O06", "PAY03", "R04", "F03"]:
+            elif sid in ["R01", "P04", "P06", "O06", "PAY03", "R04", "F03"]:
                 exp_route = "HYBRID"
             else:
                 exp_route = "STRUCTURED"

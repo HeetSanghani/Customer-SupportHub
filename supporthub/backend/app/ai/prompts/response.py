@@ -28,3 +28,16 @@ INSTRUCTIONS FOR GENERATING THE RESPONSE:
 
 Generate the final customer response:
 """
+
+
+TICKET_SUMMARIZATION_PROMPT = """Summarize this customer support conversation in exactly 2-3 sentences.
+Focus on: (1) what the customer's issue is, (2) what has been done so far, (3) current status.
+Be factual and concise. Write in third person (e.g. "The customer reported...").
+
+Ticket: {ticket_subject} | Category: {ticket_category} | Status: {ticket_status}
+
+Thread:
+{thread_text}
+
+Summary (2-3 sentences only):"""
+

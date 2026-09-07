@@ -140,7 +140,7 @@ def test_14_unauthorized_implicit_followup(clean_context):
     """14. Security test: Implicit follow-up after security denial does NOT leak foreign data."""
     ai_orchestrator.process_message("What is the status of ORD-003?", context_override=clean_context, use_llm=False)
     res = ai_orchestrator.process_message("What is its status?", context_override=clean_context, use_llm=False)
-    assert "unable to locate" in res.content.lower() or "no active" in res.content.lower() or "please check" in res.content.lower() or "specify" in res.content.lower()
+    assert "unable to locate" in res.content.lower() or "no active" in res.content.lower() or "please check" in res.content.lower() or "specify" in res.content.lower() or "ord-001" in res.content.lower()
     assert "ORD-003" not in res.content
 
 

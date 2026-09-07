@@ -228,6 +228,7 @@ async def websocket_chat(
                     "sender_id": str(user.id),
                     "sender_name": user.name,
                     "sender_role": user.role.value,
+                    "sender_type": msg.sender_type.value,
                     "body": body,
                     "created_at": msg.created_at.isoformat(),
                 })

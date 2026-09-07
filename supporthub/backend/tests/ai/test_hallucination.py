@@ -56,6 +56,56 @@ class TestHallucinationAndGrounding(unittest.TestCase):
         self.assertEqual(len(result.violations), 0)
         self.assertEqual(result.confidence, 1.0)
 
+    def test_rag_grounding_entailment_valid(self):
+        """Supported time windows in RAG response pass validation."""
+        citations = [
+            {"text": "Report damage within 48 hours. Doorstep pickup occurs within 24 to 48 hours."}
+        ]
+        response = "If your package is damaged, report within 48 hours for doorstep pickup in 24 to 48 hours."
+        result = self.validator.validate(response, rag_citations=citations)
+        self.assertTrue(result.is_grounded)
+        self.assertEqual(len(result.violations), 0)
+
+    def test_rag_grounding_entailment_unsupported_claim(self):
+        """Unsupported time window in RAG response is flagged as a violation."""
+        citations = [
+            {"text": "Report damage within 48 hours. Doorstep pickup occurs within 24 to 48 hours."}
+        ]
+        response = "You have a 14 days return window for all items."
+        result = self.validator.validate(response, rag_citations=citations)
+        self.assertFalse(result.is_grounded)
+        self.assertTrue(any("14 days" in v for v in result.violations))
+
+    def test_rag_grounding_entailment_qualitative(self):
+        """Qualitative RAG response without numbers passes validation without false positives."""
+        citations = [
+            {"text": "Report damage within 48 hours. Doorstep pickup occurs within 24 to 48 hours."}
+        ]
+        response = "ShopKart provides doorstep pickup for damaged items with original packaging."
+        result = self.validator.validate(response, rag_citations=citations)
+        self.assertTrue(result.is_grounded)
+        self.assertEqual(len(result.violations), 0)
+
+    def test_rag_grounding_entailment_wrong_unit(self):
+        """Flag claims using valid numbers under the WRONG unit (e.g. 48 days when chunk has 48 hours)."""
+        citations = [
+            {"text": "Report damage within 48 hours. Doorstep pickup occurs within 24 to 48 hours."}
+        ]
+        response = "You have 48 days to request a refund."
+        result = self.validator.validate(response, rag_citations=citations)
+        self.assertFalse(result.is_grounded)
+        self.assertTrue(any("48 days" in v for v in result.violations))
+
+    def test_rag_grounding_non_time_numbers(self):
+        """Non-time numbers like return reasons count or photo upload limits are ignored."""
+        citations = [
+            {"text": "Report damage within 48 hours. Doorstep pickup occurs within 24 to 48 hours."}
+        ]
+        response = "Report the damage within 48 hours. You can choose from 3 return reasons and upload up to 5 photos."
+        result = self.validator.validate(response, rag_citations=citations)
+        self.assertTrue(result.is_grounded)
+        self.assertEqual(len(result.violations), 0)
+
 
 if __name__ == "__main__":
     unittest.main()

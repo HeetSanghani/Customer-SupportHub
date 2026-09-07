@@ -1,13 +1,16 @@
 """Tickets router — CRUD with ownership enforcement."""
 from __future__ import annotations
 
+import logging
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 
+logger = logging.getLogger(__name__)
+
 from fastapi import APIRouter, Depends, HTTPException, Query, status, File, UploadFile
 from fastapi.responses import HTMLResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlmodel import select, and_, or_
 from sqlalchemy.orm import selectinload
@@ -17,7 +20,7 @@ from app.config import get_settings
 from app.database import get_session
 from app.dependencies import get_current_user, require_role
 from app.models import (
-    AuditLog, Message, SenderType, Ticket, TicketChannel, TicketPriority, TicketStatus, User, UserRole
+    AuditLog, Message, SenderType, Ticket, TicketChannel, TicketEmbedding, TicketPriority, TicketStatus, User, UserRole
 )
 
 from app.services.ai.orchestrator import AIOrchestrator
@@ -38,9 +41,16 @@ SLA_HOURS = {
 class TicketCreate(BaseModel):
     subject: str
     category: str
-    channel: TicketChannel
+    channel: TicketChannel = TicketChannel.website_chat
     priority: TicketPriority = TicketPriority.medium
     body: Optional[str] = None  # first message body
+
+    @field_validator('channel', mode='before')
+    @classmethod
+    def normalize_channel(cls, v):
+        if isinstance(v, str) and v.lower() in ('web', 'chat', 'website', 'web_chat'):
+            return TicketChannel.website_chat
+        return v
 
 
 class TicketUpdate(BaseModel):
@@ -207,23 +217,45 @@ async def create_ticket(
         )
         session.add(initial_message)
         
-    # Contextual professional response from AI / System
+    # Contextual response from AI / System
     customer_name = current_user.name or 'there'
     if ticket.channel == TicketChannel.email:
         ai_reply_body = f"Hello {customer_name}! Thank you for reaching out to SupportHub Email Support regarding '{ticket.subject}'. We have received your inquiry (Ref: {ticket.ref}). Our support team will review your request and get back to you shortly."
+        greeting_message = Message(
+            ticket_id=ticket.id,
+            sender_id=None,
+            sender_type=SenderType.ai,
+            body=ai_reply_body
+        )
+        session.add(greeting_message)
+        await session.commit()
     elif body.body:
-        ai_reply_body = f"Hello {customer_name}! I have received your request regarding '{ticket.subject}'. Our support team and AI system are reviewing your inquiry."
+        # Process the common question / inquiry via AI Orchestrator to generate an instant answer & update agent inbox
+        try:
+            from app.services.ai.live_chat_adapter import live_chat_ai_adapter
+            await live_chat_ai_adapter.process_live_chat_message(
+                ticket_id=str(ticket.id),
+                message_body=body.body,
+            )
+        except Exception as exc:
+            logger.error("[create_ticket] AI live chat processing error: %s", exc)
+            fallback_greeting = Message(
+                ticket_id=ticket.id,
+                sender_id=None,
+                sender_type=SenderType.ai,
+                body=f"Hello {customer_name}! I have received your request regarding '{ticket.subject}'. Our support team and AI system are reviewing your inquiry."
+            )
+            session.add(fallback_greeting)
+            await session.commit()
     else:
-        ai_reply_body = f"Hello {customer_name}! How can I assist you with your support request today?"
-
-    greeting_message = Message(
-        ticket_id=ticket.id,
-        sender_id=None,
-        sender_type=SenderType.ai,
-        body=ai_reply_body
-    )
-    session.add(greeting_message)
-    await session.commit()
+        greeting_message = Message(
+            ticket_id=ticket.id,
+            sender_id=None,
+            sender_type=SenderType.ai,
+            body=f"Hello {customer_name}! How can I assist you with your support request today?"
+        )
+        session.add(greeting_message)
+        await session.commit()
 
     # Phase 6: Background AI auto-classification (category, priority, sentiment)
     import asyncio
@@ -246,6 +278,8 @@ async def list_tickets(
     status_filter: Optional[TicketStatus] = Query(None, alias="status"),
     channel: Optional[TicketChannel] = None,
     priority: Optional[TicketPriority] = None,
+    human_only: Optional[bool] = Query(None),
+    all_tickets: Optional[bool] = Query(False),
     skip: int = 0,
     limit: int = Query(50, le=200),
     current_user: User = Depends(get_current_user),
@@ -256,6 +290,19 @@ async def list_tickets(
     # Ownership: customers only see their own tickets
     if current_user.role == UserRole.customer:
         stmt = stmt.where(Ticket.customer_id == current_user.id)
+
+    # Human intervention filtering for Agent role or when human_only=True requested
+    should_filter_human = human_only is True or (
+        current_user.role == UserRole.agent and not all_tickets and human_only is not False
+    )
+
+    if should_filter_human:
+        stmt = stmt.where(
+            (Ticket.status == TicketStatus.escalated) |
+            (Ticket.agent_id.isnot(None)) |
+            (Ticket.priority == TicketPriority.urgent) |
+            (Ticket.category.ilike("%escalat%"))
+        )
 
     if status_filter:
         stmt = stmt.where(Ticket.status == status_filter)
@@ -346,7 +393,8 @@ async def escalate_ticket(
     ticket = await session.get(Ticket, ticket_id)
     if not ticket or ticket.deleted_at:
         raise HTTPException(status_code=404, detail="Ticket not found")
-    if current_user.role == UserRole.customer and ticket.customer_id != current_user.id:
+    role_val = current_user.role.value if hasattr(current_user.role, 'value') else str(current_user.role)
+    if role_val == "customer" and ticket.customer_id != current_user.id:
         raise HTTPException(status_code=403, detail="Access denied")
 
     old_status = str(ticket.status.value if hasattr(ticket.status, 'value') else ticket.status)
@@ -411,6 +459,16 @@ async def accept_ticket(
         ticket_id=ticket.id,
         diff_json=f'{{"old_status": "{old_status}", "new_status": "open", "agent_id": "{current_user.id}"}}',
     ))
+
+    # Persist System Message in conversation thread
+    system_msg = Message(
+        ticket_id=ticket.id,
+        sender_id=None,
+        sender_type=SenderType.system,
+        body=f"Agent {current_user.name} accepted this ticket.",
+    )
+    session.add(system_msg)
+
     await session.commit()
     await session.refresh(ticket)
 
@@ -451,7 +509,8 @@ async def resolve_ticket(
     ticket = await session.get(Ticket, ticket_id)
     if not ticket or ticket.deleted_at:
         raise HTTPException(status_code=404, detail="Ticket not found")
-    if current_user.role == UserRole.customer and ticket.customer_id != current_user.id:
+    role_val = current_user.role.value if hasattr(current_user.role, 'value') else str(current_user.role)
+    if role_val == "customer" and ticket.customer_id != current_user.id:
         raise HTTPException(status_code=403, detail="Access denied")
 
     old_status = str(ticket.status.value if hasattr(ticket.status, 'value') else ticket.status)
@@ -498,6 +557,54 @@ async def resolve_ticket(
     return TicketOut.from_orm(ticket)
 
 
+@router.post("/{ticket_id}/close", response_model=TicketOut)
+async def close_ticket(
+    ticket_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    """Close a ticket (staff or ticket owner customer)."""
+    ticket = await session.get(Ticket, ticket_id)
+    if not ticket or ticket.deleted_at:
+        raise HTTPException(status_code=404, detail="Ticket not found")
+    role_val = current_user.role.value if hasattr(current_user.role, 'value') else str(current_user.role)
+    if role_val == "customer" and ticket.customer_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    old_status = str(ticket.status.value if hasattr(ticket.status, 'value') else ticket.status)
+    ticket.status = TicketStatus.closed
+    ticket.updated_at = datetime.now()
+    session.add(ticket)
+
+    session.add(AuditLog(
+        actor_id=current_user.id,
+        action="ticket.closed",
+        entity_type="ticket",
+        entity_id=str(ticket.id),
+        ticket_id=ticket.id,
+        diff_json=f'{{"old_status": "{old_status}", "new_status": "closed"}}',
+    ))
+    await session.commit()
+    await session.refresh(ticket)
+
+    from app.ws.manager import manager
+    await manager.broadcast(str(ticket.id), {
+        "type": "ticket_update",
+        "status": "closed",
+        "subject": ticket.subject or "",
+    })
+    await manager.broadcast_to_agents({
+        "type": "inbox_update",
+        "ticket_id": str(ticket.id),
+        "preview": f"Ticket {ticket.ref} closed by {current_user.name}",
+        "sender_name": current_user.name,
+        "subject": ticket.subject or "",
+        "status": "closed",
+    })
+
+    return TicketOut.from_orm(ticket)
+
+
 @router.post("/{ticket_id}/reopen", response_model=TicketOut)
 async def reopen_ticket(
     ticket_id: uuid.UUID,
@@ -508,7 +615,8 @@ async def reopen_ticket(
     ticket = await session.get(Ticket, ticket_id)
     if not ticket or ticket.deleted_at:
         raise HTTPException(status_code=404, detail="Ticket not found")
-    if current_user.role == UserRole.customer and ticket.customer_id != current_user.id:
+    role_val = current_user.role.value if hasattr(current_user.role, 'value') else str(current_user.role)
+    if role_val == "customer" and ticket.customer_id != current_user.id:
         raise HTTPException(status_code=403, detail="Access denied")
 
     old_status = str(ticket.status.value if hasattr(ticket.status, 'value') else ticket.status)
@@ -579,6 +687,21 @@ async def create_ticket_message(
         raise HTTPException(status_code=403, detail="Access denied")
 
     sender_type = SenderType.agent if role_val in ("agent", "admin", "manager") else SenderType.customer
+
+    # Auto-assign ticket if an agent sends a message on an unassigned ticket
+    if role_val in ("agent", "admin", "manager") and ticket.agent_id is None:
+        ticket.agent_id = current_user.id
+        if ticket.status in (TicketStatus.new, TicketStatus.escalated, TicketStatus.waiting):
+            ticket.status = TicketStatus.open
+        session.add(AuditLog(
+            actor_id=current_user.id,
+            action="ticket.auto_assigned",
+            entity_type="ticket",
+            entity_id=str(ticket.id),
+            ticket_id=ticket.id,
+            diff_json=f'{{"agent_id": "{current_user.id}", "status": "{ticket.status}"}}',
+        ))
+
     msg = Message(
         ticket_id=ticket.id,
         sender_id=current_user.id,
@@ -591,6 +714,27 @@ async def create_ticket_message(
     session.add(ticket)
     await session.commit()
     await session.refresh(msg)
+
+    # Broadcast via WebSocket to room & agent inbox
+    from app.ws.manager import manager
+    await manager.broadcast(str(ticket.id), {
+        "type": "message",
+        "id": str(msg.id),
+        "ticket_id": str(ticket.id),
+        "sender_id": str(current_user.id),
+        "sender_name": current_user.name,
+        "sender_role": role_val,
+        "body": msg.body,
+        "created_at": msg.created_at.isoformat(),
+    })
+    await manager.broadcast_to_agents({
+        "type": "inbox_update",
+        "ticket_id": str(ticket.id),
+        "preview": msg.body[:80],
+        "sender_name": current_user.name,
+        "status": str(ticket.status.value if hasattr(ticket.status, 'value') else ticket.status),
+    })
+
     return MessageOut(
         id=str(msg.id),
         ticket_id=str(msg.ticket_id),
@@ -875,6 +1019,9 @@ class SuggestReplyOut(BaseModel):
     is_fallback: bool = False
     confidence: float = 1.0
     latency_ms: int = 0
+    is_grounded: bool = True
+    grounding_score: float = 1.0
+    grounding_violations: List[str] = []
 
 class SummarizeOut(BaseModel):
     summary: str
@@ -886,6 +1033,7 @@ class SimilarTicketOut(BaseModel):
     category: str
     status: str
     similarity: float
+    is_fallback: bool = False
 
 
 @router.post("/{ticket_id}/suggest-reply", response_model=SuggestReplyOut)
@@ -895,7 +1043,7 @@ async def suggest_reply(
     current_user: User = Depends(require_role(UserRole.agent)),
     session: AsyncSession = Depends(get_session),
 ):
-    """AI drafts a suggested reply based on the full ticket conversation thread."""
+    """AI drafts a suggested reply based on ticket context, verified against GroundingValidator."""
     ticket = await session.get(Ticket, ticket_id)
     if not ticket or ticket.deleted_at:
         raise HTTPException(status_code=404, detail="Ticket not found")
@@ -903,6 +1051,7 @@ async def suggest_reply(
     from app.models import Message
     from sqlmodel import select as sql_select
     from app.services.ai.knowledge_rag import get_relevant_kb_context
+    from app.ai.grounding import GroundingValidator
 
     msgs_result = await session.exec(
         sql_select(Message)
@@ -934,6 +1083,25 @@ async def suggest_reply(
         tone=tone or "standard",
     )
 
+    # Validate grounding against retrieved KB context if context is present
+    is_grounded = True
+    grounding_score = 1.0
+    grounding_violations = []
+
+    if kb_context and ai_response.response_text:
+        try:
+            validator = GroundingValidator()
+            g_result = validator.validate(
+                response_text=ai_response.response_text,
+                rag_citations=[{"content": kb_context}],
+                query=search_query
+            )
+            is_grounded = g_result.is_grounded
+            grounding_score = g_result.confidence
+            grounding_violations = g_result.violations
+        except Exception as g_exc:
+            logger.warning("[AgentAssist WARNING] Grounding validation error: %s", g_exc)
+
     return SuggestReplyOut(
         suggestion=ai_response.response_text,
         suggested_reply=ai_response.response_text,
@@ -941,6 +1109,9 @@ async def suggest_reply(
         is_fallback=ai_response.is_fallback,
         confidence=ai_response.confidence,
         latency_ms=ai_response.latency_ms,
+        is_grounded=is_grounded,
+        grounding_score=grounding_score,
+        grounding_violations=grounding_violations,
     )
 
 
@@ -950,7 +1121,7 @@ async def summarize_ticket(
     current_user: User = Depends(require_role(UserRole.agent)),
     session: AsyncSession = Depends(get_session),
 ):
-    """AI generates a 2-3 sentence summary of the ticket conversation."""
+    """AI generates a 2-3 sentence summary of the ticket conversation using model adapter."""
     ticket = await session.get(Ticket, ticket_id)
     if not ticket or ticket.deleted_at:
         raise HTTPException(status_code=404, detail="Ticket not found")
@@ -967,34 +1138,43 @@ async def summarize_ticket(
         .order_by(Message.created_at.asc())
         .limit(30)
     )
-    messages = msgs_result.all()
+    messages = list(msgs_result.all())
 
     if len(messages) < 3:
-        return SummarizeOut(summary=f"New ticket: '{ticket.subject}' — conversation just started.")
+        summary = f"New ticket: '{ticket.subject}' — conversation just started."
+        return SummarizeOut(summary=summary)
 
     thread_text = "\n".join([
         f"[{m.sender_type.value.upper()}]: {m.body}"
         for m in messages if m.body
     ])
 
-    prompt = f"""Summarize this customer support conversation in exactly 2-3 sentences.
-Focus on: (1) what the customer's issue is, (2) what has been done so far, (3) current status.
-Be factual and concise. Write in third person (e.g. "The customer reported...").
+    from app.ai.prompts.response import TICKET_SUMMARIZATION_PROMPT
+    from app.services.ai.model_adapter import get_model_adapter
+    from app.services.ai.models import Prompt
 
-Ticket: {ticket.subject} | Category: {ticket.category} | Status: {ticket.status.value}
-
-Thread:
-{thread_text}
-
-Summary (2-3 sentences only):"""
+    system_prompt = TICKET_SUMMARIZATION_PROMPT.format(
+        ticket_subject=ticket.subject,
+        ticket_category=ticket.category or "General",
+        ticket_status=ticket.status.value,
+        thread_text=thread_text
+    )
 
     try:
-        import asyncio
-        import google.generativeai as genai
-        model = genai.GenerativeModel("gemini-flash-lite-latest")
-        response = await asyncio.to_thread(model.generate_content, prompt)
-        summary = response.text.strip()
-    except Exception as e:
+        adapter = get_model_adapter()
+        prompt_obj = Prompt(
+            system=system_prompt,
+            messages=[],
+            version="v1.0-summary",
+            temperature=0.2,
+            max_tokens=250
+        )
+        raw_res = await adapter.generate(prompt_obj)
+        summary = raw_res.get("text", "").strip()
+        if not summary:
+            raise ValueError("Model adapter returned empty summary text.")
+    except Exception as exc:
+        logger.exception("[AgentAssist ERROR] Failed to generate ticket summary for ticket_id=%s: %s", ticket_id, str(exc))
         summary = f"Ticket '{ticket.subject}' is currently {ticket.status.value} with {len(messages)} messages exchanged."
 
     # Cache the summary
@@ -1012,58 +1192,272 @@ async def find_similar_tickets(
     current_user: User = Depends(require_role(UserRole.agent)),
     session: AsyncSession = Depends(get_session),
 ):
-    """Find similar resolved tickets using pgvector cosine similarity on ticket subjects."""
+    """Find similar resolved tickets using pgvector cosine similarity on ticket embeddings."""
     ticket = await session.get(Ticket, ticket_id)
     if not ticket or ticket.deleted_at:
         raise HTTPException(status_code=404, detail="Ticket not found")
 
-    # Generate embedding for the current ticket subject + category
-    from app.ai import generate_embedding
-    import asyncio
+    from app.services.ai.ticket_embeddings import (
+        ensure_ticket_embedding,
+        generate_query_embedding,
+        get_ticket_text_for_embedding,
+    )
+    from sqlmodel import col, type_coerce, Float, select as sql_select
     from sqlalchemy import text
 
-    query_text = f"{ticket.subject} {ticket.category}"
-    query_vec = await asyncio.to_thread(generate_embedding, query_text)
+    # Ensure current ticket has a real embedding stored
+    await ensure_ticket_embedding(session, ticket)
 
-    # Use raw SQL for pgvector similarity on tickets table
-    # We embed the subject into the KbArticle embedding space to find similar KB content
-    # and also do a text-similarity fallback on tickets
-    from sqlmodel import select as sql_select
+    query_text = get_ticket_text_for_embedding(ticket)
+    query_vec = generate_query_embedding(query_text)
 
-    # Fallback: find tickets with same category that are resolved, excluding current
-    stmt = sql_select(Ticket).where(
-        Ticket.id != ticket_id,
-        Ticket.deleted_at.is_(None),
-        Ticket.status.in_([TicketStatus.resolved, TicketStatus.closed]),
-        Ticket.category == ticket.category
-    ).order_by(Ticket.created_at.desc()).limit(limit)
-
-    result = await session.exec(stmt)
-    similar_tickets = result.all()
-
-    # Also try broader search if not enough results
-    if len(similar_tickets) < limit:
-        extra_stmt = sql_select(Ticket).where(
-            Ticket.id != ticket_id,
-            Ticket.id.notin_([t.id for t in similar_tickets]),
-            Ticket.deleted_at.is_(None),
-            Ticket.status.in_([TicketStatus.resolved, TicketStatus.closed]),
-        ).order_by(Ticket.created_at.desc()).limit(limit - len(similar_tickets))
-        extra_result = await session.exec(extra_stmt)
-        similar_tickets += extra_result.all()
-
-    return [
-        SimilarTicketOut(
-            id=str(t.id),
-            ref=t.ref,
-            subject=t.subject,
-            category=t.category,
-            status=t.status.value,
-            similarity=round(0.95 - (i * 0.08), 2)  # simulated similarity score
+    # 1. Run real pgvector cosine similarity query (<=> operator) against TicketEmbedding
+    stmt = (
+        sql_select(
+            Ticket,
+            type_coerce(col(TicketEmbedding.embedding).op("<=>")(query_vec), Float).label("distance")
         )
-        for i, t in enumerate(similar_tickets[:limit])
-    ]
+        .join(TicketEmbedding, Ticket.id == TicketEmbedding.ticket_id)
+        .where(
+            Ticket.id != ticket_id,
+            Ticket.deleted_at.is_(None),
+            Ticket.status.in_([TicketStatus.resolved, TicketStatus.closed])
+        )
+        .order_by(text("distance ASC"))
+        .limit(limit)
+    )
+
+    results = (await session.exec(stmt)).all()
+
+    output: List[SimilarTicketOut] = []
+    seen_ids = set()
+
+    for row_ticket, distance in results:
+        # Distance D in pgvector cosine operator <=>: similarity S = 1.0 - D
+        sim_score = max(0.0, round(1.0 - float(distance), 4))
+        seen_ids.add(row_ticket.id)
+        output.append(
+            SimilarTicketOut(
+                id=str(row_ticket.id),
+                ref=row_ticket.ref,
+                subject=row_ticket.subject,
+                category=row_ticket.category,
+                status=row_ticket.status.value,
+                similarity=sim_score,
+                is_fallback=False
+            )
+        )
+
+    # 2. Fallback: category/time search for tickets missing embeddings
+    if len(output) < limit:
+        needed = limit - len(output)
+        fallback_stmt = (
+            sql_select(Ticket)
+            .where(
+                Ticket.id != ticket_id,
+                Ticket.id.notin_(seen_ids) if seen_ids else True,
+                Ticket.deleted_at.is_(None),
+                Ticket.status.in_([TicketStatus.resolved, TicketStatus.closed]),
+                Ticket.category == ticket.category
+            )
+            .order_by(Ticket.created_at.desc())
+            .limit(needed)
+        )
+        fallback_tickets = (await session.exec(fallback_stmt)).all()
+
+        for t in fallback_tickets:
+            seen_ids.add(t.id)
+            output.append(
+                SimilarTicketOut(
+                    id=str(t.id),
+                    ref=t.ref,
+                    subject=t.subject,
+                    category=t.category,
+                    status=t.status.value,
+                    similarity=0.5,
+                    is_fallback=True
+                )
+            )
+
+    return output[:limit]
 
 
+# ─── Phase B.5 — AI Copilot: Next-Best-Action ─────────────────────────────────
 
+class ActionItem(BaseModel):
+    id: str
+    label: str
+    rationale: str
+    priority: int  # 1 = highest
+    action_type: str  # "status_change" | "reply" | "escalate" | "sla" | "info"
+
+
+class NextActionOut(BaseModel):
+    actions: List[ActionItem]
+    ticket_summary: Optional[str] = None
+
+
+@router.post("/{ticket_id}/next-action", response_model=NextActionOut)
+async def get_next_best_action(
+    ticket_id: uuid.UUID,
+    current_user: User = Depends(require_role(UserRole.agent)),
+    session: AsyncSession = Depends(get_session),
+):
+    """
+    Deterministic Next-Best-Action engine for the AI Copilot.
+
+    Analyses ticket status, priority, SLA, sentiment, and message count
+    to return 1-3 prioritised recommended agent actions.
+
+    HITL guarantee: This endpoint ONLY returns recommendations — it never
+    mutates ticket state, sends messages, or triggers any side effects.
+    The agent must explicitly act on each suggestion.
+    """
+    ticket = await session.get(Ticket, ticket_id)
+    if not ticket or ticket.deleted_at:
+        raise HTTPException(status_code=404, detail="Ticket not found")
+
+    # Fetch messages for context
+    from sqlmodel import select as sql_select
+    msgs_result = await session.exec(
+        sql_select(Message)
+        .where(Message.ticket_id == ticket_id)
+        .order_by(Message.created_at.asc())
+        .limit(50)
+    )
+    messages = list(msgs_result.all())
+
+    status_val = ticket.status.value if hasattr(ticket.status, "value") else str(ticket.status)
+    priority_val = ticket.priority.value if hasattr(ticket.priority, "value") else str(ticket.priority)
+    sentiment = (ticket.sentiment or "").lower()
+    msg_count = len(messages)
+    now = datetime.now()
+    sla_breached = ticket.sla_breached or (
+        ticket.sla_due_at is not None and ticket.sla_due_at < now
+    )
+    sla_mins_remaining = None
+    if ticket.sla_due_at and ticket.sla_due_at >= now:
+        sla_mins_remaining = int((ticket.sla_due_at - now).total_seconds() / 60)
+
+    # Determine last sender type
+    last_sender_type = None
+    if messages:
+        last_msg = messages[-1]
+        last_sender_type = last_msg.sender_type.value if hasattr(last_msg.sender_type, "value") else str(last_msg.sender_type)
+
+    actions: List[ActionItem] = []
+    priority_counter = 1
+
+    # Rule 1 — Escalated ticket: accept it
+    if status_val == "escalated":
+        actions.append(ActionItem(
+            id="accept_ticket",
+            label="Accept & Claim Ticket",
+            rationale="Ticket is escalated. Accepting it stops further SLA countdown and notifies the customer a human agent is on the case.",
+            priority=priority_counter,
+            action_type="status_change",
+        ))
+        priority_counter += 1
+
+    # Rule 2 — SLA breached: urgent response required
+    if sla_breached and status_val not in ("resolved", "closed"):
+        actions.append(ActionItem(
+            id="sla_breach_response",
+            label="Respond Immediately — SLA Breached",
+            rationale="This ticket has breached its SLA target. A prompt, empathetic reply is required to acknowledge the delay and communicate next steps.",
+            priority=priority_counter,
+            action_type="sla",
+        ))
+        priority_counter += 1
+
+    # Rule 3 — SLA < 30 mins remaining: warn
+    if sla_mins_remaining is not None and sla_mins_remaining < 30 and status_val not in ("resolved", "closed"):
+        actions.append(ActionItem(
+            id="sla_warning_response",
+            label=f"Reply Within {sla_mins_remaining} Minutes — SLA at Risk",
+            rationale=f"Only {sla_mins_remaining} minutes remain before SLA breach. Draft and send a reply immediately.",
+            priority=priority_counter,
+            action_type="sla",
+        ))
+        priority_counter += 1
+
+    # Rule 4 — Frustrated/negative sentiment with customer waiting
+    if sentiment in ("frustrated", "negative") and last_sender_type == "customer" and status_val not in ("resolved", "closed"):
+        actions.append(ActionItem(
+            id="empathetic_reply",
+            label="Send Empathetic Reply",
+            rationale=f"Customer sentiment is '{sentiment}'. An empathetic acknowledgement reduces churn risk before addressing the core issue.",
+            priority=priority_counter,
+            action_type="reply",
+        ))
+        priority_counter += 1
+
+    # Rule 5 — Customer sent last message in an active conversation
+    if last_sender_type == "customer" and msg_count >= 3 and status_val in ("open", "waiting"):
+        actions.append(ActionItem(
+            id="follow_up_reply",
+            label="Send Follow-Up Reply",
+            rationale=f"The customer sent the last message ({msg_count} total). A follow-up keeps them informed and prevents re-escalation.",
+            priority=priority_counter,
+            action_type="reply",
+        ))
+        priority_counter += 1
+
+    # Rule 6 — Resolved ticket: offer to close
+    if status_val == "resolved":
+        actions.append(ActionItem(
+            id="close_ticket",
+            label="Close Ticket",
+            rationale="Ticket is resolved. Closing it frees capacity and delivers the final CSAT survey to the customer.",
+            priority=priority_counter,
+            action_type="status_change",
+        ))
+        priority_counter += 1
+
+    # Rule 7 — High/urgent priority with no recent agent reply
+    if priority_val in ("urgent", "high") and status_val in ("open", "new", "waiting"):
+        has_recent_agent = any(
+            (m.sender_type.value if hasattr(m.sender_type, "value") else str(m.sender_type)) == "agent"
+            for m in messages[-3:]
+        )
+        if not has_recent_agent:
+            actions.append(ActionItem(
+                id="urgent_draft_reply",
+                label="Draft & Send Urgent Reply",
+                rationale=f"This is a {priority_val} priority ticket with no recent agent reply. Use AI Suggest to draft a rapid response.",
+                priority=priority_counter,
+                action_type="reply",
+            ))
+            priority_counter += 1
+
+    # Rule 8 — New ticket with no agent reply yet
+    if status_val in ("new", "open") and msg_count <= 2 and last_sender_type == "customer":
+        actions.append(ActionItem(
+            id="initial_response",
+            label="Send Initial Response",
+            rationale="This ticket has no agent reply yet. An acknowledgement sets a positive experience baseline.",
+            priority=priority_counter,
+            action_type="reply",
+        ))
+        priority_counter += 1
+
+    # Fallback: no rules triggered
+    if not actions:
+        actions.append(ActionItem(
+            id="use_ai_suggest",
+            label="Use AI Suggest to Draft a Reply",
+            rationale="No urgent actions detected. Use the AI Suggest tab to generate a context-aware reply.",
+            priority=1,
+            action_type="info",
+        ))
+
+    # Cap at top 3 actions, re-number cleanly
+    actions = sorted(actions, key=lambda a: a.priority)[:3]
+    for i, action in enumerate(actions):
+        action.priority = i + 1
+
+    return NextActionOut(
+        actions=actions,
+        ticket_summary=ticket.ai_summary,
+    )
 

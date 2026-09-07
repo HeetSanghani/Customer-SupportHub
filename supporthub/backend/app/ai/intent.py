@@ -25,7 +25,58 @@ class IntentCategory(str, Enum):
     ESCALATION = "escalation"
     SECURITY = "security"
     MULTI_TURN = "multi_turn"
+    RESOLVED = "resolved"
     UNKNOWN = "unknown"
+
+
+def is_resolution_intent(text: str) -> bool:
+    """
+    Robust intent detector to determine if a customer message indicates
+    their issue/problem is solved, or that they wish to close/resolve the ticket.
+    Handles variations, typos (e.g. 'promblem', 'solvd', 'problm'), and conversational phrases.
+    """
+    if not text:
+        return False
+    
+    cleaned = text.lower().strip()
+    
+    # Standardize common typos and word forms (e.g. 'promblem', 'problm', 'solvd', 'reslvd')
+    cleaned_norm = re.sub(r"\bpr[o0mbe]{1,4}l[em]{1,3}s?\b", "problem", cleaned)
+    cleaned_norm = re.sub(r"\bsolv[ed]{0,2}\b", "solved", cleaned_norm)
+    cleaned_norm = re.sub(r"\bres[olv]{2,5}[ed]{0,2}\b", "resolved", cleaned_norm)
+    cleaned_norm = re.sub(r"\bfix[ed]{1,2}\b", "fixed", cleaned_norm)
+    
+    # 1. Broad resolution phrase list
+    phrases = [
+        "problem solved", "problem is solved", "the problem is solved",
+        "my problem is solved", "issue resolved", "issue is resolved",
+        "my issue is resolved", "the issue is resolved", "that fixed it",
+        "that solved it", "that solved my issue", "problem fixed", "issue fixed",
+        "close chat", "close ticket", "end chat", "end ticket", "resolve ticket",
+        "mark as resolved", "mark ticket resolved", "you can close", "you can end",
+        "all good now", "everything is working now", "no more help needed",
+        "thanks problem solved", "thanks my problem is solved", "issue is fixed",
+        "problem is fixed", "all resolved", "case solved", "query resolved"
+    ]
+    
+    if any(p in cleaned_norm for p in phrases):
+        return True
+        
+    # 2. Flexible Regex pattern matching
+    patterns = [
+        r"\b(the\s+|my\s+)?(problem|issue|query|ticket|it|this)\s+(is\s+)?(solved|resolved|fixed)\b",
+        r"\b(solved|resolved|fixed)\s+(the\s+|my\s+)?(problem|issue|query|ticket)\b",
+        r"\b(thanks|thank\s+you).*(problem|issue|query)?.*(solved|resolved|fixed)\b",
+        r"\b(close|end|resolve)\s+(this\s+)?(chat|ticket|conversation)\b",
+        r"^\s*(thanks?,?\s*)?(problem|issue)?\s*(is\s*)?(solved|resolved|fixed)\s*(!|\.)*\s*$"
+    ]
+    
+    for pat in patterns:
+        if re.search(pat, cleaned_norm):
+            return True
+
+    return False
+
 
 
 @dataclass
@@ -171,6 +222,18 @@ class IntentClassifier:
         _has_explicit_refund  = bool(explicit_entities.get("refund_id"))
         _has_any_explicit     = any([_has_explicit_product, _has_explicit_order,
                                       _has_explicit_return, _has_explicit_refund])
+
+        # 0. Resolution Check
+        if is_resolution_intent(query):
+            return IntentResult(
+                category=IntentCategory.RESOLVED,
+                intent_name="CASE_RESOLVED",
+                confidence=0.99,
+                entities=entities,
+                explicit_entities=explicit_entities,
+                suggested_route="NONE",
+                raw_query=query
+            )
 
         # 1. Security Check
         if any(w in text for w in ["other customer", "another customer's", "pin is", "otp is", "my password is", "what is the otp sent for my payment", "phone number of customer", "what items did priya", "shipping address associated with ord"]):

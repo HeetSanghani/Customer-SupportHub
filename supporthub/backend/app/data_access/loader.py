@@ -108,6 +108,8 @@ class DataLoader:
                     self.sellers[alias] = s
             for o in postgres_business_repository.list_all_orders():
                 self.orders[o.order_id] = o
+            for oi in postgres_business_repository.list_all_order_items():
+                self.order_items[oi.order_item_id] = oi
             for sh in postgres_business_repository.list_all_shipments():
                 self.shipments[sh.shipment_id] = sh
             for pay in postgres_business_repository.list_all_payments():

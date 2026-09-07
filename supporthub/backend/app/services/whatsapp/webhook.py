@@ -26,7 +26,8 @@ from app.services.whatsapp.sender import WhatsAppSender
 from app.database import AsyncSessionLocal
 from app.ws.manager import manager
 from sqlmodel import select
-from app.models import Message
+from app.models import Message, TicketStatus
+from app.ai.intent import is_resolution_intent
 
 logger = logging.getLogger(__name__)
 
@@ -144,8 +145,23 @@ async def _process_single_message(
                 await db_session.commit()
                 await db_session.refresh(context.ticket)
 
-        # ── Step 3B: AI Orchestration ──────────────────────────────────────
-        ai_response = await ai_orchestrator.generate(context)
+        # ── Step 3B: Resolution Intent & AI Orchestration ─────────────────
+        if is_resolution_intent(incoming.text):
+            context.ticket.status = TicketStatus.resolved
+            context.ticket.ai_resolved = True
+            db_session.add(context.ticket)
+            await db_session.commit()
+            await db_session.refresh(context.ticket)
+            logger.info("✅ Ticket %s automatically RESOLVED via resolution intent.", context.ticket.ref)
+
+            resolution_text = (
+                "I'm glad to hear your issue has been resolved! I've marked this ticket as resolved. "
+                "If you need any further assistance in the future, please feel free to reach out. Have a great day!"
+            )
+            from app.services.ai.orchestrator import AIResponse
+            ai_response = AIResponse(response_text=resolution_text)
+        else:
+            ai_response = await ai_orchestrator.generate(context)
 
         logger.info(
             "🤖 AI Response | ref=%s | provider=%s | tokens=%d | ms=%d | fallback=%s | "
@@ -168,32 +184,6 @@ async def _process_single_message(
             delivery_result.provider_message_id,
             delivery_result.latency_ms,
         )
-
-        # Check if customer message or AI response requests to resolve/close the chat
-        user_msg = (incoming.text or "").lower().strip()
-        ai_msg = (ai_response.response_text or "").lower().strip()
-
-        resolution_phrases = [
-            "close this chat", "close chat", "end this chat", "end chat",
-            "close ticket", "end ticket", "resolve ticket", "mark as resolved",
-            "you can close", "you can end", "thanks, that fixed it", "thanks that fixed it",
-            "that fixed it", "problem solved", "issue is resolved", "issue resolved"
-        ]
-
-        is_resolved_intent = (
-            any(phrase in user_msg for phrase in resolution_phrases)
-            or (("close" in user_msg or "end" in user_msg) and ("chat" in user_msg or "ticket" in user_msg))
-            or ("pleasure assisting" in ai_msg and "have a great day" in ai_msg)
-        )
-
-        if is_resolved_intent:
-            from app.models import TicketStatus
-            context.ticket.status = TicketStatus.resolved
-            context.ticket.ai_resolved = True
-            db_session.add(context.ticket)
-            await db_session.commit()
-            await db_session.refresh(context.ticket)
-            logger.info("✅ Ticket %s automatically RESOLVED via resolution intent.", context.ticket.ref)
 
         # Broadcast AI response over WebSocket to dashboard UI
         await manager.broadcast(ticket_id_str, {

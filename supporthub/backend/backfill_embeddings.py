@@ -1,30 +1,24 @@
 import asyncio
-import os
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
-from sqlalchemy.orm import sessionmaker
 from sqlmodel import select
-from app.config import get_settings
+from app.rag.retriever import _execute_db_op
 from app.models import KbArticle
-from app.ai import generate_embedding
+from app.rag.embeddings import GoogleEmbeddingProvider
 
-async def main():
-    settings = get_settings()
-    engine = create_async_engine(settings.database_url, echo=False)
-    async_session = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+async def _backfill(session):
+    provider = GoogleEmbeddingProvider()
+    stmt = select(KbArticle)
+    res = await session.exec(stmt)
+    articles = res.all()
     
-    async with async_session() as session:
-        statement = select(KbArticle)
-        result = await session.execute(statement)
-        articles = result.scalars().all()
+    for article in articles:
+        print(f"Generating real Gemini embedding for: {article.title[:50]}")
+        text = f"{article.title}\n{article.body}"
+        vec = provider.embed_text(text, task_type="retrieval_document")
+        article.embedding = vec
+        session.add(article)
         
-        for article in articles:
-            print(f"Generating real embedding for: {article.title}")
-            text = f"{article.title}\n{article.body}"
-            article.embedding = generate_embedding(text)
-            session.add(article)
-            
-        await session.commit()
-        print("Updated all articles with real Gemini embeddings!")
+    await session.commit()
+    print(f"Successfully updated {len(articles)} articles with real 768-dim Gemini embeddings!")
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    _execute_db_op(_backfill)

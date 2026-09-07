@@ -7,7 +7,13 @@ from .state import GraphState
 
 
 def _route_after_escalation(state: GraphState) -> str:
-    return "escalate" if state.get("escalated") else "decompose"
+    if state.get("escalated"):
+        from .nodes import _hybrid_split
+        subs = _hybrid_split(state.get("raw_query", ""))
+        if len(subs) > 1:
+            return "decompose"
+        return "escalate"
+    return "decompose"
 
 
 def build_graph():

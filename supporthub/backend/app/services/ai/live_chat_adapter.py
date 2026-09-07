@@ -24,8 +24,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
 from app.database import AsyncSessionLocal
-from app.models import Message, SenderType, Ticket, TicketPriority, TicketStatus, User
+from app.models import AuditLog, Message, SenderType, Ticket, TicketPriority, TicketStatus, User
 from app.ws.manager import manager
+from app.ai.intent import is_resolution_intent
 
 logger = logging.getLogger(__name__)
 
@@ -179,7 +180,49 @@ class LiveChatAIAdapter:
                 await self._broadcast_ai_events(ticket_id, ai_msg, ticket, unlinked_notice)
                 return ai_msg
 
-            # 3. Invoke AI Orchestrator
+            # 3. Handle Resolution Intent BEFORE running AI Orchestrator
+            if is_resolution_intent(message_body):
+                ticket.status = TicketStatus.resolved
+                ticket.ai_resolved = True
+                logger.info("[LiveChatAIAdapter] Ticket %s marked as resolved by user intent.", ticket_id)
+
+                session.add(AuditLog(
+                    actor_id=ticket.customer_id,
+                    action="ticket.auto_resolved",
+                    entity_type="ticket",
+                    entity_id=str(ticket.id),
+                    ticket_id=ticket.id,
+                    diff_json='{"status": "resolved", "ai_resolved": true, "trigger": "customer_intent"}',
+                ))
+
+                resolution_reply = (
+                    "I'm glad to hear your issue has been resolved! I've marked this ticket as resolved. "
+                    "If you need any further assistance in the future, please feel free to reach out. Have a great day!"
+                )
+                ai_msg = Message(
+                    ticket_id=ticket_uuid,
+                    sender_id=None,
+                    sender_type=SenderType.ai,
+                    body=resolution_reply,
+                )
+                session.add(ai_msg)
+                ticket.updated_at = datetime.now()
+                session.add(ticket)
+
+                try:
+                    from app.services.csat_delivery import deliver_csat_survey
+                    await deliver_csat_survey(session, ticket, user)
+                except Exception as e:
+                    logger.warning("[LiveChatAIAdapter] Failed to deliver CSAT survey: %s", e)
+
+                await session.commit()
+                await session.refresh(ai_msg)
+                await session.refresh(ticket)
+
+                await self._broadcast_ai_events(ticket_id, ai_msg, ticket, resolution_reply)
+                return ai_msg
+
+            # 4. Invoke AI Orchestrator
             ai_text = _FALLBACK_REPLY
             ai_result = None
             try:
@@ -202,7 +245,7 @@ class LiveChatAIAdapter:
                 else:
                     ai_text = _FALLBACK_REPLY
 
-            # 3. Handle Escalation Decision
+            # 5. Handle Escalation Decision
             if ai_result and hasattr(ai_result, "escalation_decision") and ai_result.escalation_decision:
                 if ai_result.escalation_decision.should_escalate or ai_result.route_type == "HUMAN":
                     ticket.status = TicketStatus.escalated
@@ -223,27 +266,6 @@ class LiveChatAIAdapter:
                         ai_result.escalation_decision.reason,
                         ticket.priority.value,
                     )
-
-            # 4. Handle Resolution Intent
-            user_msg_clean = (message_body or "").lower().strip()
-            resolution_phrases = [
-                "close this chat", "close chat", "end this chat", "end chat",
-                "close ticket", "end ticket", "resolve ticket", "mark as resolved",
-                "you can close", "you can end", "thanks, that fixed it", "thanks that fixed it",
-                "that fixed it", "problem solved", "issue is resolved", "issue resolved"
-            ]
-            if any(phrase in user_msg_clean for phrase in resolution_phrases) or (
-                ("close" in user_msg_clean or "end" in user_msg_clean) and ("chat" in user_msg_clean or "ticket" in user_msg_clean)
-            ):
-                ticket.status = TicketStatus.resolved
-                ticket.ai_resolved = True
-                logger.info("[LiveChatAIAdapter] Ticket %s marked as resolved by user intent.", ticket_id)
-
-                try:
-                    from app.services.csat_delivery import deliver_csat_survey
-                    await deliver_csat_survey(session, ticket, user)
-                except Exception as e:
-                    logger.warning("[LiveChatAIAdapter] Failed to deliver CSAT survey: %s", e)
 
             # 5. Persist AI Message & Ticket Timestamp
             ticket.updated_at = datetime.now()

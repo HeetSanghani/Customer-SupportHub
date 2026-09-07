@@ -114,7 +114,7 @@ class AIRouter:
             is_hybrid = True
             target_tools = ["get_order", "get_shipment_by_order"]
             rag_query = "Order cancellation policy before dispatch"
-        elif ("can i return" in text or "return window" in text or ("return policy" in text and has_entity_ref) or "return request" in text) and (has_entity_ref or intent.category in (IntentCategory.RETURNS, IntentCategory.PRODUCT)):
+        elif ("can i return" in text or "return window" in text or ("return policy" in text and has_entity_ref) or "return request" in text or "return " in text) and (has_entity_ref or intent.category in (IntentCategory.RETURNS, IntentCategory.PRODUCT)):
             is_hybrid = True
             target_tools = ["get_order", "get_product", "get_return_by_order"]
             rag_query = "Return policy window and conditions"

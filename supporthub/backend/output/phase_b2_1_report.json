@@ -1,0 +1,34 @@
+{
+  "phase": "B.2.1",
+  "status": "COMPLETED",
+  "timestamp": "2026-08-31T14:34:00+05:30",
+  "test_metrics": {
+    "dedicated_e2e_tests": {
+      "total": 4,
+      "passed": 4,
+      "failed": 0
+    },
+    "ai_suite_tests": {
+      "total": 215,
+      "passed": 215,
+      "failed": 0
+    }
+  },
+  "benchmarks": [
+    {
+      "query": "Show my order, payment and shipment status.",
+      "status": "PASSED",
+      "intents": ["ORDER_INQUIRY", "PAYMENT_INQUIRY", "SHIPMENT_INQUIRY"]
+    },
+    {
+      "query": "Where is ORD-001, can I return it, and connect me to a human?",
+      "status": "PASSED",
+      "intents": ["ORDER_INQUIRY", "RETURN_INQUIRY", "HUMAN_ESCALATION"]
+    },
+    {
+      "query": "Show my order ORD-001 and ORD-004.",
+      "status": "PASSED",
+      "security": "ANTI_IDOR_VERIFIED"
+    }
+  ]
+}

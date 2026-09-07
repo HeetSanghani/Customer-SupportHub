@@ -365,6 +365,13 @@ class PostgresBusinessRepository:
             rows = cur.fetchall()
             return [self.map_order_item(r) for r in rows]
 
+    def list_all_order_items(self) -> List[OrderItem]:
+        with self.db.cursor() as cur:
+            cur.execute("SELECT * FROM order_items;")
+            rows = cur.fetchall()
+            return [self.map_order_item(r) for r in rows]
+
+
     def get_order_full_details(self, order_id: str, customer_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
         order = self.get_order(order_id, customer_id=customer_id)
         if not order:

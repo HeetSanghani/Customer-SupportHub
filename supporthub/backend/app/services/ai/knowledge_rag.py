@@ -31,122 +31,52 @@ _MAX_BODY_CHARS = 500
 
 
 async def get_relevant_kb_context(
-    session: AsyncSession,
-    query: str,
+    session: Optional[AsyncSession] = None,
+    query: str = "",
     max_results: int = _MAX_RESULTS,
 ) -> Optional[str]:
     """
-    Retrieve relevant KB articles for a query string.
-
-    Tries vector similarity search first (requires pgvector + embeddings),
-    then falls back to keyword ILIKE search.
-
-    Returns formatted context string for injection into AI prompts,
-    or None if no relevant articles found.
+    Retrieve relevant KB context using canonical app/rag/ RAGPipeline.
+    Canonicalized to use PGVectorRetriever on kb_chunk_embeddings.
     """
     if not query or not query.strip():
         return None
 
-    query = query.strip()
-    articles: list[KbArticle] = []
-
-    # ── 1. Try pgvector similarity search ─────────────────────────────────────
     try:
-        embedding = await _embed_query(query)
-        if embedding:
-            stmt = (
-                select(KbArticle)
-                .where(KbArticle.published == True)
-                .where(KbArticle.embedding != None)
-                .order_by(col(KbArticle.embedding).op("<=>")(embedding))
-                .limit(max_results)
+        from app.rag.pipeline import rag_pipeline
+        rag_res = rag_pipeline.query(query.strip(), top_k=max_results)
+        if rag_res and rag_res.get("has_knowledge"):
+            context_text = rag_res.get("context_text")
+            logger.info(
+                "[KB RAG RETRIEVAL PATH: CANONICAL RAG PIPELINE] Retrieved %d chunks (%d chars) for query: %s",
+                rag_res.get("results_count", 0), len(context_text or ""), query[:60]
             )
-            result = await session.exec(stmt)
-            articles = list(result.all())
-            if articles:
-                logger.debug(
-                    "[KB RAG] Vector search found %d articles for query: %s",
-                    len(articles), query[:60]
-                )
+            return context_text
     except Exception as e:
-        logger.warning("[KB RAG] Vector search failed, using keyword fallback: %s", e)
-        articles = []
-
-    # ── 2. Keyword fallback ────────────────────────────────────────────────────
-    if not articles:
-        try:
-            keywords = _extract_keywords(query)
-            if keywords:
-                conditions = [
-                    or_(
-                        col(KbArticle.title).ilike(f"%{kw}%"),
-                        col(KbArticle.body).ilike(f"%{kw}%"),
-                        col(KbArticle.category).ilike(f"%{kw}%"),
-                    )
-                    for kw in keywords[:3]  # Limit to top 3 keywords
-                ]
-                stmt = (
-                    select(KbArticle)
-                    .where(KbArticle.published == True)
-                    .where(or_(*conditions))
-                    .order_by(KbArticle.helpful_count.desc(), KbArticle.views.desc())
-                    .limit(max_results)
-                )
-                result = await session.exec(stmt)
-                articles = list(result.all())
-                if articles:
-                    logger.debug(
-                        "[KB RAG] Keyword fallback found %d articles for keywords: %s",
-                        len(articles), keywords
-                    )
-        except Exception as e:
-            logger.warning("[KB RAG] Keyword search also failed: %s", e)
-            articles = []
-
-    if not articles:
-        logger.debug("[KB RAG] No relevant KB articles found for query: %s", query[:60])
-        return None
-
-    # ── 3. Format context for prompt injection ─────────────────────────────────
-    lines = []
-    for i, article in enumerate(articles, start=1):
-        body_snippet = (article.body or "")[:_MAX_BODY_CHARS].strip()
-        if len(article.body or "") > _MAX_BODY_CHARS:
-            body_snippet += "..."
-        lines.append(
-            f"[Article {i}: {article.title}]\n"
-            f"Category: {article.category}\n"
-            f"{body_snippet}"
+        logger.error(
+            "[KB RAG RETRIEVAL PATH: FAILED] Canonical RAG pipeline exception | type=%s | error=%s",
+            type(e).__name__, e, exc_info=True
         )
 
-    context = "\n\n".join(lines)
-    logger.info(
-        "[KB RAG] Injecting %d KB articles (%d chars) for query: %s",
-        len(articles), len(context), query[:60]
-    )
-    return context
+    return None
 
 
 async def _embed_query(query: str) -> Optional[list[float]]:
     """
-    Generate an embedding vector for the query string using Google's text embedding API.
-    Returns None if embedding generation fails or is unavailable.
+    Generate an embedding vector for the query string using GoogleEmbeddingProvider.
+    Returns None if embedding generation fails.
     """
     try:
-        import google.generativeai as genai
-
+        from app.rag.embeddings import GoogleEmbeddingProvider
+        provider = GoogleEmbeddingProvider()
         loop = asyncio.get_event_loop()
-        result = await loop.run_in_executor(
+        vec = await loop.run_in_executor(
             None,
-            lambda: genai.embed_content(
-                model="models/text-embedding-004",
-                content=query,
-                task_type="retrieval_query",
-            )
+            lambda: provider.embed_text(query, task_type="retrieval_query")
         )
-        return result.get("embedding")
+        return vec
     except Exception as e:
-        logger.debug("[KB RAG] Embedding generation skipped: %s", e)
+        logger.error("[KB RAG] Embedding generation failed | type=%s | error=%s", type(e).__name__, e, exc_info=True)
         return None
 
 

@@ -196,7 +196,7 @@ class KbArticle(SQLModel, table=True):
     category: str = Field(max_length=100, index=True)
     body: str = Field(sa_column=Column(Text))
     embedding: Optional[list[float]] = Field(
-        default=None, sa_column=Column(Vector(1536))
+        default=None, sa_column=Column(Vector(768))
     )
     views: int = Field(default=0)
     helpful_count: int = Field(default=0)
@@ -204,6 +204,35 @@ class KbArticle(SQLModel, table=True):
     created_by: Optional[uuid.UUID] = Field(default=None, foreign_key="users.id")
     created_at: datetime = Field(default_factory=datetime.now)
     updated_at: datetime = Field(default_factory=datetime.now)
+
+
+# ─── KB Chunk Embedding (RAG Vector Store) ───────────────────────────────────
+
+class KbChunkEmbedding(SQLModel, table=True):
+    __tablename__ = "kb_chunk_embeddings"
+
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    chunk_id: str = Field(max_length=255, unique=True, index=True)
+    source_id: str = Field(max_length=255, index=True)
+    source_type: str = Field(max_length=100, index=True)
+    title: str = Field(max_length=300)
+    category: str = Field(max_length=100, index=True)
+    content: str = Field(sa_column=Column(Text))
+    embedding: list[float] = Field(sa_column=Column(Vector(768)))
+    created_at: datetime = Field(default_factory=datetime.now)
+
+
+# ─── Ticket Embedding (Similar Ticket Search) ───────────────────────────────────
+
+class TicketEmbedding(SQLModel, table=True):
+    __tablename__ = "ticket_embeddings"
+
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    ticket_id: uuid.UUID = Field(foreign_key="tickets.id", unique=True, index=True)
+    embedding: list[float] = Field(sa_column=Column(Vector(768), nullable=False))
+    created_at: datetime = Field(default_factory=datetime.now)
+
+
 
 
 # ─── Channel Integration ──────────────────────────────────────────────────────

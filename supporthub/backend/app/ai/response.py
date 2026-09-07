@@ -122,8 +122,46 @@ class ResponseSynthesizer:
         data: Dict[str, Any],
         query: str
     ) -> AIResponse:
-        """Construct response from verified structured database records."""
         q_lower = query.lower()
+        is_product_info_query = any(w in q_lower for w in [
+            "product", "products", "item", "items", "sku", "skus",
+            "product info", "product information", "product detail", "product details",
+            "itemized", "what did i order", "what is inside", "whats inside", "what items"
+        ])
+
+        # Multi-Entity Structured Aggregation
+        active_entities = [k for k in ("order", "payment", "shipment", "return", "refund") if data.get(k)]
+        if len(active_entities) > 1 and not is_product_info_query and ("and" in q_lower or "," in q_lower or intent_name == "UNKNOWN" or len(q_lower.split()) > 4):
+            sections = []
+            if "order" in data and data["order"]:
+                o = data["order"]
+                o_id = o.get('order_id') if isinstance(o, dict) else getattr(o, 'order_id', '')
+                o_status = o.get('status') if isinstance(o, dict) else getattr(o, 'status', '')
+                o_total = o.get('total_amount', 0) if isinstance(o, dict) else getattr(o, 'total_amount', 0)
+                sections.append(f"Order {o_id} status: **{o_status}** (Total: ₹{o_total:,.2f}).")
+            if "payment" in data and data["payment"]:
+                pay = data["payment"]
+                raw_fail = pay.get("failure_reason") or ""
+                safe_fail = _sanitize_payment_failure_reason(raw_fail)
+                fail_reason = f" Reason: {safe_fail}." if safe_fail else ""
+                sections.append(f"Payment for order {pay.get('order_id')} is **{pay.get('status')}** via {pay.get('method')} (Ref: {pay.get('transaction_reference')}).{fail_reason}")
+            if "shipment" in data and data["shipment"]:
+                s = data["shipment"]
+                sections.append(f"Shipment {s.get('shipment_id')} for order {s.get('order_id')} is **{s.get('status')}** via {s.get('carrier')} (Tracking: {s.get('tracking_number')}, Estimated Delivery: {s.get('estimated_delivery_date')}).")
+            if "return" in data and data["return"]:
+                ret = data["return"]
+                sections.append(f"Return request {ret.get('return_id')} for order {ret.get('order_id')} is **{ret.get('status')}** (Reason: {ret.get('reason')}).")
+            if "refund" in data and data["refund"]:
+                ref = data["refund"]
+                sections.append(f"Refund {ref.get('refund_id')} for order {ref.get('order_id')} is **{ref.get('status')}** (Amount: ₹{ref.get('refund_amount'):,.2f} via {ref.get('refund_method')}).")
+
+            if sections:
+                return AIResponse(
+                    content="\n\n".join(sections),
+                    route_type="STRUCTURED",
+                    structured_data=data,
+                    is_grounded=True
+                )
 
         # Seller Priority
         if "seller" in data and data["seller"] and ("seller" in q_lower or "who sells" in q_lower or intent_name == "SELLER_INQUIRY"):
@@ -165,7 +203,7 @@ class ResponseSynthesizer:
             )
 
         # Shipment Priority
-        if "shipment" in data and data["shipment"] and ("shipment" in q_lower or "tracking" in q_lower or "courier" in q_lower or intent_name == "SHIPMENT_INQUIRY"):
+        if "shipment" in data and data["shipment"] and ("shipment" in q_lower or "tracking" in q_lower or "courier" in q_lower or intent_name == "SHIPMENT_INQUIRY") and not is_product_info_query:
             s = data["shipment"]
             content = (
                 f"Shipment {s.get('shipment_id')} for order {s.get('order_id')} is {s.get('status')} via {s.get('carrier')}. "
@@ -178,7 +216,7 @@ class ResponseSynthesizer:
                 is_grounded=True
             )
 
-        if intent_name == "SHIPMENT_INQUIRY" and ("shipment" not in data or not data["shipment"]):
+        if intent_name == "SHIPMENT_INQUIRY" and ("shipment" not in data or not data["shipment"]) and not is_product_info_query:
             content = "I could not find an active shipment record for your account. Please provide your Order ID or Tracking Number if you need tracking details."
             return AIResponse(
                 content=content,
@@ -188,7 +226,7 @@ class ResponseSynthesizer:
             )
 
         # Payment Priority
-        if "payment" in data and data["payment"] and ("payment" in q_lower or "paid" in q_lower or intent_name == "PAYMENT_INQUIRY"):
+        if "payment" in data and data["payment"] and ("payment" in q_lower or "paid" in q_lower or intent_name == "PAYMENT_INQUIRY") and not is_product_info_query:
             pay = data["payment"]
             ref_info = ""
             if "refund" in data and data["refund"]:
@@ -225,8 +263,8 @@ class ResponseSynthesizer:
                         is_grounded=True
                     )
 
-        # Product Response
-        if "product" in data and data["product"]:
+        # Product Response (Direct Product entity search e.g. PROD-001)
+        if "product" in data and data["product"] and "order" not in data:
             p = data["product"]
             p_name = p.get('name') if isinstance(p, dict) else getattr(p, 'name', '')
             p_brand = p.get('brand') if isinstance(p, dict) else getattr(p, 'brand', '')
@@ -250,24 +288,64 @@ class ResponseSynthesizer:
         # Order Response — query-aware: answer the SPECIFIC question asked
         if "order" in data and data["order"]:
             o = data["order"]
-            s = data.get("shipment")
-            items = data.get("order_items", [])
-            item_names = [
-                f"{it.get('product_id') if isinstance(it, dict) else getattr(it, 'product_id', '')} (Qty {it.get('quantity') if isinstance(it, dict) else getattr(it, 'quantity', 1)})"
-                for it in items
-            ] if items else []
-
             o_id = o.get('order_id') if isinstance(o, dict) else getattr(o, 'order_id', '')
             o_status = o.get('status') if isinstance(o, dict) else getattr(o, 'status', '')
             o_total = o.get('total_amount', 0) if isinstance(o, dict) else getattr(o, 'total_amount', 0)
 
+            items = data.get("order_items", [])
+            if not items and o_id:
+                try:
+                    from app.ai.tools import tool_registry
+                    items = tool_registry.get_order_items(o_id)
+                    data["order_items"] = items
+                except Exception:
+                    items = []
+
+            formatted_items = []
+            for it in items:
+                p_id = it.get('product_id') if isinstance(it, dict) else getattr(it, 'product_id', '')
+                p_name = it.get('product_name') if isinstance(it, dict) else getattr(it, 'product_name', 'Product')
+                qty = it.get('quantity') if isinstance(it, dict) else getattr(it, 'quantity', 1)
+                unit_price = it.get('unit_price', 0) if isinstance(it, dict) else getattr(it, 'unit_price', 0)
+                total_price = it.get('total_price', 0) if isinstance(it, dict) else getattr(it, 'total_price', 0)
+                formatted_items.append(
+                    f"• **{p_name}**\n"
+                    f"   SKU: `{p_id}` • Qty: {qty} • Price: **₹{unit_price:,.2f}** (Total: **₹{total_price:,.2f}**)"
+                )
+
+            item_names = [
+                f"{it.get('product_name', it.get('product_id', ''))} (Qty {it.get('quantity', 1)})" if isinstance(it, dict) else f"{getattr(it, 'product_id', '')} (Qty {getattr(it, 'quantity', 1)})"
+                for it in items
+            ] if items else []
+
+            s = data.get("shipment")
             s_status = s.get('status') if isinstance(s, dict) else getattr(s, 'status', '') if s else ""
             s_carrier = s.get('carrier') if isinstance(s, dict) else getattr(s, 'carrier', '') if s else ""
             s_tracking = s.get('tracking_number') if isinstance(s, dict) else getattr(s, 'tracking_number', '') if s else ""
             s_est = s.get('estimated_delivery_date', 'N/A') if isinstance(s, dict) else getattr(s, 'estimated_delivery_date', 'N/A') if s else "N/A"
 
+            # "product / item / sku / product info / product details / items in order" → focus on product line items
+            if is_product_info_query:
+                if formatted_items:
+                    items_list_str = "\n\n".join(formatted_items)
+                    content = (
+                        f"Order **{o_id}** — Product Details\n\n"
+                        f"📦 **Items Included:**\n"
+                        f"{items_list_str}\n\n"
+                        f"📌 **Order Summary:**\n"
+                        f"• Status: **{o_status}**\n"
+                        f"• Total Amount: **₹{o_total:,.2f}**"
+                    )
+                else:
+                    content = (
+                        f"Order **{o_id}** — Product Details\n\n"
+                        f"• Status: **{o_status}**\n"
+                        f"• Total Amount: **₹{o_total:,.2f}**\n\n"
+                        f"No itemized product breakdown recorded."
+                    )
+
             # "where is my order / where / tracking / shipment" → focus on location & carrier
-            if any(w in q_lower for w in ["where", "track", "tracking", "carrier", "location", "shipment", "courier", "delivery date", "when will"]):
+            elif any(w in q_lower for w in ["where", "track", "tracking", "carrier", "location", "shipment", "courier", "delivery date", "when will"]):
                 if s:
                     content = (
                         f"Your order {o_id} is currently **{s_status}** "
@@ -282,10 +360,12 @@ class ResponseSynthesizer:
 
             # "price / cost / how much / total / amount" → focus on price & items
             elif any(w in q_lower for w in ["price", "cost", "how much", "total", "amount", "charge", "paid"]):
-                items_str = f" Items ordered: {', '.join(item_names)}." if item_names else ""
-                content = (
-                    f"Order {o_id} total is **₹{o_total:,.2f}**.{items_str}"
-                )
+                if formatted_items:
+                    items_str = "\n\n" + "\n".join(formatted_items)
+                    content = f"Order **{o_id}** total is **₹{o_total:,.2f}**.{items_str}"
+                else:
+                    items_str = f" Items ordered: {', '.join(item_names)}." if item_names else ""
+                    content = f"Order {o_id} total is **₹{o_total:,.2f}**.{items_str}"
 
             # "cancel / cancellation" → explain cancellation options for THIS specific order
             elif any(w in q_lower for w in ["cancel", "cancle", "cancellation"]):

@@ -5,10 +5,18 @@ from typing import Any, Dict, List, Optional, TypedDict
 
 class SubQuestion(TypedDict, total=False):
     """One decomposed piece of the customer's message."""
-    text: str
+    id: str
+    original_text: str
+    normalized_text: str
+    text: str  # Backwards compatibility alias for normalized_text
     intent: Optional[Any]
+    entities: Dict[str, Any]
     route: Optional[Any]
+    context_reference: Dict[str, Any]
+    authorization_status: str  # "ALLOWED", "DENIED"
+    execution_status: str      # "SUCCESS", "FAILED"
     response: Optional[Any]
+    error: Optional[str]
 
 
 class GraphState(TypedDict, total=False):

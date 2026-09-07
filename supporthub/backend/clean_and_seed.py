@@ -66,7 +66,7 @@ async def run_clean_and_seed():
             {"email": "emma.wilson@supporthub.com", "name": "Emma Wilson", "role": UserRole.agent, "phone": "+1 (555) 010-0006"},
 
             # Customers
-            {"email": "customer@supporthub.com", "name": "Customer User", "role": UserRole.customer, "phone": "+1 (555) 100-0001", "customer_id": "CUST-001"},
+            {"email": "customer@supporthub.com", "name": "Aarav Sharma", "role": UserRole.customer, "phone": "+1 (555) 100-0001", "customer_id": "CUST-001", "address": "123 Main Street, Suite 100", "city": "New York", "state": "NY", "postal_code": "10001", "country": "United States"},
             {"email": "sarah.j@example.com", "name": "Sarah Johnson", "role": UserRole.customer, "phone": "+1 (555) 234-5678", "customer_id": "CUST-002"},
             {"email": "alex.t@example.com", "name": "Alex Thomas", "role": UserRole.customer, "phone": "+1 (555) 345-6789"},
             {"email": "michael.c@example.com", "name": "Michael Chen", "role": UserRole.customer, "phone": "+1 (555) 456-7890"},
@@ -136,7 +136,12 @@ async def run_clean_and_seed():
                     phone=u_data.get("phone"),
                     channel=u_data.get("channel"),
                     channel_customer_id=u_data.get("channel_customer_id"),
-                    customer_id=u_data.get("customer_id")
+                    customer_id=u_data.get("customer_id"),
+                    address=u_data.get("address"),
+                    city=u_data.get("city"),
+                    state=u_data.get("state"),
+                    postal_code=u_data.get("postal_code"),
+                    country=u_data.get("country"),
                 )
                 session.add(new_u)
                 await session.commit()
@@ -154,6 +159,16 @@ async def run_clean_and_seed():
                     existing.channel_customer_id = u_data["channel_customer_id"]
                 if "customer_id" in u_data:
                     existing.customer_id = u_data["customer_id"]
+                if "address" in u_data:
+                    existing.address = u_data["address"]
+                if "city" in u_data:
+                    existing.city = u_data["city"]
+                if "state" in u_data:
+                    existing.state = u_data["state"]
+                if "postal_code" in u_data:
+                    existing.postal_code = u_data["postal_code"]
+                if "country" in u_data:
+                    existing.country = u_data["country"]
                 session.add(existing)
                 await session.commit()
                 await session.refresh(existing)

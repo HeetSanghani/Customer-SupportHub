@@ -44,70 +44,176 @@ def check_escalation(state: GraphState) -> GraphState:
 
 
 def decompose_query(state: GraphState) -> GraphState:
-    texts = _naive_split(state["raw_query"])
-    state["sub_questions"] = [
-        {"text": t, "intent": None, "route": None, "response": None} for t in texts
-    ]
+    sub_objs = _hybrid_split(state["raw_query"], use_llm=state.get("use_llm", False))
+    state["sub_questions"] = sub_objs
     return state
 
 
+def _extract_entities_from_text(text: str) -> Dict[str, str]:
+    entities = {}
+    ord_match = re.search(r'\b(ORD-\d+)\b', text, re.IGNORECASE)
+    if ord_match:
+        entities["order_id"] = ord_match.group(1).upper()
+
+    prod_match = re.search(r'\b(PROD-\d+)\b', text, re.IGNORECASE)
+    if prod_match:
+        entities["product_id"] = prod_match.group(1).upper()
+
+    ret_match = re.search(r'\b(RET-\d+)\b', text, re.IGNORECASE)
+    if ret_match:
+        entities["return_id"] = ret_match.group(1).upper()
+
+    ref_match = re.search(r'\b(REF-\d+)\b', text, re.IGNORECASE)
+    if ref_match:
+        entities["refund_id"] = ref_match.group(1).upper()
+
+    return entities
+
+
+def _hybrid_split(text: str, use_llm: bool = False) -> List[Dict[str, Any]]:
+    text_clean = text.strip()
+    if not text_clean:
+        return [{"id": "sq_1", "original_text": text, "normalized_text": text, "text": text, "entities": {}}]
+
+    MAX_SUB_QUESTIONS = 5
+
+    # 1. Fast-Path: single short question (< 8 words and no multi-clause triggers)
+    words = text_clean.split()
+    triggers = ["?", ";", "\n", " and ", ", and ", " also ", " additionally ", ", plus "]
+    has_trigger = any(tr in text_clean.lower() for tr in triggers) or text_clean.count("?") > 1
+    if len(words) < 8 and not has_trigger:
+        entities = _extract_entities_from_text(text_clean)
+        return [{
+            "id": "sq_1",
+            "original_text": text_clean,
+            "normalized_text": text_clean,
+            "text": text_clean,
+            "entities": entities,
+        }]
+
+    # 2. Rule-Based Heuristic Parser
+    parts: List[str] = []
+    if ";" in text_clean:
+        parts = [p.strip() for p in text_clean.split(";") if p.strip()]
+    elif "\n" in text_clean:
+        parts = [p.strip() for p in text_clean.split("\n") if p.strip()]
+    else:
+        pattern = r"\?+\s*(?=[A-Za-z0-9])|,\s*and\s+(?:can\s+i\s+|also\s+|additionally\s+)?|,\s*(?:also|additionally)\s+|\band\s+(?=(?:order|payment|shipment|return|refund|status|what|where|how|can\s+i|could\s+you|please|show|tell|connect|transfer|check|track|i\s+want|i\s+need|ord-|ret-|ref-|prod-)\b)|,\s+(?=(?:order|payment|shipment|return|refund|status|get\s+me|what|where|how|can|show|tell|connect|transfer|check|track|ord-|ret-|ref-|prod-)\b)"
+        raw_parts = [p.strip(" ,.?") for p in re.split(pattern, text_clean, flags=re.IGNORECASE) if p.strip(" ,.?")]
+        if len(raw_parts) > 1:
+            parts = raw_parts
+        elif text_clean.count("?") > 1:
+            parts = [p.strip() + "?" for p in text_clean.split("?") if p.strip()]
+
+    if not parts:
+        parts = [text_clean]
+
+    # Enforce MAX_SUB_QUESTIONS limit
+    parts = parts[:MAX_SUB_QUESTIONS]
+
+    # Deduplicate while preserving order
+    seen = set()
+    unique_parts = []
+    for p in parts:
+        p_norm = p.lower().strip(" ?,.")
+        if p_norm not in seen:
+            seen.add(p_norm)
+            unique_parts.append(p)
+
+    # Convert to structured SubQuestion objects & extract entities
+    sub_questions = []
+
+    for idx, p in enumerate(unique_parts):
+        local_entities = _extract_entities_from_text(p)
+        merged_entities = local_entities if len(unique_parts) > 1 else (_extract_entities_from_text(text_clean) or local_entities)
+
+        sub_questions.append({
+            "id": f"sq_{idx+1}",
+            "original_text": p,
+            "normalized_text": p,
+            "text": p,
+            "entities": merged_entities,
+        })
+
+    return sub_questions
+
+
 def _naive_split(text: str) -> List[str]:
-    text = text.strip()
-    if not text:
-        return [text]
-
-    # Heuristic splitting on multiple ?, ;, newlines, "and", "also"
-    if text.count("?") > 1:
-        parts = [p.strip() + "?" for p in text.split("?") if p.strip()]
-        parts = [re.sub(r'\?+$', '?', p) for p in parts]
-        if len(parts) > 1:
-            return parts
-
-    if ";" in text:
-        parts = [p.strip() for p in text.split(";") if p.strip()]
-        if len(parts) > 1:
-            return parts
-
-    if "\n" in text:
-        parts = [p.strip() for p in text.split("\n") if p.strip()]
-        if len(parts) > 1:
-            return parts
-
-    # 4. Split on multi-intent clause conjunctions (e.g. ", and can I also", ", and also", ", also", " and additionally")
-    pattern = r',?\s*(?:and\s+)?(?:can\s+i\s+)?\b(?:also|additionally)\b|,\s*and\s+can\s+i\b'
-    parts = re.split(pattern, text, flags=re.IGNORECASE)
-    parts = [p.strip(" ,.") for p in parts if p.strip(" ,.")]
-    if len(parts) > 1:
-        # Prepend 'Can I ' if part lost its question prefix
-        cleaned_parts = []
-        for i, p in enumerate(parts):
-            if i > 0 and not p.lower().startswith(("where", "what", "can", "how", "is", "does", "will", "when")):
-                p = "Can I " + p
-            cleaned_parts.append(p)
-        return cleaned_parts
-
-    return [text]
+    sub_objs = _hybrid_split(text)
+    return [sq["text"] for sq in sub_objs]
 
 
 def handle_subquestions(state: GraphState) -> GraphState:
-    context_slots = {
-        "order_id": state.get("active_order_id"),
-        "product_id": state.get("active_product_id"),
-        "return_id": state.get("active_return_id"),
-        "refund_id": state.get("active_refund_id"),
-    }
+    conversation_id = state.get("conversation_id")
+    customer_id = state.get("customer_id")
 
-    for sub in state["sub_questions"]:
-        route_decision = _router.route(
-            query=sub["text"],
-            customer_id=state.get("customer_id"),
-            conversation_id=state.get("conversation_id"),
-            context_slots=context_slots,
-            use_llm=state.get("use_llm"),
-        )
-        sub["route"] = route_decision
-        sub["intent"] = route_decision.intent
-        sub["response"] = _handle_single_route(route_decision, sub["text"], state)
+    ctx = context_manager.get_or_create(conversation_id=conversation_id) if conversation_id else None
+
+    # Pre-turn slots
+    active_order_id = state.get("active_order_id") or (ctx.active_order_id if ctx else None)
+    active_product_id = state.get("active_product_id") or (ctx.active_product_id if ctx else None)
+    active_return_id = state.get("active_return_id") or (ctx.active_return_id if ctx else None)
+    active_refund_id = state.get("active_refund_id") or (ctx.active_refund_id if ctx else None)
+
+    for idx, sub in enumerate(state["sub_questions"]):
+        sub_text = sub.get("normalized_text") or sub.get("text", "")
+        sub_id = sub.get("id") or f"sq_{idx+1}"
+        sub["id"] = sub_id
+        sub["original_text"] = sub.get("original_text") or sub_text
+        sub["normalized_text"] = sub_text
+        sub["text"] = sub_text
+
+        # Sub-question specific context slots (scoped to entities in sub-question)
+        sub_entities = sub.get("entities", {})
+        sub_text_lower = sub_text.lower()
+        context_keywords = ("it", "my order", "the order", "this order", "that order", "my return", "my refund", "my item", "where is it", "cancel it", "return it")
+        uses_context = any(kw in sub_text_lower for kw in context_keywords)
+
+        sub_slots = {
+            "order_id": sub_entities.get("order_id") or (active_order_id if uses_context else None),
+            "product_id": sub_entities.get("product_id") or (active_product_id if uses_context else None),
+            "return_id": sub_entities.get("return_id") or (active_return_id if uses_context else None),
+            "refund_id": sub_entities.get("refund_id") or (active_refund_id if uses_context else None),
+        }
+        sub["context_reference"] = dict(sub_slots)
+
+        try:
+            route_decision = _router.route(
+                query=sub_text,
+                customer_id=customer_id,
+                conversation_id=conversation_id,
+                context_slots=sub_slots,
+                use_llm=state.get("use_llm"),
+            )
+            sub["route"] = route_decision
+            sub["intent"] = route_decision.intent
+
+            # Handle Human escalation route
+            if route_decision.route_type == RouteType.HUMAN:
+                state["escalated"] = True
+                if not state.get("escalation_decision"):
+                    state["escalation_decision"] = route_decision.escalation_decision
+
+            # Execute route handler
+            response = _handle_single_route(route_decision, sub_text, state)
+
+            if response.route_type == "SECURITY":
+                sub["authorization_status"] = "DENIED"
+                sub["execution_status"] = "SECURITY_BLOCKED"
+            else:
+                sub["authorization_status"] = "ALLOWED"
+                sub["execution_status"] = "SUCCESS"
+
+            sub["response"] = response
+
+        except Exception as exc:
+            sub["execution_status"] = "FAILED"
+            sub["error"] = str(exc)
+            sub["response"] = AIResponse(
+                content="I encountered an issue retrieving information for this part of your query.",
+                route_type="HYBRID",
+                is_grounded=False,
+            )
 
     return state
 
@@ -165,7 +271,8 @@ def _handle_rag_route(route_decision: RouteDecision, query: str, state: GraphSta
         )
         ctx.update_slots_domain_aware(_explicit_entities, authorized=True)
 
-    rag_res = rag_pipeline.query(route_decision.rag_query or query)
+    clean_q = (route_decision.rag_query or query).strip(" ?!.")
+    rag_res = rag_pipeline.query(clean_q)
     customer_id = state.get("customer_id")
     active_use_llm = state.get("use_llm", False)
 
@@ -313,8 +420,17 @@ def _execute_tools(decision: RouteDecision, state: GraphState, ctx: Any) -> Dict
 
     for tool in decision.target_tools:
         try:
-            if tool == "get_order" and order_id:
-                data["order"] = tool_registry.get_order(order_id)
+            if tool == "get_order":
+                if order_id:
+                    data["order"] = tool_registry.get_order(order_id)
+                elif customer_id:
+                    c_orders = tool_registry.get_customer_orders(customer_id)
+                    if c_orders:
+                        data["customer_orders"] = c_orders
+                        first_ord = c_orders[0]
+                        oid = first_ord.get("order_id") if isinstance(first_ord, dict) else getattr(first_ord, "order_id", None)
+                        if oid:
+                            data["order"] = tool_registry.get_order(oid)
             elif tool == "get_order_items" and order_id:
                 data["order_items"] = tool_registry.get_order_items(order_id)
             elif tool == "get_shipment_by_order":
@@ -336,18 +452,45 @@ def _execute_tools(decision: RouteDecision, state: GraphState, ctx: Any) -> Dict
                 data["seller"] = tool_registry.get_seller(seller_id)
             elif tool == "get_seller" and product_id and not seller_id:
                 data["seller"] = tool_registry.get_seller_by_product(product_id)
-            elif tool == "get_payment_by_order" and order_id:
-                data["payment"] = tool_registry.get_payment_by_order(order_id)
+            elif tool == "get_payment_by_order":
+                if order_id:
+                    data["payment"] = tool_registry.get_payment_by_order(order_id)
+                elif customer_id:
+                    c_orders = tool_registry.get_customer_orders(customer_id)
+                    if c_orders:
+                        data["customer_orders"] = c_orders
+                        first_ord = c_orders[0]
+                        oid = first_ord.get("order_id") if isinstance(first_ord, dict) else getattr(first_ord, "order_id", None)
+                        if oid:
+                            data["payment"] = tool_registry.get_payment_by_order(oid)
             elif tool == "get_payment" and ent.get("payment_id"):
                 data["payment"] = tool_registry.get_payment(ent["payment_id"])
             elif tool == "get_return" and return_id:
                 data["return"] = tool_registry.get_return(return_id)
-            elif tool == "get_return_by_order" and order_id:
-                data["return"] = tool_registry.get_return_by_order(order_id)
+            elif tool == "get_return_by_order":
+                if order_id:
+                    data["return"] = tool_registry.get_return_by_order(order_id)
+                elif customer_id:
+                    c_orders = tool_registry.get_customer_orders(customer_id)
+                    if c_orders:
+                        data["customer_orders"] = c_orders
+                        first_ord = c_orders[0]
+                        oid = first_ord.get("order_id") if isinstance(first_ord, dict) else getattr(first_ord, "order_id", None)
+                        if oid:
+                            data["return"] = tool_registry.get_return_by_order(oid)
             elif tool == "get_refund" and refund_id:
                 data["refund"] = tool_registry.get_refund(refund_id)
-            elif tool == "get_refund_by_order" and order_id:
-                data["refund"] = tool_registry.get_refund_by_order(order_id)
+            elif tool == "get_refund_by_order":
+                if order_id:
+                    data["refund"] = tool_registry.get_refund_by_order(order_id)
+                elif customer_id:
+                    c_orders = tool_registry.get_customer_orders(customer_id)
+                    if c_orders:
+                        data["customer_orders"] = c_orders
+                        first_ord = c_orders[0]
+                        oid = first_ord.get("order_id") if isinstance(first_ord, dict) else getattr(first_ord, "order_id", None)
+                        if oid:
+                            data["refund"] = tool_registry.get_refund_by_order(oid)
             elif tool == "get_refund_by_return" and return_id:
                 data["refund"] = tool_registry.get_refund_by_return(return_id)
             elif tool == "get_customer" and customer_id:
@@ -393,8 +536,8 @@ def _check_ownership(data: Dict[str, Any], caller_customer_id: Optional[str], de
         if req_order_id:
             try:
                 o_rec = tool_registry.get_order(req_order_id)
-                if o_rec and isinstance(o_rec, dict):
-                    owner = o_rec.get("customer_id")
+                if o_rec:
+                    owner = o_rec.get("customer_id") if isinstance(o_rec, dict) else getattr(o_rec, "customer_id", None)
                     if owner and owner.upper() != caller_customer_id.upper():
                         return security_validator.validate_resource_ownership(
                             caller_customer_id=caller_customer_id,
@@ -414,14 +557,20 @@ def _check_ownership(data: Dict[str, Any], caller_customer_id: Optional[str], de
         if req_return_id:
             try:
                 r_rec = tool_registry.get_return(req_return_id)
-                if r_rec and isinstance(r_rec, dict):
-                    owner = r_rec.get("customer_id")
+                if r_rec:
+                    owner = r_rec.get("customer_id") if isinstance(r_rec, dict) else getattr(r_rec, "customer_id", None)
                     if owner and owner.upper() != caller_customer_id.upper():
                         return security_validator.validate_resource_ownership(
                             caller_customer_id=caller_customer_id,
                             resource_owner_id=owner,
                             resource_type="return"
                         )
+                else:
+                    return security_validator.validate_resource_ownership(
+                        caller_customer_id=caller_customer_id,
+                        resource_owner_id="OTHER_CUSTOMER",
+                        resource_type="return"
+                    )
             except Exception:
                 pass
 
@@ -429,14 +578,20 @@ def _check_ownership(data: Dict[str, Any], caller_customer_id: Optional[str], de
         if req_refund_id:
             try:
                 rf_rec = tool_registry.get_refund(req_refund_id)
-                if rf_rec and isinstance(rf_rec, dict):
-                    owner = rf_rec.get("customer_id")
+                if rf_rec:
+                    owner = rf_rec.get("customer_id") if isinstance(rf_rec, dict) else getattr(rf_rec, "customer_id", None)
                     if owner and owner.upper() != caller_customer_id.upper():
                         return security_validator.validate_resource_ownership(
                             caller_customer_id=caller_customer_id,
                             resource_owner_id=owner,
                             resource_type="refund"
                         )
+                else:
+                    return security_validator.validate_resource_ownership(
+                        caller_customer_id=caller_customer_id,
+                        resource_owner_id="OTHER_CUSTOMER",
+                        resource_type="refund"
+                    )
             except Exception:
                 pass
 
@@ -450,29 +605,75 @@ def aggregate_responses(state: GraphState) -> GraphState:
     if not responses:
         raise RuntimeError("aggregate_responses called with no sub-answers to merge")
 
-    # Prioritize SECURITY denial or HUMAN escalation if present in sub-responses
-    for r in responses:
-        if r.route_type in ("SECURITY", "HUMAN"):
-            state["final_response"] = r
-            return state
+    # Tag citations on each sub-question response with source sub-question index and text
+    for idx, sq in enumerate(sub_questions):
+        resp = sq.get("response")
+        if not resp or not resp.rag_citations:
+            continue
+        sub_text = sq.get("text", "")
+        tagged_citations = []
+        for citation in resp.rag_citations:
+            c_copy = dict(citation)
+            c_copy["sub_question_index"] = idx
+            c_copy["sub_question_text"] = sub_text
+            tagged_citations.append(c_copy)
+        resp.rag_citations = tagged_citations
 
     if len(responses) == 1:
         state["final_response"] = responses[0]
         return state
 
-    merged_content = "\n\n".join(r.content for r in responses)
-    merged_citations = [c for r in responses for c in r.rag_citations]
+    # Separate responses by route type
+    info_responses = [r for r in responses if r.route_type not in ("SECURITY", "HUMAN")]
+    escalation_responses = [r for r in responses if r.route_type == "HUMAN"]
+    security_responses = [r for r in responses if r.route_type == "SECURITY"]
+
+    # Critical credential/prompt injection violations override everything
+    cred_sec_responses = [
+        r for r in security_responses
+        if any(v in ("CREDENTIAL_EXPOSURE", "PROMPT_INJECTION", "SYSTEM_PROMPT_LEAK") for v in (r.grounding_violations or []))
+        or any(k in r.content.lower() for k in ("otp", "cvv", "upi pin", "password"))
+    ]
+    if cred_sec_responses:
+        state["final_response"] = cred_sec_responses[0]
+        return state
+
+    if not info_responses:
+        if security_responses:
+            state["final_response"] = security_responses[0]
+            return state
+        if escalation_responses:
+            state["final_response"] = escalation_responses[0]
+            return state
+
+    # Combine content from all responses in sub-question order
+    content_blocks = []
+    for sq in sub_questions:
+        resp = sq.get("response")
+        if resp and resp.content:
+            content_blocks.append(resp.content)
+
+    merged_content = "\n\n".join(content_blocks)
+    merged_citations = [c for r in responses for c in (r.rag_citations or [])]
     merged_structured: dict = {}
     for r in responses:
-        merged_structured.update(r.structured_data)
-    merged_grounded = all(r.is_grounded for r in responses)
-    merged_violations = [v for r in responses for v in r.grounding_violations]
+        if r.structured_data:
+            merged_structured.update(r.structured_data)
 
+    merged_grounded = all(r.is_grounded for r in responses)
+    merged_violations = [v for r in responses for v in (r.grounding_violations or [])]
+
+    esc_dec = state.get("escalation_decision")
+    if not esc_dec and escalation_responses:
+        esc_dec = escalation_responses[0].escalation_decision
+
+    overall_route = "HUMAN" if escalation_responses else "HYBRID"
     state["final_response"] = AIResponse(
         content=merged_content,
-        route_type="HYBRID",
+        route_type=overall_route,
         structured_data=merged_structured,
         rag_citations=merged_citations,
+        escalation_decision=esc_dec,
         is_grounded=merged_grounded,
         grounding_violations=merged_violations,
         is_llm_generated=any(r.is_llm_generated for r in responses),
