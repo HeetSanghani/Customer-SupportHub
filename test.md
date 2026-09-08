@@ -55,7 +55,7 @@ ngrok http 8000
 
 **5. Start Database Explorer UI (Port 8090)**
 ```bash
-fuser -k 8090/tcp 2>/dev/null; sleep 1; cd /home/python/Projects/Customer-SupportHub/supporthub/backend && uv run python ../../db_explorer.py
+fuser -k 8090/tcp 2>/dev/null; sleep 1; cd supporthub/backend && uv run python ../../db_explorer.py
 ```
 
 ---
