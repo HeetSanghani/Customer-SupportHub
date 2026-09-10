@@ -1,23 +1,47 @@
-import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useState, useMemo, useEffect } from 'react'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { ticketsApi } from '../api/tickets'
+import { useAuthStore } from '../store/authStore'
 import { 
   CheckCircle, Search, Filter, Bell, Mail, MessageSquare, 
-  Smartphone, Instagram, Facebook, AlertCircle, Bot
+  Smartphone, Instagram, Facebook, AlertCircle, Bot, Users
 } from 'lucide-react'
 
 export default function UnifiedInbox({ filter, basePath }) {
   const navigate = useNavigate()
+  const { role, name } = useAuthStore()
+  const location = useLocation()
+  const searchParams = useMemo(() => new URLSearchParams(location.search), [location.search])
+  const isAgent = basePath === '/agent' || (role === 'agent' && basePath !== '/manager' && basePath !== '/admin')
+  const normalizeChannel = (ch) => {
+    if (!ch) return 'all'
+    const lower = ch.toLowerCase()
+    if (lower === 'chat' || lower === 'website' || lower === 'web' || lower === 'website_chat') return 'website_chat'
+    return lower
+  }
+
   const [searchTerm, setSearchTerm] = useState('')
-  const [selectedChannel, setSelectedChannel] = useState('all')
+  const [selectedChannel, setSelectedChannel] = useState(() => normalizeChannel(searchParams.get('channel')))
+  const [humanOnly, setHumanOnly] = useState(() => searchParams.get('human_only') === 'true')
+
+  useEffect(() => {
+    const ch = searchParams.get('channel')
+    setSelectedChannel(normalizeChannel(ch))
+    const humanParam = searchParams.get('human_only')
+    if (humanParam !== null) {
+      setHumanOnly(humanParam === 'true')
+    }
+  }, [searchParams])
 
   const { data: rawTickets = [], isLoading } = useQuery({
-    queryKey: ['tickets', basePath, filter, 'human-only'],
+    queryKey: ['tickets', basePath, filter, isAgent ? 'human-only' : 'all', humanOnly ? 'human-filter' : 'no-filter'],
     queryFn: async () => {
       const params = {
-        ...(filter !== 'all' && filter !== 'active' && filter !== 'closed' && filter !== 'resolved' ? { status: filter } : {}),
-        human_only: true
+        ...(filter !== 'all' && filter !== 'active' && filter !== 'closed' && filter !== 'resolved' && filter !== 'live' ? { status: filter } : {}),
+        ...(isAgent ? { human_only: true } : { all_tickets: true }),
+        ...(humanOnly && !isAgent ? { human_only: true } : {}),
+        limit: 200,
       }
       const res = await ticketsApi.list(params)
       return res.data
@@ -27,11 +51,15 @@ export default function UnifiedInbox({ filter, basePath }) {
   // Apply active status filter & channel filter & search term
   const tickets = rawTickets.filter(t => {
     // Status filter
+    if (filter === 'live') {
+      if (t.status === 'resolved' || t.status === 'closed') return false
+      return t.channel === 'website_chat' || t.channel === 'whatsapp' || t.channel === 'instagram' || t.channel === 'facebook' || t.status === 'new'
+    }
     if (filter === 'active' && (t.status === 'resolved' || t.status === 'closed')) return false
     if ((filter === 'closed' || filter === 'resolved') && (t.status !== 'resolved' && t.status !== 'closed')) return false
     
     // Channel filter
-    if (selectedChannel !== 'all' && t.channel !== selectedChannel) return false
+    if (selectedChannel !== 'all' && normalizeChannel(t.channel) !== selectedChannel) return false
 
     // Search term
     if (searchTerm.trim()) {
@@ -137,12 +165,14 @@ export default function UnifiedInbox({ filter, basePath }) {
     if (!ticket.agent_id) {
       return <span className="text-xs text-[#9598B0] font-medium">Unassigned</span>
     }
+    const agentName = ticket.agent?.name || 'Agent User'
+    const initials = agentName.split(' ').map(n => n[0]).filter(Boolean).join('').substring(0, 2).toUpperCase() || 'AU'
     return (
       <div className="flex items-center gap-2">
         <div className="w-6 h-6 rounded-full bg-indigo-600 text-white font-bold text-[10px] flex items-center justify-center">
-          EW
+          {initials}
         </div>
-        <span className="text-xs font-semibold text-[#1C1B2E]">Emma Wilson</span>
+        <span className="text-xs font-semibold text-[#1C1B2E]">{agentName}</span>
       </div>
     )
   }
@@ -160,7 +190,7 @@ export default function UnifiedInbox({ filter, basePath }) {
     return <span className="text-xs text-emerald-600 font-semibold">2h 45m left</span>
   }
 
-  const pageTitle = filter === 'active' ? 'Active Tickets' : (filter === 'closed' || filter === 'resolved') ? 'Closed Tickets' : filter === 'waiting' ? 'Snoozed Tickets' : filter === 'escalated' ? 'Escalated Tickets' : 'All Tickets'
+  const pageTitle = filter === 'live' ? 'Live Tickets' : filter === 'active' ? 'Active Tickets' : (filter === 'closed' || filter === 'resolved') ? 'Closed Tickets' : filter === 'waiting' ? 'Snoozed Tickets' : filter === 'escalated' ? 'Escalated Tickets' : 'All Tickets'
 
   return (
     <div className="flex-1 flex flex-col h-screen bg-[#F6F7FC] overflow-hidden text-[#1C1B2E]">
@@ -168,9 +198,17 @@ export default function UnifiedInbox({ filter, basePath }) {
       <div className="h-16 bg-white border-b border-[#E5E7F3] px-8 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-3">
           <h1 className="text-xl font-bold font-['Plus_Jakarta_Sans']">{pageTitle}</h1>
-          <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
-            👤 Human Requests Only
-          </span>
+          {filter === 'live' && (
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+              Live Real-Time
+            </span>
+          )}
+          {isAgent && (
+            <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
+              👤 Human Requests Only
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-4">
           <div className="relative w-80">
@@ -183,13 +221,6 @@ export default function UnifiedInbox({ filter, basePath }) {
               className="w-full bg-[#F6F7FC] border border-[#E5E7F3] rounded-xl pl-9 pr-4 py-2 text-xs outline-none focus:border-indigo-500 transition-colors"
             />
           </div>
-          <div className="relative cursor-pointer p-2 rounded-xl hover:bg-gray-100 transition-colors text-[#6C7089]">
-            <Bell size={18} />
-            <span className="absolute top-1 right-1 w-4 h-4 bg-rose-500 text-white font-bold text-[9px] rounded-full flex items-center justify-center">4</span>
-          </div>
-          <div className="w-8 h-8 rounded-full bg-indigo-600 text-white font-bold text-xs flex items-center justify-center">
-            EW
-          </div>
         </div>
       </div>
 
@@ -197,7 +228,11 @@ export default function UnifiedInbox({ filter, basePath }) {
       <div className="flex-1 overflow-y-auto p-8 space-y-6">
         <div>
           <h2 className="text-2xl font-bold font-['Plus_Jakarta_Sans']">{pageTitle}</h2>
-          <p className="text-[#6C7089] text-xs mt-0.5">All customer conversations, across every channel, in one place.</p>
+          <p className="text-[#6C7089] text-xs mt-0.5">
+            {isAgent 
+              ? 'Showing tickets requiring human assistance. Autonomous AI conversations are hidden.' 
+              : 'All customer conversations, across every channel, in one place.'}
+          </p>
         </div>
 
         {/* Filter Pills Bar */}
@@ -209,7 +244,16 @@ export default function UnifiedInbox({ filter, basePath }) {
               return (
                 <button
                   key={ch.id}
-                  onClick={() => setSelectedChannel(ch.id)}
+                  onClick={() => {
+                    setSelectedChannel(ch.id)
+                    const newParams = new URLSearchParams(location.search)
+                    if (ch.id === 'all') {
+                      newParams.delete('channel')
+                    } else {
+                      newParams.set('channel', ch.id)
+                    }
+                    navigate({ search: newParams.toString() }, { replace: true })
+                  }}
                   className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold transition-all whitespace-nowrap ${
                     isSelected
                       ? 'bg-[#6366F1] text-white shadow-sm'
@@ -223,9 +267,41 @@ export default function UnifiedInbox({ filter, basePath }) {
             })}
           </div>
 
-          <button className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold bg-white text-[#6C7089] border border-[#E5E7F3] hover:bg-gray-50 transition-colors">
-            <Filter size={14} /> Filter
-          </button>
+          <div className="flex items-center gap-2">
+            {/* Assigned to Human Filter - visible for manager/admin */}
+            {!isAgent && (
+              <button
+                onClick={() => {
+                  const next = !humanOnly
+                  setHumanOnly(next)
+                  const newParams = new URLSearchParams(location.search)
+                  if (next) {
+                    newParams.set('human_only', 'true')
+                  } else {
+                    newParams.delete('human_only')
+                  }
+                  navigate({ search: newParams.toString() }, { replace: true })
+                }}
+                className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold transition-all whitespace-nowrap border ${
+                  humanOnly
+                    ? 'bg-rose-600 text-white border-rose-600 shadow-sm'
+                    : 'bg-white text-[#6C7089] border-[#E5E7F3] hover:bg-rose-50 hover:text-rose-600 hover:border-rose-300'
+                }`}
+                title="Show only tickets assigned to a human agent (escalated / urgent / agent-assigned)"
+              >
+                <Users size={14} />
+                Assigned to Human
+                {humanOnly && (
+                  <span className="ml-1 bg-white/20 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">
+                    ON
+                  </span>
+                )}
+              </button>
+            )}
+            <button className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold bg-white text-[#6C7089] border border-[#E5E7F3] hover:bg-gray-50 transition-colors">
+              <Filter size={14} /> Filter
+            </button>
+          </div>
         </div>
 
         {/* Data Table */}

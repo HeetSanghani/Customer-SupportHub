@@ -45,7 +45,9 @@ class ProductService:
         """Fetch category details by ID."""
         if self.loader is not None:
             self.loader.load()
-            return self.loader.categories.get(category_id)
+            cat = self.loader.categories.get(category_id)
+            if cat is not None:
+                return cat
         return self.repo.get_category(category_id)
 
     def list_all_products(self) -> List[Product]:

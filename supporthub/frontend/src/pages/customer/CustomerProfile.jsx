@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { ticketsApi } from '../../api/tickets'
@@ -32,19 +32,23 @@ export default function CustomerProfile() {
     queryKey: ['auth', 'me'],
     queryFn: async () => {
       const res = await authApi.me()
-      const u = res.data
-      setDisplayName(u.name || '')
-      setDisplayEmail(u.email || '')
-      setPhone(u.phone || '')
-      setAddress(u.address || '')
-      setCity(u.city || '')
-      setState(u.state || '')
-      setPostalCode(u.postal_code || '')
-      setCountry(u.country || '')
-      return u
+      return res.data
     },
     staleTime: 1000 * 60 * 5
   })
+
+  useEffect(() => {
+    if (userProfile) {
+      setDisplayName(userProfile.name || '')
+      setDisplayEmail(userProfile.email || '')
+      setPhone(userProfile.phone || '')
+      setAddress(userProfile.address || '')
+      setCity(userProfile.city || '')
+      setState(userProfile.state || '')
+      setPostalCode(userProfile.postal_code || '')
+      setCountry(userProfile.country || '')
+    }
+  }, [userProfile])
 
   const { data: tickets = [] } = useQuery({
     queryKey: ['tickets', 'customer'],

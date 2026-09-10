@@ -1,6 +1,7 @@
 """SupportHub FastAPI application — entry point."""
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
 import logging
 import sentry_sdk
 from fastapi import FastAPI, Request
@@ -34,6 +35,13 @@ if settings.sentry_dsn and not settings.sentry_dsn.startswith("https://..."):
 # ─── Rate Limiter ─────────────────────────────────────────────────────────────
 limiter = Limiter(key_func=get_remote_address)
 
+# ─── Lifespan ─────────────────────────────────────────────────────────────────
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    if not settings.is_production:
+        await init_db()  # Use Alembic migrations in production
+    yield
+
 # ─── App ──────────────────────────────────────────────────────────────────────
 app = FastAPI(
     title="SupportHub API",
@@ -42,6 +50,7 @@ app = FastAPI(
     docs_url="/api/docs",
     redoc_url="/api/redoc",
     openapi_url="/api/openapi.json",
+    lifespan=lifespan,
 )
 
 app.state.limiter = limiter
@@ -75,12 +84,6 @@ async def global_exception_handler(request: Request, exc: Exception):
     if settings.is_production:
         return JSONResponse(status_code=500, content={"detail": "Internal server error"})
     return JSONResponse(status_code=500, content={"detail": str(exc)})
-
-# ─── Startup ──────────────────────────────────────────────────────────────────
-@app.on_event("startup")
-async def on_startup():
-    if not settings.is_production:
-        await init_db()  # Use Alembic migrations in production
 
 # ─── Routers ──────────────────────────────────────────────────────────────────
 API_PREFIX = "/api/v1"

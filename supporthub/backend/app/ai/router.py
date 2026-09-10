@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import List, Optional, Dict, Any
 
-from app.ai.intent import IntentCategory, IntentResult, intent_classifier, llm_intent_classifier
+from app.ai.intent import IntentCategory, IntentResult, intent_classifier, llm_intent_classifier, normalize_query_typos
 from app.ai.security import SecurityDecision, security_validator
 from app.ai.escalation import EscalationDecision, escalation_evaluator
 
@@ -94,7 +94,7 @@ class AIRouter:
         else:
             intent = self.classifier.classify(query, context_slots=context_slots)
 
-        text = query.lower()
+        text = normalize_query_typos(query)
 
         # 4. Check for Hybrid Queries first if explicit entity or entity context or hybrid intent is present
         has_explicit_id = any(k in text for k in ["ord-", "prod-", "ret-", "ref-"])
@@ -118,15 +118,21 @@ class AIRouter:
             is_hybrid = True
             target_tools = ["get_order", "get_product", "get_return_by_order"]
             rag_query = "Return policy window and conditions"
-        elif ("refund delayed" in text or ("refund policy" in text and has_entity_ref) or "refund timeline" in text or "taking so long to process" in text) and (has_entity_ref or intent.category in (IntentCategory.REFUNDS, IntentCategory.PAYMENTS)):
+        elif any(w in text for w in ["damaged", "defective", "broken", "want a refund", "request a refund", "claim a refund", "refund my order", "refund for my order", "how can i get a refund", "how do i get a refund", "how to get a refund", "get a refund", "can i get a refund", "need a refund"]) or (
+            ("refund delayed" in text or ("refund policy" in text and has_entity_ref) or "refund timeline" in text or "taking so long to process" in text) and (has_entity_ref or intent.category in (IntentCategory.REFUNDS, IntentCategory.PAYMENTS))
+        ):
             is_hybrid = True
-            target_tools = ["get_refund_by_order", "get_refund", "get_payment_by_order"]
-            rag_query = "Refund turnaround timeline by payment method"
+            target_tools = ["get_order", "get_refund_by_order", "get_refund", "get_return_by_order"]
+            rag_query = "Product Replacement and Exchange Process for damaged or defective items and refund policy"
         elif has_entity_ref and any(w in text for w in ["payment options", "payment methods", "payment supported", "how to pay"]):
             is_hybrid = True
             target_tools = ["get_order", "get_shipment_by_order", "get_payment_by_order"]
             rag_query = "Payment methods and accepted options policy"
-        elif intent.category == IntentCategory.PRODUCT and any(w in text for w in ["warranty", "return", "fit", "modal innerwear", "password", "reset"]):
+        elif intent.category == IntentCategory.PRODUCT and any(w in text for w in ["warranty", "guarantee"]):
+            is_hybrid = True
+            target_tools = ["get_product"]
+            rag_query = "ShopKart Warranty Policy and How to Claim Manufacturer Warranty"
+        elif intent.category == IntentCategory.PRODUCT and any(w in text for w in ["return", "fit", "modal innerwear", "password", "reset"]):
             is_hybrid = True
             target_tools = ["get_product"]
             rag_query = "Product return policy and password reset guide"
@@ -155,11 +161,27 @@ class AIRouter:
             "cancellation policy", "cancellation rules", "cancel policy", "how does cancellation work",
             "return policy of shopkart", "return policy", "return window for electronics",
             "how long does a upi refund take", "upi refund",
+            "how long does a refund take", "how long does it take to get a refund", "refund timeline",
+            "when will i get my refund", "when will i receive my refund", "refund turnaround",
+            "how does shopkart refund", "refund policy", "how do refunds work", "refund process",
             "how do i return an item", "until what point can an order be cancelled",
             "standard delivery take to metro", "how does shopkart refund money",
             "payment methods are supported", "forgot my shopkart password",
             "how do i reset it", "not receiving the login otp",
             "update my default delivery address", "how can i update",
+            # General warranty policy patterns
+            "warranty policy", "claim warranty", "warranty coverage", "how to claim warranty",
+            # Damaged / defective / missing items
+            "damaged product", "damaged item", "received broken", "defective item", "wrong product",
+            "wrong item", "delivered but not received", "did not receive my order", "package not delivered",
+            "delivery delayed", "order delayed", "shipment delayed",
+            # Cancellation & Return guides
+            "how to cancel an order", "cancel an order", "step-by-step guide to request a return",
+            "exchange policy", "replacement policy",
+            # Payment failure troubleshooting
+            "payment declined", "payment failed", "why was my payment declined",
+            "money deducted", "transaction failed", "card declined", "payment error", "deducted from bank",
+            "what to do when payment fails", "payment unconfirmed",
             # W05: general payment-capability FAQ patterns
             "what payment methods", "which payment methods", "what payment options",
             "which payment options", "can i pay using", "can i pay with",
@@ -168,18 +190,41 @@ class AIRouter:
             "payment modes", "how can i pay", "how do i pay",
         ]
         if any(pat in text for pat in rag_patterns) or intent.category in (IntentCategory.GENERAL_POLICY, IntentCategory.ACCOUNT) or intent.suggested_route == "RAG":
+            rag_q = query
+            if any(w in text for w in ["payment declined", "payment failed", "why was my payment declined", "money deducted", "transaction failed", "card declined"]):
+                rag_q = "What to Do When Payment Fails or Money is Deducted and ShopKart Payment Policy"
             return RouteDecision(
                 route_type=RouteType.RAG,
                 intent=intent,
-                rag_query=query,
+                rag_query=rag_q,
                 security_decision=sec_decision,
                 escalation_decision=esc_decision,
                 rationale="General informational / policy query routed directly to RAG knowledge retrieval."
             )
 
         # 6. Structured Data Cases: Specific entity status, pricing, tracking
+        is_all_prods = any(w in text for w in [
+            "all product", "all products", "catalog", "what products", "list products",
+            "show products", "show me products", "products do you have", "what do you sell",
+            "browse products", "show all products", "give me info of all products",
+            "all products info", "product list", "available products", "tell me all products",
+            "what can i buy", "what items do you sell"
+        ])
+        is_prod_search = any(w in text for w in [
+            "phone", "phones", "mobile", "laptop", "laptops", "headphone", "headphones",
+            "tablet", "tablets", "cooktop", "induction", "keyboard", "mouse", "speaker",
+            "do you have", "do you sell", "search product", "search for"
+        ]) and intent.category == IntentCategory.PRODUCT and not has_explicit_id
+
+        if is_all_prods:
+            product_tools = ["list_all_products"]
+        elif is_prod_search:
+            product_tools = ["search_products"]
+        else:
+            product_tools = ["get_product", "search_products"]
+
         tools_map = {
-            IntentCategory.PRODUCT: ["get_product"],
+            IntentCategory.PRODUCT: product_tools,
             IntentCategory.ORDERS: ["get_order", "get_shipment_by_order", "get_order_items", "get_customer_orders"],
             IntentCategory.PAYMENTS: ["get_payment_by_order", "get_refund_by_order", "get_payment"],
             IntentCategory.SHIPMENTS: ["get_shipment_by_order", "get_shipment_by_tracking", "get_customer_orders"],

@@ -179,44 +179,48 @@ async def evaluate_ticket_automations(
             executed_actions.append(f"Set category to '{new_category}'")
             changes_made = True
 
+        # Action: Send Automated / Canned Reply
+        canned_reply = action_cfg.get("send_canned_reply") or action_cfg.get("auto_reply")
+        if canned_reply:
+            # Always report in actions (for dry-run visibility), but only persist if not dry-run
+            executed_actions.append(f"Send automated reply: '{canned_reply[:60]}{'...' if len(canned_reply) > 60 else ''}'") 
+            if not dry_run:
+                auto_msg = Message(
+                    ticket_id=ticket.id,
+                    sender_id=None,
+                    sender_type=SenderType.ai,
+                    body=str(canned_reply),
+                )
+                session.add(auto_msg)
+                changes_made = True
+
+        # Action: Auto-Resolve Ticket
+        if action_cfg.get("auto_resolve"):
+            executed_actions.append("Mark ticket as resolved (auto-resolve)")
+            if not dry_run:
+                ticket.status = TicketStatus.resolved
+                ticket.ai_resolved = True
+                changes_made = True
+
         # Action: Assign Agent
-        if assign_agent := action_cfg.get("assign_agent"):
-            if assign_agent == "round_robin":
-                # Find active agent with lowest ticket count
+        if not dry_run and (assign_agent_action := action_cfg.get("assign_agent")):
+            if assign_agent_action == "round_robin":
                 agent_stmt = select(User).where(User.role == UserRole.agent, User.status == "active")
                 agents = (await session.exec(agent_stmt)).all()
                 if agents:
                     chosen_agent = agents[0]
                     ticket.agent_id = chosen_agent.id
-                    executed_actions.append(f"Auto-assigned to agent '{chosen_agent.name}'")
+                    executed_actions.append(f"Auto-assigned (round-robin) to '{chosen_agent.name}'")
                     changes_made = True
-            elif isinstance(assign_agent, str) and assign_agent not in ("", "none", "unassigned"):
+            elif isinstance(assign_agent_action, str) and assign_agent_action not in ("", "none", "unassigned"):
                 try:
-                    ticket.agent_id = uuid.UUID(assign_agent)
-                    executed_actions.append(f"Assigned to agent ID {assign_agent}")
+                    ticket.agent_id = uuid.UUID(assign_agent_action)
+                    executed_actions.append(f"Assigned to agent ID {assign_agent_action}")
                     changes_made = True
                 except Exception:
                     pass
-
-        # Action: Send Automated / Canned Reply
-        canned_reply = action_cfg.get("send_canned_reply") or action_cfg.get("auto_reply")
-        if canned_reply and not dry_run:
-            auto_msg = Message(
-                ticket_id=ticket.id,
-                sender_id=None,
-                sender_type=SenderType.ai,
-                body=str(canned_reply),
-            )
-            session.add(auto_msg)
-            executed_actions.append(f"Dispatched automated reply: '{canned_reply[:40]}...'")
-            changes_made = True
-
-        # Action: Auto-Resolve Ticket
-        if action_cfg.get("auto_resolve") and not dry_run:
-            ticket.status = TicketStatus.resolved
-            ticket.ai_resolved = True
-            executed_actions.append("Marked ticket as resolved")
-            changes_made = True
+        elif dry_run and (assign_agent_action := action_cfg.get("assign_agent")):
+            executed_actions.append(f"Assign agent: {assign_agent_action}")
 
         results.append({
             "rule_id": str(rule.id),

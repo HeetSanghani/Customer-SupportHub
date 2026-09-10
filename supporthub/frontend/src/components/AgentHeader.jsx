@@ -3,10 +3,10 @@ import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { useAuthStore } from '../store/authStore'
 import { 
   User, Smartphone, Instagram, Facebook, Mail, LogOut, 
-  ChevronDown
+  ChevronDown, Lock, Shield
 } from 'lucide-react'
 
-export default function AgentHeader({ agentStatus, setAgentStatus }) {
+export default function AgentHeader() {
   const { name, email, logout } = useAuthStore()
   const navigate = useNavigate()
   const location = useLocation()
@@ -105,41 +105,24 @@ export default function AgentHeader({ agentStatus, setAgentStatus }) {
                 </div>
                 <div className="text-[11px] text-[#6C7089] truncate">{email || 'agent@supporthub.com'}</div>
 
-                {/* Status Switcher (Availability status) */}
-                <div className="mt-2.5 pt-2 border-t border-gray-200/60 flex items-center justify-between">
-                  <span className="text-[10px] font-bold text-[#9598B0] uppercase">Availability:</span>
-                  <div className="flex items-center gap-1 bg-white p-1 rounded-lg border border-gray-200 shadow-2xs">
-                    <button
-                      onClick={() => setAgentStatus('online')}
-                      className={`px-2 py-0.5 text-[10px] font-bold rounded-md transition-colors ${agentStatus === 'online' ? 'bg-emerald-500 text-white' : 'text-gray-600 hover:bg-gray-100'}`}
-                    >
-                      Online
-                    </button>
-                    <button
-                      onClick={() => setAgentStatus('away')}
-                      className={`px-2 py-0.5 text-[10px] font-bold rounded-md transition-colors ${agentStatus === 'away' ? 'bg-amber-500 text-white' : 'text-gray-600 hover:bg-gray-100'}`}
-                    >
-                      Away
-                    </button>
-                    <button
-                      onClick={() => setAgentStatus('offline')}
-                      className={`px-2 py-0.5 text-[10px] font-bold rounded-md transition-colors ${agentStatus === 'offline' ? 'bg-gray-500 text-white' : 'text-gray-600 hover:bg-gray-100'}`}
-                    >
-                      Offline
-                    </button>
-                  </div>
-                </div>
               </div>
 
-              {/* ONLY Agent Profile & Performance Link */}
-              <div className="py-2">
+              <div className="py-1 space-y-0.5">
                 <Link
                   to="/agent/profile"
                   onClick={() => setIsDropdownOpen(false)}
-                  className={`flex items-center gap-3 px-4 py-2.5 text-xs font-semibold transition-colors ${location.pathname === '/agent/profile' ? 'bg-indigo-50 text-indigo-600 font-bold' : 'text-[#1C1B2E] hover:bg-gray-50'}`}
+                  className={`flex items-center gap-3 px-4 py-2.5 text-xs font-semibold transition-colors rounded-lg mx-1 ${location.pathname === '/agent/profile' ? 'bg-indigo-50 text-indigo-600 font-bold' : 'text-[#1C1B2E] hover:bg-gray-50'}`}
                 >
-                  <User size={16} className="text-indigo-600" />
-                  <span>Agent Profile & Performance</span>
+                  <User size={15} className="text-indigo-600" />
+                  <span>My Profile</span>
+                </Link>
+                <Link
+                  to="/agent/security"
+                  onClick={() => setIsDropdownOpen(false)}
+                  className={`flex items-center gap-3 px-4 py-2.5 text-xs font-semibold transition-colors rounded-lg mx-1 ${location.pathname === '/agent/security' ? 'bg-indigo-50 text-indigo-600 font-bold' : 'text-[#1C1B2E] hover:bg-gray-50'}`}
+                >
+                  <Lock size={15} className="text-indigo-600" />
+                  <span>Account Security &amp; Password</span>
                 </Link>
               </div>
 

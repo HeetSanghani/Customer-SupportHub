@@ -70,6 +70,11 @@ logger = logging.getLogger(__name__)
 
 # ─── Helpers ─────────────────────────────────────────────────────────────────
 
+def _utcnow() -> datetime:
+    """Return current UTC as naive datetime matching PostgreSQL TIMESTAMP WITHOUT TIME ZONE."""
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
 def _channel_to_ticket_channel(channel: Channel) -> TicketChannel:
     """Map the normalized Channel enum to the existing TicketChannel enum."""
     mapping = {
@@ -163,7 +168,7 @@ class WebhookEventRepository:
             channel=_channel_to_channel_type(channel),
             processed=False,
             raw_payload=json.dumps(raw_payload) if raw_payload else None,
-            received_at=datetime.utcnow(),  # naive UTC — matches TIMESTAMP WITHOUT TIME ZONE
+            received_at=_utcnow(),  # naive UTC — matches TIMESTAMP WITHOUT TIME ZONE
         )
         session.add(event)
         try:
@@ -187,7 +192,7 @@ class WebhookEventRepository:
         event.processed = error is None
         event.error = error
         event.processing_ms = processing_ms
-        event.processed_at = datetime.utcnow()  # naive UTC
+        event.processed_at = _utcnow()  # naive UTC
         session.add(event)
 
 
@@ -288,7 +293,7 @@ class CustomerRepository:
         """
         if new_name and new_name != customer.name:
             customer.name = new_name
-            customer.updated_at = datetime.utcnow()
+            customer.updated_at = _utcnow()
             session.add(customer)
 
 
@@ -391,7 +396,7 @@ class ConversationRepository:
         ticket: Ticket,
     ) -> None:
         """Touch updated_at on the ticket so the inbox sorts correctly."""
-        ticket.updated_at = datetime.utcnow()
+        ticket.updated_at = _utcnow()
         session.add(ticket)
 
 
@@ -440,7 +445,7 @@ class MessageRepository:
             attachments=attachments_json,
             external_message_id=incoming.channel_message_id,
         )
-        ticket.updated_at = datetime.utcnow()
+        ticket.updated_at = _utcnow()
         session.add(ticket)
         session.add(message)
         await session.flush()

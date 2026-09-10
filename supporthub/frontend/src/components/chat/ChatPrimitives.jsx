@@ -139,27 +139,8 @@ export function ChatInputArea({ ws, ticketId, disabled }) {
     setText('')
   }
 
-  const upload = async () => {
-    const inp = document.createElement('input')
-    inp.type = 'file'
-    inp.onchange = async e => {
-      const file = e.target.files[0]; if (!file) return
-      const fd = new FormData(); fd.append('file', file)
-      try {
-        const res = await client.post(`/tickets/${ticketId}/upload`, fd, { headers:{'Content-Type':'multipart/form-data'} })
-        setText(p => p + ` 📎 [Attachment: ${res.data.filename}](${res.data.url})`)
-      } catch(err) { alert(`Upload failed: ${err?.response?.data?.detail||err.message}`) }
-    }
-    inp.click()
-  }
-
   return (
     <form onSubmit={send} className="flex gap-2">
-      <button type="button" onClick={upload}
-        className="p-3 rounded-xl border bg-[#F6F7FC] hover:bg-gray-100 text-[#6C7089] border-[#E5E7F3] transition-colors flex-shrink-0"
-        title="Attach file" aria-label="Attach file">
-        <Paperclip size={18} />
-      </button>
       <input type="text" value={text} onChange={e => setText(e.target.value)}
         placeholder="Type a message…"
         className="flex-1 border border-[#E5E7F3] rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-indigo-400 outline-none"

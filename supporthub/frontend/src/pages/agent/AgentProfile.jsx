@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { authApi } from '../../api/auth'
@@ -13,7 +13,7 @@ export default function AgentProfile() {
   const { name, role, email: storeEmail, updateUser } = useAuthStore()
   const queryClient = useQueryClient()
 
-  const [displayName, setDisplayName] = useState(name || 'Emma Wilson')
+  const [displayName, setDisplayName] = useState(name || 'Agent User')
   const [displayEmail, setDisplayEmail] = useState(storeEmail || 'agent@supporthub.com')
   const [phone, setPhone] = useState('+1 (555) 382-9901')
   const [department, setDepartment] = useState('Customer Experience & Escalations')
@@ -33,14 +33,18 @@ export default function AgentProfile() {
     queryKey: ['auth', 'me'],
     queryFn: async () => {
       const res = await authApi.me()
-      const u = res.data
-      setDisplayName(u.name || name || 'Emma Wilson')
-      setDisplayEmail(u.email || storeEmail || 'agent@supporthub.com')
-      if (u.phone) setPhone(u.phone)
-      return u
+      return res.data
     },
     staleTime: 1000 * 60 * 5
   })
+
+  useEffect(() => {
+    if (userProfile) {
+      setDisplayName(userProfile.name || name || 'Agent User')
+      setDisplayEmail(userProfile.email || storeEmail || 'agent@supporthub.com')
+      if (userProfile.phone) setPhone(userProfile.phone)
+    }
+  }, [userProfile, name, storeEmail])
 
   // Fetch human tickets assigned / handled
   const { data: tickets = [] } = useQuery({
@@ -279,7 +283,7 @@ export default function AgentProfile() {
                     type="button"
                     onClick={() => {
                       setIsEditing(false)
-                      setDisplayName(userProfile?.name || name || 'Emma Wilson')
+                      setDisplayName(userProfile?.name || name || 'Agent User')
                       setDisplayEmail(userProfile?.email || storeEmail || 'agent@supporthub.com')
                       setErrorMsg('')
                     }}

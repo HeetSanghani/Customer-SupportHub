@@ -39,6 +39,7 @@ class ToolRegistry:
             "get_customer": self.get_customer,
             "get_product": self.get_product,
             "search_products": self.search_products,
+            "list_all_products": self.list_all_products,
             "get_seller": self.get_seller,
             "get_seller_by_product": self.get_seller_by_product,
             "get_order": self.get_order,
@@ -81,6 +82,7 @@ class ToolRegistry:
         p = self.product_svc.get_product(product_id)
         if not p:
             return None
+        cat = self.product_svc.get_category(p.category_id)
         return {
             "product_id": p.product_id,
             "name": p.name,
@@ -95,13 +97,53 @@ class ToolRegistry:
             "return_eligible": p.return_eligible,
             "return_window_days": p.return_window_days,
             "replacement_eligible": p.replacement_eligible,
+            "category_id": p.category_id,
+            "category_name": cat.name if cat else "General",
             "specifications": p.specifications,
             "seller_id": p.seller_id
         }
 
     def search_products(self, query: str) -> list:
         prods = self.product_svc.search_products_by_name(query)
-        return [{"product_id": p.product_id, "name": p.name, "price": p.price, "status": p.availability_status} for p in prods[:5]]
+        res = []
+        for p in prods[:8]:
+            cat = self.product_svc.get_category(p.category_id)
+            res.append({
+                "product_id": p.product_id,
+                "name": p.name,
+                "brand": p.brand,
+                "price": p.price,
+                "mrp": p.mrp,
+                "discount_percentage": p.discount_percentage,
+                "category_id": p.category_id,
+                "category_name": cat.name if cat else "General",
+                "stock_quantity": p.stock_quantity,
+                "availability_status": p.availability_status,
+                "warranty_period": p.warranty_period,
+                "return_window_days": p.return_window_days
+            })
+        return res
+
+    def list_all_products(self, limit: int = 40) -> list:
+        prods = self.product_svc.list_all_products()
+        res = []
+        for p in prods[:limit]:
+            cat = self.product_svc.get_category(p.category_id)
+            res.append({
+                "product_id": p.product_id,
+                "name": p.name,
+                "brand": p.brand,
+                "price": p.price,
+                "mrp": p.mrp,
+                "discount_percentage": p.discount_percentage,
+                "category_id": p.category_id,
+                "category_name": cat.name if cat else "General",
+                "stock_quantity": p.stock_quantity,
+                "availability_status": p.availability_status,
+                "warranty_period": p.warranty_period,
+                "return_window_days": p.return_window_days
+            })
+        return res
 
     def get_seller(self, seller_id: str) -> Optional[Dict[str, Any]]:
         s = self.seller_svc.get_seller(seller_id)

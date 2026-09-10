@@ -26,10 +26,8 @@ payment_service = PaymentService()
 
 
 def get_effective_customer_id(user: User) -> str:
-    """Return the customer ID for querying orders: customer_id if set, else UUID string."""
-    if user.customer_id:
-        return user.customer_id
-    return str(user.id)
+    """Return the authenticated customer's customer_id string (e.g. CUST-001) or UUID string."""
+    return user.customer_id or str(user.id)
 
 
 # ─── Pydantic Response Schemas ────────────────────────────────────────────────

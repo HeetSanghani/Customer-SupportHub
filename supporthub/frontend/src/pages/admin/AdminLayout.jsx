@@ -1,6 +1,6 @@
+import { useState } from 'react'
 import { Routes, Route, Navigate, Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../../store/authStore'
-import { queryClient } from '../../api/queryClient'
 import {
   LayoutDashboard,
   Users,
@@ -10,7 +10,9 @@ import {
   ShieldCheck,
   Sliders,
   Inbox,
-  LogOut
+  Clock,
+  CheckCircle,
+  ChevronDown
 } from 'lucide-react'
 
 import UnifiedInbox from '../../components/UnifiedInbox'
@@ -26,89 +28,58 @@ import HelpCenterMgmt from './HelpCenterMgmt'
 import AISettings from './AISettings'
 import RolesPermissions from './RolesPermissions'
 import SystemSettings from './SystemSettings'
-import { Smartphone, Mail, Instagram, Facebook } from 'lucide-react'
+import AdminHeader from '../../components/AdminHeader'
+import StaffProfile from '../../components/StaffProfile'
+import StaffSecurity from '../../components/StaffSecurity'
 
 export default function AdminLayout() {
-  const { role, logout, name, setRole, isAuthenticated } = useAuthStore()
+  const { role, isAuthenticated } = useAuthStore()
   const location = useLocation()
   const navigate = useNavigate()
+  const isInboxActive = location.pathname.startsWith('/admin/inbox') || location.pathname.startsWith('/admin/tickets')
+  const [inboxExpanded, setInboxExpanded] = useState(true)
 
   // Redirect to login if not authenticated
   if (!isAuthenticated) return <Navigate to="/login" replace />
 
-  const handleLogout = () => {
-    logout()
-    navigate('/login', { replace: true })
-  }
-
-  const handleRoleChange = (newRole) => {
-    try {
-      queryClient.clear()
-    } catch (e) {}
-    setRole(newRole)
-    if (newRole === 'manager') navigate('/manager')
-    else if (newRole === 'agent') navigate('/agent')
-    else if (newRole === 'customer') navigate('/customer')
-    else navigate('/admin')
-  }
-
   const navItems = [
     { label: 'Dashboard', path: '/admin', icon: LayoutDashboard, exact: true },
-    { label: 'WhatsApp Inbox', path: '/admin/whatsapp', icon: Smartphone },
-    { label: 'Instagram Inbox', path: '/admin/instagram', icon: Instagram },
-    { label: 'Facebook Inbox', path: '/admin/facebook', icon: Facebook },
-    { label: 'Email Inbox', path: '/admin/email', icon: Mail },
     { label: 'User Management', path: '/admin/users', icon: Users },
     { label: 'Channel Integrations', path: '/admin/channels', icon: Link2 },
-    { label: 'Help Center Mgmt', path: '/admin/help-center', icon: BookOpen },
+    { label: 'Help Center Management', path: '/admin/help-center', icon: BookOpen },
     { label: 'AI Settings', path: '/admin/ai-settings', icon: Bot },
     { label: 'Roles & Permissions', path: '/admin/roles', icon: ShieldCheck },
     { label: 'System Settings', path: '/admin/settings', icon: Sliders },
-    { label: 'Global Inbox', path: '/admin/inbox', icon: Inbox },
   ]
 
   return (
     <div className="flex h-screen bg-[#F6F7FC] overflow-hidden">
-      {/* Sidebar */}
-      <aside className="w-64 bg-white flex flex-col text-[#1C1B2E] border-r border-[#E5E7F3] z-20">
+      {/* Modern Dark Sidebar (matching Manager role) */}
+      <aside className="w-64 bg-[#1C1B2E] flex flex-col text-white z-20 shrink-0 shadow-lg">
         {/* Header Branding */}
-        <div className="p-6 flex items-center gap-3 border-b border-[#F3F4F6]">
-          <div
-            className="w-8 h-8 rounded-xl flex items-center justify-center text-white font-bold text-sm shadow-md"
-            style={{ background: 'linear-gradient(135deg, #6366F1 0%, #A855F7 100%)' }}
-          >
-            S
-          </div>
-          <div>
-            <div className="font-bold text-sm leading-tight font-['Plus_Jakarta_Sans']">SupportHub</div>
-            <div className="text-[11px] text-[#9598B0] font-medium">AI Omnichannel Platform</div>
-          </div>
-        </div>
-
-        {/* Viewing As Dropdown */}
-        <div className="p-4 border-b border-[#F3F4F6]">
-          <div className="bg-[#F6F7FC] p-2.5 rounded-xl border border-[#E5E7F3]">
-            <div className="text-[10px] font-bold text-[#9598B0] uppercase tracking-wider mb-1">
-              Demo — Viewing As
-            </div>
-            <select
-              value={role || 'admin'}
-              onChange={(e) => handleRoleChange(e.target.value)}
-              className="w-full bg-white border border-[#E5E7F3] rounded-lg px-2.5 py-1 text-xs font-bold text-[#1C1B2E] focus:outline-none focus:border-indigo-500 cursor-pointer"
+        <div className="p-5 flex items-center justify-between border-b border-white/10">
+          <Link to="/admin" className="flex items-center gap-2.5 group">
+            <div
+              className="w-9 h-9 rounded-xl flex items-center justify-center text-white font-extrabold text-sm shadow-md transition-transform group-hover:scale-105"
+              style={{ background: 'linear-gradient(135deg, #6366F1 0%, #A855F7 100%)' }}
             >
-              <option value="admin">Admin</option>
-              <option value="manager">Manager</option>
-              <option value="agent">Agent</option>
-              <option value="customer">Customer</option>
-            </select>
-          </div>
+              S
+            </div>
+            <div>
+              <div className="font-bold tracking-tight leading-none text-base" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
+                SupportHub
+              </div>
+              <div className="text-[9px] text-[#9598B0] uppercase tracking-widest mt-1">Admin Dashboard</div>
+            </div>
+          </Link>
         </div>
 
         {/* Navigation Items */}
-        <nav className="flex-1 px-4 space-y-1.5 mt-4 overflow-y-auto">
-          <div className="px-3 pb-2 text-[10px] font-bold text-[#9598B0] uppercase tracking-wider">
+        <nav className="flex-1 px-3.5 space-y-1 mt-4 overflow-y-auto">
+          <div className="text-[9px] font-extrabold text-[#9598B0] uppercase tracking-wider px-3 mb-1.5">
             Administration
           </div>
+
           {navItems.map((item) => {
             const isActive = item.exact
               ? location.pathname === item.path
@@ -119,61 +90,120 @@ export default function AdminLayout() {
               <Link
                 key={item.path}
                 to={item.path}
-                className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-all ${
+                className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-bold transition-all ${
                   isActive
-                    ? 'bg-[#EEF2FF] text-[#4F46E5]'
-                    : 'text-[#6C7089] hover:bg-gray-50 hover:text-[#1C1B2E]'
+                    ? 'bg-[#6366F1] text-white shadow-md shadow-indigo-500/20'
+                    : 'text-[#9598B0] hover:bg-white/5 hover:text-white'
                 }`}
               >
-                <Icon size={18} className={isActive ? 'text-[#4F46E5]' : 'text-[#9598B0]'} />
+                <Icon size={16} />
                 <span>{item.label}</span>
               </Link>
             )
           })}
+
+          {/* Global Inbox Accordion */}
+          <div className="pt-2">
+            <div className="text-[9px] font-extrabold text-[#9598B0] uppercase tracking-wider px-3 mb-1.5">
+              Operations
+            </div>
+
+            <div>
+              <button
+                type="button"
+                onClick={() => setInboxExpanded(!inboxExpanded)}
+                className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer select-none ${
+                  isInboxActive
+                    ? 'bg-[#6366F1] text-white shadow-md shadow-indigo-500/20'
+                    : 'text-[#9598B0] hover:bg-white/5 hover:text-white'
+                }`}
+              >
+                <div className="flex items-center gap-2.5">
+                  <Inbox size={16} />
+                  <span>Global Inbox</span>
+                </div>
+                <ChevronDown
+                  size={14}
+                  className={`text-white/70 transition-transform duration-200 ${inboxExpanded ? 'rotate-180' : ''}`}
+                />
+              </button>
+
+              {inboxExpanded && (
+                <div className="pl-6 pr-1 py-1 space-y-0.5 mt-0.5">
+                  <Link
+                    to="/admin/inbox/active"
+                    className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                      location.pathname === '/admin/inbox/active'
+                        ? 'bg-white/10 text-white font-bold'
+                        : 'text-[#9598B0] hover:bg-white/5 hover:text-white'
+                    }`}
+                  >
+                    <Clock size={13} />
+                    <span>Active Tickets</span>
+                  </Link>
+
+                  <Link
+                    to="/admin/inbox/closed"
+                    className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                      location.pathname === '/admin/inbox/closed'
+                        ? 'bg-white/10 text-white font-bold'
+                        : 'text-[#9598B0] hover:bg-white/5 hover:text-white'
+                    }`}
+                  >
+                    <CheckCircle size={13} />
+                    <span>Closed Tickets</span>
+                  </Link>
+
+                  <Link
+                    to="/admin/inbox/all"
+                    className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                      location.pathname === '/admin/inbox/all' || location.pathname === '/admin/inbox'
+                        ? 'bg-white/10 text-white font-bold'
+                        : 'text-[#9598B0] hover:bg-white/5 hover:text-white'
+                    }`}
+                  >
+                    <Inbox size={13} />
+                    <span>All Tickets</span>
+                  </Link>
+                </div>
+              )}
+            </div>
+          </div>
         </nav>
 
-        {/* Bottom User Info & Logout */}
-        <div className="p-4 border-t border-[#F3F4F6] bg-white">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2.5 min-w-0">
-              <div className="w-8 h-8 rounded-full bg-indigo-600 text-white flex items-center justify-center font-bold text-xs shadow-sm">
-                {name ? name.charAt(0).toUpperCase() : 'A'}
-              </div>
-              <div className="min-w-0">
-                <div className="text-xs font-bold text-[#1C1B2E] truncate">{name || 'Admin User'}</div>
-                <div className="text-[10px] text-[#9598B0] font-medium capitalize">{role || 'admin'}</div>
-              </div>
-            </div>
-            <button
-              onClick={handleLogout}
-              className="text-[#9598B0] hover:text-red-600 p-1.5 rounded-lg hover:bg-red-50 transition-colors"
-              title="Log out"
-            >
-              <LogOut size={16} />
-            </button>
-          </div>
-        </div>
+        {/* Bottom spacer */}
+        <div className="h-4" />
       </aside>
 
-      {/* Main Content Area */}
-      <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <Routes>
-          <Route path="/" element={<AdminOverview />} />
-          <Route path="/whatsapp" element={<WhatsAppInbox basePath="/admin" />} />
-          <Route path="/instagram" element={<InstagramInbox basePath="/admin" />} />
-          <Route path="/facebook" element={<FacebookInbox basePath="/admin" />} />
-          <Route path="/email" element={<EmailInbox basePath="/admin" />} />
-          <Route path="/users" element={<UserManagement />} />
-          <Route path="/directory" element={<UserManagement />} />
-          <Route path="/channels" element={<ChannelIntegrations />} />
-          <Route path="/help-center" element={<HelpCenterMgmt />} />
-          <Route path="/ai-settings" element={<AISettings />} />
-          <Route path="/roles" element={<RolesPermissions />} />
-          <Route path="/settings" element={<SystemSettings />} />
-          <Route path="/inbox" element={<UnifiedInbox filter="all" basePath="/admin" />} />
-          <Route path="/tickets/:id" element={<TicketDetail basePath="/admin" />} />
-          <Route path="*" element={<Navigate to="/admin" replace />} />
-        </Routes>
+      {/* Main Content Area with Header */}
+      <main className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
+        <AdminHeader />
+
+        <div className="flex-1 overflow-y-auto">
+          <Routes>
+            <Route path="/" element={<AdminOverview />} />
+            <Route path="/profile" element={<StaffProfile basePath="/admin" />} />
+            <Route path="/security" element={<StaffSecurity basePath="/admin" />} />
+            <Route path="/whatsapp" element={<WhatsAppInbox basePath="/admin" />} />
+            <Route path="/instagram" element={<InstagramInbox basePath="/admin" />} />
+            <Route path="/facebook" element={<FacebookInbox basePath="/admin" />} />
+            <Route path="/email" element={<EmailInbox basePath="/admin" />} />
+            <Route path="/users" element={<UserManagement />} />
+            <Route path="/directory" element={<UserManagement />} />
+            <Route path="/channels" element={<ChannelIntegrations />} />
+            <Route path="/help-center" element={<HelpCenterMgmt />} />
+            <Route path="/ai-settings" element={<AISettings />} />
+            <Route path="/roles" element={<RolesPermissions />} />
+            <Route path="/settings" element={<SystemSettings />} />
+            <Route path="/inbox" element={<UnifiedInbox filter="all" basePath="/admin" />} />
+            <Route path="/inbox/all" element={<UnifiedInbox filter="all" basePath="/admin" />} />
+            <Route path="/inbox/live" element={<Navigate to="/admin/inbox/active" replace />} />
+            <Route path="/inbox/active" element={<UnifiedInbox filter="active" basePath="/admin" />} />
+            <Route path="/inbox/closed" element={<UnifiedInbox filter="closed" basePath="/admin" />} />
+            <Route path="/tickets/:id" element={<TicketDetail basePath="/admin" />} />
+            <Route path="*" element={<Navigate to="/admin" replace />} />
+          </Routes>
+        </div>
       </main>
     </div>
   )

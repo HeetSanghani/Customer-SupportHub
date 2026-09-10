@@ -4,10 +4,11 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { ticketsApi } from '../api/tickets'
 import { useAuthStore } from '../store/authStore'
 import { 
-  ArrowLeft, Send, Clock, Zap, X, Search, Paperclip, 
+  ArrowLeft, Send, Clock, Zap, X, Search, 
   User, ShoppingBag, Sparkles, ChevronRight, CheckCircle2, 
   Package, ExternalLink, ShieldCheck, FileText, Tag, Phone, 
-  Mail, Calendar, AlertCircle, Eye, Truck, CheckCircle
+  Mail, Calendar, AlertCircle, Eye, Truck, CheckCircle,
+  PanelRightClose, PanelRightOpen
 } from 'lucide-react'
 import client from '../api/client'
 import { formatDateTime, formatSmartTime } from '../utils/dateUtils'
@@ -29,6 +30,25 @@ export default function TicketDetail({ basePath }) {
   const [quickSearch, setQuickSearch] = useState('')
   const [selectedOrderModal, setSelectedOrderModal] = useState(null)
   const [knowledgeSearch, setKnowledgeSearch] = useState('')
+  const [sidebarOpen, setSidebarOpen] = useState(() => {
+    const saved = localStorage.getItem('agentTicketSidebarOpen')
+    return saved !== null ? JSON.parse(saved) : true
+  })
+
+  useEffect(() => {
+    localStorage.setItem('agentTicketSidebarOpen', JSON.stringify(sidebarOpen))
+  }, [sidebarOpen])
+
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'b') {
+        e.preventDefault()
+        setSidebarOpen(prev => !prev)
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [])
 
   const quickReplyTemplates = [
     {
@@ -304,6 +324,13 @@ export default function TicketDetail({ basePath }) {
               </p>
             </div>
           </div>
+          <button 
+            onClick={() => setSidebarOpen(prev => !prev)}
+            className="p-2 rounded-xl text-[#9598B0] hover:text-[#1C1B2E] hover:bg-gray-100 transition-colors"
+            title={sidebarOpen ? "Close sidebar (Ctrl+B)" : "Open sidebar (Ctrl+B)"}
+          >
+            {sidebarOpen ? <PanelRightClose size={20} /> : <PanelRightOpen size={20} />}
+          </button>
         </div>
 
         {/* Messages */}
@@ -458,8 +485,9 @@ export default function TicketDetail({ basePath }) {
       </div>
 
       {/* Right Sidebar — Full Agent Intelligence & Context Panel */}
-      <div className="w-96 bg-white border-l border-[#E5E7F3] flex flex-col overflow-y-auto">
-        <div className="p-5 space-y-6">
+      {sidebarOpen && (
+        <div className="w-96 bg-white border-l border-[#E5E7F3] flex flex-col overflow-y-auto shrink-0">
+          <div className="p-5 space-y-6">
           
           {/* 1. CUSTOMER PROFILE HEADER */}
           <div className="flex items-center gap-3 border-b border-gray-100 pb-4">
@@ -618,7 +646,7 @@ export default function TicketDetail({ basePath }) {
                   value={ticket.agent_id ? 'you' : 'unassigned'}
                   onChange={e => updateMutation.mutate({ agent_id: e.target.value === 'you' ? 'current' : null })}
                 >
-                  <option value="you">You ({currentName || 'Emma Wilson'})</option>
+                  <option value="you">You ({currentName || 'Agent User'})</option>
                   <option value="unassigned">Unassigned</option>
                 </select>
               </div>
@@ -734,6 +762,7 @@ export default function TicketDetail({ basePath }) {
 
         </div>
       </div>
+      )}
 
       {/* ORDER DETAILS MODAL */}
       {selectedOrderModal && (

@@ -43,7 +43,7 @@ from __future__ import annotations
 import json
 import logging
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlmodel.ext.asyncio.session import AsyncSession
 
@@ -88,7 +88,7 @@ class AIRepository:
             confidence=ai_response.confidence,
             estimated_cost_usd=ai_response.usage.estimated_cost_usd,
             error=ai_response.error,
-            created_at=datetime.utcnow(),
+            created_at=datetime.now(timezone.utc).replace(tzinfo=None),
         )
 
     async def store(

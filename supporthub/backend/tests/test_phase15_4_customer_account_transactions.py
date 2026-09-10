@@ -81,8 +81,9 @@ async def customer_a():
             await session.commit()
             await session.refresh(user)
         else:
-            # Ensure password is reset to default for fixture re-use
+            # Ensure password and customer_id are reset to default for fixture re-use
             user.password_hash = hash_password("Password123!")
+            user.customer_id = "CUST-001"
             session.add(user)
             await session.commit()
             await session.refresh(user)
@@ -113,6 +114,12 @@ async def customer_b():
                 postal_code="94103",
                 country="USA",
             )
+            session.add(user)
+            await session.commit()
+            await session.refresh(user)
+        else:
+            user.password_hash = hash_password("Password123!")
+            user.customer_id = "CUST-002"
             session.add(user)
             await session.commit()
             await session.refresh(user)

@@ -194,6 +194,7 @@ function EmailCustomerAvatar({ customer, size = 'md', className = '' }) {
 
 export default function EmailInbox({ basePath = '/agent' }) {
   const { token, role, name: currentName } = useAuthStore()
+  const isAgent = basePath === '/agent' || (role === 'agent' && basePath !== '/manager' && basePath !== '/admin')
   const queryClient = useQueryClient()
   const messagesEndRef = useRef(null)
   const inputRef = useRef(null)
@@ -241,12 +242,16 @@ export default function EmailInbox({ basePath = '/agent' }) {
 
   // 1. Query Email Tickets
   const { data: rawTickets = [], isLoading: loadingTickets } = useQuery({
-    queryKey: ['email-tickets', 'human-only'],
+    queryKey: ['email-tickets', isAgent ? 'human-only' : 'all'],
     queryFn: async () => {
-      const res = await ticketsApi.list({ channel: 'email', human_only: true })
+      const params = {
+        channel: 'email',
+        ...(isAgent ? { human_only: true } : { all_tickets: true })
+      }
+      const res = await ticketsApi.list(params)
       if (res.data && res.data.length > 0) return res.data
-      // Fallback: if no channel=email specific tickets, return human_only tickets
-      const allRes = await ticketsApi.list({ human_only: true })
+      // Fallback: if no channel=email specific tickets, return tickets for role
+      const allRes = await ticketsApi.list(isAgent ? { human_only: true } : { all_tickets: true })
       const emailFiltered = allRes.data.filter(t => t.channel === 'email')
       return emailFiltered.length > 0 ? emailFiltered : allRes.data
     },
@@ -911,31 +916,6 @@ export default function EmailInbox({ basePath = '/agent' }) {
                     <Zap size={14} /> Templates
                   </button>
 
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      const input = document.createElement('input')
-                      input.type = 'file'
-                      input.onchange = async (e) => {
-                        const file = e.target.files[0]
-                        if (!file) return
-                        const formData = new FormData()
-                        formData.append('file', file)
-                        try {
-                          const res = await client.post(`/tickets/${selectedTicketId}/upload`, formData, {
-                            headers: { 'Content-Type': 'multipart/form-data' }
-                          })
-                          setInputText(prev => prev + `\n\n📎 Attachment: ${res.data.filename} (${res.data.url})`)
-                        } catch (err) {
-                          alert('Failed to upload attachment')
-                        }
-                      }
-                      input.click()
-                    }}
-                    className="flex items-center gap-1 px-3 py-1.5 rounded-xl border border-[#E5E7F3] bg-[#F6F7FC] hover:bg-indigo-50 text-[#6C7089] hover:text-indigo-600 text-xs font-semibold transition-colors"
-                  >
-                    <Paperclip size={14} /> Attach File
-                  </button>
                 </div>
 
                 <button

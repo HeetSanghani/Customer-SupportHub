@@ -134,7 +134,7 @@ async def update_article(
     if body.title is not None or body.body is not None:
         article.embedding = generate_embedding(article.title + " " + article.body)
 
-    article.updated_at = datetime.now(timezone.utc)
+    article.updated_at = datetime.now()
     session.add(article)
     await session.commit()
     await session.refresh(article)

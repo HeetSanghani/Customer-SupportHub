@@ -353,6 +353,14 @@ async def list_users(
             role=u.role.value,
             status=u.status.value,
             avatar_url=u.avatar_url,
+            customer_id=u.customer_id,
+            phone=u.phone,
+            address=u.address,
+            city=u.city,
+            state=u.state,
+            postal_code=u.postal_code,
+            country=u.country,
+            company_id=u.company_id,
         ) for u in users
     ]
 
@@ -363,6 +371,8 @@ class CreateUserRequest(BaseModel):
     role: str = "agent"
     status: str = "active"
     password: Optional[str] = "password123"
+    phone: Optional[str] = None
+    customer_id: Optional[str] = None
 
 
 class UpdateUserRequest(BaseModel):
@@ -370,6 +380,8 @@ class UpdateUserRequest(BaseModel):
     email: Optional[EmailStr] = None
     role: Optional[str] = None
     status: Optional[str] = None
+    phone: Optional[str] = None
+    customer_id: Optional[str] = None
 
 
 @router.post("/users", response_model=MeResponse, status_code=201)
@@ -401,6 +413,8 @@ async def create_user(
         password_hash=hash_password(body.password or "password123"),
         role=user_role,
         status=user_status,
+        phone=body.phone,
+        customer_id=body.customer_id,
     )
     session.add(new_user)
     await session.commit()
@@ -413,6 +427,14 @@ async def create_user(
         role=new_user.role.value,
         status=new_user.status.value,
         avatar_url=new_user.avatar_url,
+        customer_id=new_user.customer_id,
+        phone=new_user.phone,
+        address=new_user.address,
+        city=new_user.city,
+        state=new_user.state,
+        postal_code=new_user.postal_code,
+        country=new_user.country,
+        company_id=new_user.company_id,
     )
 
 
@@ -444,6 +466,10 @@ async def update_user(
             user.status = UserStatus(body.status)
         except ValueError:
             pass
+    if body.phone is not None:
+        user.phone = body.phone
+    if body.customer_id is not None:
+        user.customer_id = body.customer_id
 
     session.add(user)
     await session.commit()
@@ -456,6 +482,14 @@ async def update_user(
         role=user.role.value,
         status=user.status.value,
         avatar_url=user.avatar_url,
+        customer_id=user.customer_id,
+        phone=user.phone,
+        address=user.address,
+        city=user.city,
+        state=user.state,
+        postal_code=user.postal_code,
+        country=user.country,
+        company_id=user.company_id,
     )
 
 

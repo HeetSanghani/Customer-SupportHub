@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { ticketsApi } from '../../api/tickets'
 import { useAuthStore } from '../../store/authStore'
-import { Plus, Send, Star, CheckCircle, X, HelpCircle, CreditCard, Wrench, User as UserIcon, Paperclip } from 'lucide-react'
+import { Plus, Send, Star, CheckCircle, X, HelpCircle, CreditCard, Wrench, User as UserIcon } from 'lucide-react'
 import client from '../../api/client'
 import { formatTime, formatDate, formatSmartTime } from '../../utils/dateUtils'
 
@@ -439,33 +439,6 @@ function ChatPane({ ticketId }) {
           </>
         ) : (
           <form onSubmit={sendMessage} className="flex gap-2">
-            <button
-              type="button"
-              onClick={async () => {
-                const input = document.createElement('input')
-                input.type = 'file'
-                input.onchange = async (e) => {
-                  const file = e.target.files[0]
-                  if (!file) return
-                  const formData = new FormData()
-                  formData.append('file', file)
-                  try {
-                    const res = await client.post(`/tickets/${ticketId}/upload`, formData, {
-                      headers: { 'Content-Type': 'multipart/form-data' }
-                    })
-                    setInputText(prev => prev + ` 📎 [Attachment: ${res.data.filename}](${res.data.url})`)
-                  } catch (err) {
-                    console.error('File upload failed:', err?.response?.data || err.message)
-                    alert(`Failed to upload file: ${err?.response?.data?.detail || err.message}`)
-                  }
-                }
-                input.click()
-              }}
-              className="p-3 rounded-xl border bg-[#F6F7FC] hover:bg-gray-100 text-[#6C7089] border-[#E5E7F3] transition-colors"
-              title="Attach screenshot or file"
-            >
-              <Paperclip size={18} />
-            </button>
 
             <input 
               type="text" 

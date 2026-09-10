@@ -72,13 +72,6 @@ export default function AgentTicketQueue() {
               className="w-full bg-[#F6F7FC] border border-[#E5E7F3] rounded-xl pl-9 pr-4 py-2 text-xs outline-none focus:border-indigo-500 transition-colors"
             />
           </div>
-          <div className="relative cursor-pointer p-2 rounded-xl hover:bg-gray-100 transition-colors text-[#6C7089]">
-            <Bell size={18} />
-            <span className="absolute top-1 right-1 w-4 h-4 bg-rose-500 text-white font-bold text-[9px] rounded-full flex items-center justify-center">4</span>
-          </div>
-          <div className="w-8 h-8 rounded-full bg-indigo-600 text-white font-bold text-xs flex items-center justify-center">
-            EW
-          </div>
         </div>
       </div>
 

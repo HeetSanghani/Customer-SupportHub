@@ -69,7 +69,6 @@ async def restore():
             {"email": "manager@supporthub.com", "name": "Manager User", "role": UserRole.manager},
             {"email": "priya.p@example.com", "name": "Priya Patel", "role": UserRole.manager},
             {"email": "agent@supporthub.com", "name": "Agent User", "role": UserRole.agent},
-            {"email": "emma.wilson@supporthub.com", "name": "Emma Wilson", "role": UserRole.agent},
             {"email": "customer@supporthub.com", "name": "Customer User", "role": UserRole.customer},
         ]
 

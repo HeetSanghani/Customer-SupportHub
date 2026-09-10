@@ -5,6 +5,10 @@ import uuid
 from datetime import datetime, timezone
 from typing import Optional
 
+def _utcnow_naive() -> datetime:
+    """Return naive UTC datetime matching PostgreSQL TIMESTAMP WITHOUT TIME ZONE."""
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
 from pgvector.sqlalchemy import Vector
 from sqlalchemy import Column, Text
 from sqlmodel import Field, Relationship, SQLModel
@@ -411,7 +415,7 @@ class WebhookEvent(SQLModel, table=True):
     raw_payload: Optional[str] = Field(default=None, sa_column=Column(Text))  # JSON string
 
     received_at: datetime = Field(
-        default_factory=datetime.utcnow,  # naive UTC — PostgreSQL TIMESTAMP WITHOUT TIME ZONE
+        default_factory=_utcnow_naive,  # naive UTC — PostgreSQL TIMESTAMP WITHOUT TIME ZONE
         index=True,
     )
     processed_at: Optional[datetime] = Field(default=None)

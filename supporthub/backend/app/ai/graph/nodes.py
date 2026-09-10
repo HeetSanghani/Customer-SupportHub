@@ -51,21 +51,21 @@ def decompose_query(state: GraphState) -> GraphState:
 
 def _extract_entities_from_text(text: str) -> Dict[str, str]:
     entities = {}
-    ord_match = re.search(r'\b(ORD-\d+)\b', text, re.IGNORECASE)
+    ord_match = re.search(r'\b(?:ORD|ORDER)[-_# ]*(\d{1,5})\b', text, re.IGNORECASE)
     if ord_match:
-        entities["order_id"] = ord_match.group(1).upper()
+        entities["order_id"] = f"ORD-{ord_match.group(1).zfill(3)}"
 
-    prod_match = re.search(r'\b(PROD-\d+)\b', text, re.IGNORECASE)
+    prod_match = re.search(r'\b(?:PROD|PRODUCT)[-_# ]*(\d{1,5})\b', text, re.IGNORECASE)
     if prod_match:
-        entities["product_id"] = prod_match.group(1).upper()
+        entities["product_id"] = f"PROD-{prod_match.group(1).zfill(3)}"
 
-    ret_match = re.search(r'\b(RET-\d+)\b', text, re.IGNORECASE)
+    ret_match = re.search(r'\b(?:RET|RETURN)[-_# ]*(\d{1,5})\b', text, re.IGNORECASE)
     if ret_match:
-        entities["return_id"] = ret_match.group(1).upper()
+        entities["return_id"] = f"RET-{ret_match.group(1).zfill(3)}"
 
-    ref_match = re.search(r'\b(REF-\d+)\b', text, re.IGNORECASE)
+    ref_match = re.search(r'\b(?:REF|REFUND)[-_# ]*(\d{1,5})\b', text, re.IGNORECASE)
     if ref_match:
-        entities["refund_id"] = ref_match.group(1).upper()
+        entities["refund_id"] = f"REF-{ref_match.group(1).zfill(3)}"
 
     return entities
 
@@ -411,32 +411,105 @@ def _handle_hybrid_route(route_decision: RouteDecision, query: str, state: Graph
 def _execute_tools(decision: RouteDecision, state: GraphState, ctx: Any) -> Dict[str, Any]:
     data = {}
     ent = decision.intent.entities if decision.intent else {}
-    order_id = ent.get("order_id") or state.get("active_order_id") or getattr(ctx, "active_order_id", None) or state.get("last_order_id") or getattr(ctx, "last_order_id", None)
+    q_lower = (state.get("raw_query") or "").lower()
+    has_explicit_order = bool(re.search(r'\bORD-\d+\b', state.get("raw_query") or "", re.IGNORECASE))
+
+    # Ensure product queries do not collide with all_orders
+    is_product_focused = any(w in q_lower for w in ["product", "products", "item", "items", "catalog", "browse"]) and not any(w in q_lower for w in ["my order", "my orders", "ordered", "order items", "inside order"])
+
+    is_all_orders_query = not is_product_focused and not has_explicit_order and (
+        any(w in q_lower for w in [
+            "all order", "all orders", "my orders", "my all orders",
+            "where is my orders", "where are my orders", "what are my orders",
+            "show my orders", "show all orders", "list my orders", "list all orders",
+            "every order", "order history", "how many orders", "all of my orders",
+            "info of my all orders", "info of all my orders", "info on all my orders"
+        ]) or (
+            ("where" in q_lower or "track" in q_lower or "status" in q_lower or "give" in q_lower or "show" in q_lower)
+            and ("orders" in q_lower or "my all orders" in q_lower)
+        )
+    )
+
+    is_all_products_query = any(w in q_lower for w in [
+        "all product", "all products", "catalog", "what products", "list products",
+        "show products", "show me products", "products do you have", "what do you sell",
+        "browse products", "show all products", "give me info of all products",
+        "all products info", "product list", "available products", "tell me all products",
+        "what can i buy", "what items do you sell"
+    ])
+
+    if is_all_orders_query:
+        order_id = None
+    else:
+        order_id = ent.get("order_id") or state.get("active_order_id") or getattr(ctx, "active_order_id", None) or state.get("last_order_id") or getattr(ctx, "last_order_id", None)
+
     product_id = ent.get("product_id") or state.get("active_product_id") or getattr(ctx, "active_product_id", None) or state.get("last_product_id") or getattr(ctx, "last_product_id", None)
     return_id = ent.get("return_id") or state.get("active_return_id") or getattr(ctx, "active_return_id", None)
     refund_id = ent.get("refund_id") or state.get("active_refund_id") or getattr(ctx, "active_refund_id", None)
     seller_id = ent.get("seller_id")
     customer_id = ent.get("customer_id") or state.get("customer_id") or getattr(ctx, "customer_id", None)
 
+    # Pre-fetch detailed customer orders if is_all_orders_query
+    if is_all_orders_query and customer_id:
+        try:
+            c_orders = tool_registry.get_customer_orders(customer_id)
+            if c_orders:
+                detailed_orders = []
+                for o in c_orders:
+                    oid = o.get("order_id") if isinstance(o, dict) else getattr(o, "order_id", None)
+                    if oid:
+                        o_dict = dict(o) if isinstance(o, dict) else o.__dict__.copy()
+                        o_dict["shipment"] = tool_registry.get_shipment_by_order(oid)
+                        o_dict["items"] = tool_registry.get_order_items(oid)
+                        detailed_orders.append(o_dict)
+                data["customer_orders_detailed"] = detailed_orders
+                data["customer_orders"] = c_orders
+        except Exception:
+            pass
+
     for tool in decision.target_tools:
         try:
-            if tool == "get_order":
+            if tool == "list_all_products" or (is_all_products_query and tool == "get_product"):
+                data["catalog_products"] = tool_registry.list_all_products()
+            elif tool == "search_products":
+                search_term = re.sub(r'[^\w\s]', '', q_lower)
+                for stopw in [
+                    "do you have", "do you sell", "do you offer", "what kind of", "show me",
+                    "what", "are", "available", "products", "search for", "search", "can i buy",
+                    "tell me about", "product", "items", "item", "any", "the"
+                ]:
+                    search_term = search_term.replace(stopw, "").strip()
+                matches = tool_registry.search_products(search_term or q_lower)
+                if not matches and search_term.endswith("s"):
+                    matches = tool_registry.search_products(search_term[:-1])
+                if not matches:
+                    words = [w for w in re.sub(r'[^\w\s]', '', q_lower).split() if len(w) > 3 and w not in (
+                        "what", "kind", "have", "sell", "offer", "show", "tell", "about", "your", "store", "shop"
+                    )]
+                    for w in words:
+                        matches = tool_registry.search_products(w)
+                        if not matches and w.endswith("s"):
+                            matches = tool_registry.search_products(w[:-1])
+                        if matches:
+                            break
+                data["search_products"] = matches
+            elif tool == "get_order":
                 if order_id:
-                    data["order"] = tool_registry.get_order(order_id)
-                elif customer_id:
+                    data["order"] = tool_registry.get_order(order_id, customer_id=customer_id)
+                elif not is_all_orders_query and customer_id:
                     c_orders = tool_registry.get_customer_orders(customer_id)
                     if c_orders:
                         data["customer_orders"] = c_orders
                         first_ord = c_orders[0]
                         oid = first_ord.get("order_id") if isinstance(first_ord, dict) else getattr(first_ord, "order_id", None)
                         if oid:
-                            data["order"] = tool_registry.get_order(oid)
+                            data["order"] = tool_registry.get_order(oid, customer_id=customer_id)
             elif tool == "get_order_items" and order_id:
                 data["order_items"] = tool_registry.get_order_items(order_id)
             elif tool == "get_shipment_by_order":
                 if order_id:
                     data["shipment"] = tool_registry.get_shipment_by_order(order_id)
-                elif customer_id:
+                elif not is_all_orders_query and customer_id:
                     c_orders = tool_registry.get_customer_orders(customer_id)
                     if c_orders:
                         data["customer_orders"] = c_orders
@@ -444,10 +517,49 @@ def _execute_tools(decision: RouteDecision, state: GraphState, ctx: Any) -> Dict
                         oid = first_ord.get("order_id") if isinstance(first_ord, dict) else getattr(first_ord, "order_id", None)
                         if oid:
                             data["shipment"] = tool_registry.get_shipment_by_order(oid)
+            elif tool == "get_customer_orders" and customer_id:
+                c_orders = tool_registry.get_customer_orders(customer_id)
+                data["customer_orders"] = c_orders
+                if not data.get("customer_orders_detailed") and c_orders:
+                    detailed_orders = []
+                    for o in c_orders:
+                        oid = o.get("order_id") if isinstance(o, dict) else getattr(o, "order_id", None)
+                        if oid:
+                            o_dict = dict(o) if isinstance(o, dict) else o.__dict__.copy()
+                            o_dict["shipment"] = tool_registry.get_shipment_by_order(oid)
+                            o_dict["items"] = tool_registry.get_order_items(oid)
+                            detailed_orders.append(o_dict)
+                    data["customer_orders_detailed"] = detailed_orders
             elif tool == "get_shipment_by_tracking" and ent.get("tracking_number"):
                 data["shipment"] = tool_registry.get_shipment_by_tracking(ent["tracking_number"])
-            elif tool == "get_product" and product_id:
-                data["product"] = tool_registry.get_product(product_id)
+            elif tool == "get_product":
+                if product_id:
+                    data["product"] = tool_registry.get_product(product_id)
+                elif is_all_products_query:
+                    data["catalog_products"] = tool_registry.list_all_products()
+                else:
+                    search_term = re.sub(r'[^\w\s]', '', q_lower)
+                    for stopw in [
+                        "do you have", "do you sell", "do you offer", "what kind of", "show me",
+                        "what", "are", "available", "products", "search for", "search", "can i buy",
+                        "tell me about", "product", "items", "item", "any", "the"
+                    ]:
+                        search_term = search_term.replace(stopw, "").strip()
+                    matches = tool_registry.search_products(search_term or q_lower)
+                    if not matches and search_term.endswith("s"):
+                        matches = tool_registry.search_products(search_term[:-1])
+                    if not matches:
+                        words = [w for w in re.sub(r'[^\w\s]', '', q_lower).split() if len(w) > 3 and w not in (
+                            "what", "kind", "have", "sell", "offer", "show", "tell", "about", "your", "store", "shop"
+                        )]
+                        for w in words:
+                            matches = tool_registry.search_products(w)
+                            if not matches and w.endswith("s"):
+                                matches = tool_registry.search_products(w[:-1])
+                            if matches:
+                                break
+                    if matches:
+                        data["search_products"] = matches
             elif tool == "get_seller" and seller_id:
                 data["seller"] = tool_registry.get_seller(seller_id)
             elif tool == "get_seller" and product_id and not seller_id:
@@ -628,23 +740,22 @@ def aggregate_responses(state: GraphState) -> GraphState:
     escalation_responses = [r for r in responses if r.route_type == "HUMAN"]
     security_responses = [r for r in responses if r.route_type == "SECURITY"]
 
-    # Critical credential/prompt injection violations override everything
-    cred_sec_responses = [
+    # Prompt injections override everything — zero tolerance for malicious attacks or leaks
+    injection_responses = [
         r for r in security_responses
-        if any(v in ("CREDENTIAL_EXPOSURE", "PROMPT_INJECTION", "SYSTEM_PROMPT_LEAK") for v in (r.grounding_violations or []))
-        or any(k in r.content.lower() for k in ("otp", "cvv", "upi pin", "password"))
+        if r.security_decision and getattr(r.security_decision, "reason", "") in ("PROMPT_INJECTION", "INJECTION_ATTACK", "DATA_EXFILTRATION")
     ]
-    if cred_sec_responses:
-        state["final_response"] = cred_sec_responses[0]
+    if injection_responses:
+        state["final_response"] = injection_responses[0]
         return state
 
-    if not info_responses:
-        if security_responses:
-            state["final_response"] = security_responses[0]
-            return state
-        if escalation_responses:
-            state["final_response"] = escalation_responses[0]
-            return state
+    if not info_responses and not escalation_responses and security_responses:
+        state["final_response"] = security_responses[0]
+        return state
+
+    if not info_responses and escalation_responses:
+        state["final_response"] = escalation_responses[0]
+        return state
 
     # Combine content from all responses in sub-question order
     content_blocks = []

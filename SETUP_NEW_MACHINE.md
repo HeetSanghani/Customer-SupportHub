@@ -66,35 +66,40 @@ WHATSAPP_PHONE_ID=
 
 ## 🐳 3. Start Docker Infrastructure
 
-This starts the PostgreSQL database and Redis cache:
+This starts the PostgreSQL database (with pgvector) and Redis cache:
 
 ```bash
 cd supporthub
-docker compose up -d
+docker compose up -d db redis
 ```
 
-Verify containers are running:
+Verify containers are running and healthy:
 ```bash
 docker ps
-# You should see: supporthub_db (postgres) and supporthub_redis (redis)
+# You should see: supporthub_db (pgvector:pg16) and supporthub_redis (redis:7-alpine)
 ```
 
 ---
 
 ## 💾 4. Restore Database from Dump
 
-This loads all existing data (users, tickets, KB articles, templates, CSAT reviews) from the committed dump file:
+Restore all database tables, users, orders, products, vector embeddings, and tickets with one command:
 
 ```bash
 # From the project root (Customer-SupportHub/)
+./scripts/restore_db.sh
+```
+
+*(Alternatively, via manual docker command:)*
+```bash
 cat supporthub_dump.sql | docker exec -i supporthub_db psql -U supporthub -d supporthub
 ```
 
-> ✅ This gives you **all demo data** including:
-> - 4 user accounts (customer, agent, manager, admin)
-> - 22 support tickets across channels
-> - Knowledge base articles & FAQ content
-> - CSAT reviews and email templates
+> ✅ This restores:
+> - Full e-commerce catalog (products, categories, sellers, orders, shipments, returns)
+> - Staff & customer accounts (Admin, Manager, Agent, Customer)
+> - Knowledge Base articles with 59 pre-computed pgvector embeddings
+> - Omnichannel tickets, message threads, automations, and canned responses
 
 ---
 
@@ -142,14 +147,14 @@ Once running, open **http://localhost:5173** in your browser:
 
 ## 🔄 7. Creating a New Database Dump (Before Pushing to GitHub)
 
-Whenever you want to push your latest database state to Git for others:
+Whenever you make changes to database records or schema and want to commit them to Git:
 
 ```bash
 # From the project root
-docker exec supporthub_db pg_dump -U supporthub -d supporthub --no-owner --no-acl > supporthub_dump.sql
+./scripts/dump_db.sh
 git add supporthub_dump.sql
 git commit -m "chore: update database dump"
-git push
+git push origin main
 ```
 
 ---

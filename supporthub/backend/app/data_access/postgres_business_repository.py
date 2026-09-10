@@ -81,7 +81,14 @@ class PostgresBusinessRepository:
         if _is_valid_uuid(customer_id):
             return str(customer_id)
         with self.db.cursor() as cur:
-            cur.execute("SELECT id FROM users WHERE customer_id = %s LIMIT 1;", (customer_id,))
+            cur.execute("""
+                SELECT u.id FROM users u
+                WHERE u.customer_id = %s
+                ORDER BY (
+                    EXISTS(SELECT 1 FROM orders o WHERE o.customer_id = u.id)
+                ) DESC, (email = 'customer@supporthub.com') DESC, created_at ASC
+                LIMIT 1;
+            """, (customer_id,))
             row = cur.fetchone()
             if row:
                 return str(row["id"])

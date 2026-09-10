@@ -97,6 +97,10 @@ export default function ManagerWorkflowAutomation() {
 
   const activeCount = automations.filter((a) => a.is_active).length
   const totalCount = automations.length
+  const escalationRulesCount = automations.filter((a) => {
+    const act = a.action_json || {}
+    return act.set_priority === 'urgent' || act.set_status === 'escalated'
+  }).length
 
   return (
     <div className="flex-1 overflow-auto bg-[#F6F7FC] text-[#1C1B2E] flex flex-col min-h-screen">
@@ -169,7 +173,7 @@ export default function ManagerWorkflowAutomation() {
               <Flame size={14} className="text-rose-500" /> Priority Escalations
             </div>
             <div className="text-xl font-bold text-rose-600 mt-1">
-              {automations.filter((a) => a.action_json?.set_priority === 'urgent' || a.action_json?.set_status === 'escalated').length} Rules
+              {escalationRulesCount} Rules
             </div>
             <div className="text-[11px] text-[#94A3B8] mt-0.5">Urgent SLA dispatch</div>
           </div>
@@ -388,6 +392,24 @@ export default function ManagerWorkflowAutomation() {
                               <span className="italic text-slate-600 line-clamp-1">Auto-Reply: "{actions.send_canned_reply}"</span>
                             </div>
                           )}
+                          {actions.assign_agent && (
+                            <div className="flex items-center gap-2 text-xs text-purple-950 font-medium">
+                              <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
+                              Assign Agent: <span className="font-bold text-blue-700 capitalize">{actions.assign_agent === 'round_robin' ? 'Round-Robin' : actions.assign_agent}</span>
+                            </div>
+                          )}
+                          {actions.auto_resolve && (
+                            <div className="flex items-center gap-2 text-xs text-purple-950 font-medium">
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                              <span className="font-bold text-emerald-700">Auto-Resolve Ticket</span>
+                            </div>
+                          )}
+                          {actions.stop_further_evaluation && (
+                            <div className="flex items-center gap-2 text-xs text-orange-700 font-medium">
+                              <span className="w-1.5 h-1.5 rounded-full bg-orange-400"></span>
+                              <span className="font-bold">Stop pipeline after this rule</span>
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -493,7 +515,28 @@ export default function ManagerWorkflowAutomation() {
                                 {actions.set_category}
                               </span>
                             )}
+                            {actions.send_canned_reply && (
+                              <span className="px-1.5 py-0.5 bg-purple-100 text-purple-800 rounded text-[10px] font-medium">
+                                auto-reply
+                              </span>
+                            )}
+                            {actions.assign_agent && (
+                              <span className="px-1.5 py-0.5 bg-blue-100 text-blue-800 rounded text-[10px] font-medium">
+                                {actions.assign_agent === 'round_robin' ? 'round-robin' : 'assign'}
+                              </span>
+                            )}
+                            {actions.auto_resolve && (
+                              <span className="px-1.5 py-0.5 bg-emerald-100 text-emerald-800 rounded text-[10px] font-medium">
+                                auto-resolve
+                              </span>
+                            )}
+                            {actions.stop_further_evaluation && (
+                              <span className="px-1.5 py-0.5 bg-orange-100 text-orange-800 rounded text-[10px] font-medium">
+                                stop-pipeline
+                              </span>
+                            )}
                           </div>
+
                         </td>
                         <td className="py-3 px-4">
                           <button
@@ -749,6 +792,9 @@ function RuleEditorModal({ rule, onClose, onSave }) {
   const [setStatusAction, setSetStatusAction] = useState(initialActions.set_status || '')
   const [setCategoryAction, setSetCategoryAction] = useState(initialActions.set_category || '')
   const [sendCannedReply, setSendCannedReply] = useState(initialActions.send_canned_reply || '')
+  const [assignAgent, setAssignAgent] = useState(initialActions.assign_agent || '')
+  const [autoResolve, setAutoResolve] = useState(initialActions.auto_resolve || false)
+  const [stopFurtherEval, setStopFurtherEval] = useState(initialActions.stop_further_evaluation || false)
 
   const mutation = useMutation({
     mutationFn: async (payload) => {
@@ -781,6 +827,9 @@ function RuleEditorModal({ rule, onClose, onSave }) {
     if (setStatusAction) action_json.set_status = setStatusAction
     if (setCategoryAction.trim()) action_json.set_category = setCategoryAction.trim()
     if (sendCannedReply.trim()) action_json.send_canned_reply = sendCannedReply.trim()
+    if (assignAgent.trim() && assignAgent !== 'none') action_json.assign_agent = assignAgent.trim()
+    if (autoResolve) action_json.auto_resolve = true
+    if (stopFurtherEval) action_json.stop_further_evaluation = true
 
     mutation.mutate({
       name: name.trim(),
@@ -899,9 +948,9 @@ function RuleEditorModal({ rule, onClose, onSave }) {
             </div>
 
             <div>
-              <label className="block text-[11px] font-semibold text-slate-600 mb-1">Filter by Sentiment</label>
+              <label className="block text[11px] font-semibold text-slate-600 mb-1">Filter by Sentiment</label>
               <div className="flex flex-wrap gap-1.5">
-                {['frustrated', 'negative', 'neutral', 'positive'].map((st) => (
+                {['frustrated', 'negative', 'angry', 'neutral', 'positive'].map((st) => (
                   <button
                     key={st}
                     type="button"
@@ -977,6 +1026,39 @@ function RuleEditorModal({ rule, onClose, onSave }) {
                 placeholder="e.g. We have received your emergency ticket and escalated to senior support..."
                 className="w-full px-3 py-1.5 text-xs border border-purple-200 rounded-lg focus:outline-none"
               />
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-semibold text-slate-600 mb-1">Assign Agent</label>
+              <select
+                value={assignAgent}
+                onChange={(e) => setAssignAgent(e.target.value)}
+                className="w-full px-3 py-1.5 text-xs border border-purple-200 rounded-lg focus:outline-none"
+              >
+                <option value="none">No assignment</option>
+                <option value="round_robin">Round-Robin (auto-pick available agent)</option>
+              </select>
+            </div>
+
+            <div className="flex items-center gap-4 pt-1">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={autoResolve}
+                  onChange={(e) => setAutoResolve(e.target.checked)}
+                  className="w-4 h-4 rounded accent-emerald-600"
+                />
+                <span className="text-xs font-semibold text-slate-700">Auto-resolve ticket</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={stopFurtherEval}
+                  onChange={(e) => setStopFurtherEval(e.target.checked)}
+                  className="w-4 h-4 rounded accent-orange-500"
+                />
+                <span className="text-xs font-semibold text-slate-700">Stop pipeline after this rule</span>
+              </label>
             </div>
           </div>
 

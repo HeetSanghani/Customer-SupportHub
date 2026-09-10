@@ -13,6 +13,7 @@ from app.models import (
     EmailLog,
     Automation,
     Macro,
+    QuickReply,
     KbArticle,
     ChannelIntegration, ChannelType, ChannelStatus
 )
@@ -61,18 +62,41 @@ async def run_clean_and_seed():
             {"email": "manager@supporthub.com", "name": "Manager User", "role": UserRole.manager, "phone": "+1 (555) 010-0003"},
             {"email": "priya.p@example.com", "name": "Priya Patel", "role": UserRole.manager, "phone": "+1 (555) 010-0004"},
 
-            # Agents
+            # Agents (Single dedicated agent)
             {"email": "agent@supporthub.com", "name": "Agent User", "role": UserRole.agent, "phone": "+1 (555) 010-0005"},
-            {"email": "emma.wilson@supporthub.com", "name": "Emma Wilson", "role": UserRole.agent, "phone": "+1 (555) 010-0006"},
 
-            # Customers
-            {"email": "customer@supporthub.com", "name": "Aarav Sharma", "role": UserRole.customer, "phone": "+1 (555) 100-0001", "customer_id": "CUST-001", "address": "123 Main Street, Suite 100", "city": "New York", "state": "NY", "postal_code": "10001", "country": "United States"},
+            # Customers (Canonical 25 seed customers)
+            {"email": "customer@supporthub.com", "name": "Aarav Sharma", "role": UserRole.customer, "phone": "+91-9876543210", "customer_id": "CUST-001", "address": "Flat 402, Green Glen Layout, Outer Ring Road, Bellandur", "city": "Bengaluru", "state": "Karnataka", "postal_code": "560103", "country": "India"},
             {"email": "sarah.j@example.com", "name": "Sarah Johnson", "role": UserRole.customer, "phone": "+1 (555) 234-5678", "customer_id": "CUST-002"},
-            {"email": "alex.t@example.com", "name": "Alex Thomas", "role": UserRole.customer, "phone": "+1 (555) 345-6789"},
-            {"email": "michael.c@example.com", "name": "Michael Chen", "role": UserRole.customer, "phone": "+1 (555) 456-7890"},
-            {"email": "rahul.s@example.com", "name": "Rahul Sharma", "role": UserRole.customer, "phone": "+91 98765 43210"},
-            {"email": "david.b@example.com", "name": "David Brown", "role": UserRole.customer, "phone": "+1 (555) 567-8901"},
-            {"email": "elena.r@example.com", "name": "Elena Rostova", "role": UserRole.customer, "phone": "+44 20 7946 0912"},
+            {"email": "rohan.verma@example.com", "name": "Rohan Verma", "role": UserRole.customer, "phone": "+91-9811234567", "customer_id": "CUST-003", "city": "New Delhi", "state": "Delhi", "country": "India"},
+            {"email": "ananya.reddy@example.com", "name": "Ananya Reddy", "role": UserRole.customer, "phone": "+91-9440123456", "customer_id": "CUST-004", "city": "Hyderabad", "state": "Telangana", "country": "India"},
+            {"email": "vikram.iyer@example.com", "name": "Vikram Iyer", "role": UserRole.customer, "phone": "+91-9840123456", "customer_id": "CUST-005", "city": "Chennai", "state": "Tamil Nadu", "country": "India"},
+            {"email": "sneha.kulkarni@example.com", "name": "Sneha Kulkarni", "role": UserRole.customer, "phone": "+91-9764123456", "customer_id": "CUST-006", "city": "Pune", "state": "Maharashtra", "country": "India"},
+            {"email": "rajesh.banerjee@example.com", "name": "Rajesh Banerjee", "role": UserRole.customer, "phone": "+91-9830123456", "customer_id": "CUST-007", "city": "Kolkata", "state": "West Bengal", "country": "India"},
+            {"email": "kavita.deshmukh@example.com", "name": "Kavita Deshmukh", "role": UserRole.customer, "phone": "+91-9822123456", "customer_id": "CUST-008", "city": "Pune", "state": "Maharashtra", "country": "India"},
+            {"email": "aditya.nair@example.com", "name": "Aditya Nair", "role": UserRole.customer, "phone": "+91-9847123456", "customer_id": "CUST-009", "city": "Kochi", "state": "Kerala", "country": "India"},
+            {"email": "neha.gupta@example.com", "name": "Neha Gupta", "role": UserRole.customer, "phone": "+91-9810123456", "customer_id": "CUST-010", "city": "Gurugram", "state": "Haryana", "country": "India"},
+            {"email": "siddharth.c@example.com", "name": "Siddharth Choudhury", "role": UserRole.customer, "phone": "+91-9435123456", "customer_id": "CUST-011", "city": "Guwahati", "state": "Assam", "country": "India"},
+            {"email": "pooja.joshi@example.com", "name": "Pooja Joshi", "role": UserRole.customer, "phone": "+91-9414123456", "customer_id": "CUST-012", "city": "Jaipur", "state": "Rajasthan", "country": "India"},
+            {"email": "manish.tiwari@example.com", "name": "Manish Tiwari", "role": UserRole.customer, "phone": "+91-9450123456", "customer_id": "CUST-013", "city": "Lucknow", "state": "Uttar Pradesh", "country": "India"},
+            {"email": "deepika.rao@example.com", "name": "Deepika Rao", "role": UserRole.customer, "phone": "+91-9844123456", "customer_id": "CUST-014", "city": "Bengaluru", "state": "Karnataka", "country": "India"},
+            {"email": "karan.mehta@example.com", "name": "Karan Mehta", "role": UserRole.customer, "phone": "+91-9879123456", "customer_id": "CUST-015", "city": "Ahmedabad", "state": "Gujarat", "country": "India"},
+            {"email": "meera.menon@example.com", "name": "Meera Menon", "role": UserRole.customer, "phone": "+91-9846123456", "customer_id": "CUST-016", "city": "Thiruvananthapuram", "state": "Kerala", "country": "India"},
+            {"email": "arjun.kapoor@example.com", "name": "Arjun Kapoor", "role": UserRole.customer, "phone": "+91-9818123456", "customer_id": "CUST-017", "city": "Noida", "state": "Uttar Pradesh", "country": "India"},
+            {"email": "ritu.agarwal@example.com", "name": "Ritu Agarwal", "role": UserRole.customer, "phone": "+91-9331123456", "customer_id": "CUST-018", "city": "Kolkata", "state": "West Bengal", "country": "India"},
+            {"email": "amit.singhania@example.com", "name": "Amit Singhania", "role": UserRole.customer, "phone": "+91-9826123456", "customer_id": "CUST-019", "city": "Indore", "state": "Madhya Pradesh", "country": "India"},
+            {"email": "shweta.bhatia@example.com", "name": "Shweta Bhatia", "role": UserRole.customer, "phone": "+91-9814123456", "customer_id": "CUST-020", "city": "Chandigarh", "state": "Chandigarh", "country": "India"},
+            {"email": "rahul.d@example.com", "name": "Rahul Dravid", "role": UserRole.customer, "phone": "+91-9880123456", "customer_id": "CUST-021", "city": "Bengaluru", "state": "Karnataka", "country": "India"},
+            {"email": "divya.sri@example.com", "name": "Divya Srivastava", "role": UserRole.customer, "phone": "+91-9415123456", "customer_id": "CUST-022", "city": "Lucknow", "state": "Uttar Pradesh", "country": "India"},
+            {"email": "gaurav.saxena@example.com", "name": "Gaurav Saxena", "role": UserRole.customer, "phone": "+91-9829123456", "customer_id": "CUST-023", "city": "Jaipur", "state": "Rajasthan", "country": "India"},
+            {"email": "suresh.pandey@example.com", "name": "Suresh Pandey", "role": UserRole.customer, "phone": "+91-9871123456", "customer_id": "CUST-024", "city": "Gurugram", "state": "Haryana", "country": "India"},
+            {"email": "tanya.malhotra@example.com", "name": "Tanya Malhotra", "role": UserRole.customer, "phone": "+91-9811987654", "customer_id": "CUST-025", "city": "New Delhi", "state": "Delhi", "country": "India"},
+            {"email": "alex.t@example.com", "name": "Alex Turner", "role": UserRole.customer, "phone": "+1 (555) 345-6789", "customer_id": "CUST-026"},
+            {"email": "michael.c@example.com", "name": "Michael Chen", "role": UserRole.customer, "phone": "+1 (555) 456-7890", "customer_id": "CUST-027"},
+            {"email": "rahul.s@example.com", "name": "Rahul Sharma", "role": UserRole.customer, "phone": "+91-9899123456", "customer_id": "CUST-028"},
+            {"email": "david.b@example.com", "name": "David Brown", "role": UserRole.customer, "phone": "+1 (555) 567-8901", "customer_id": "CUST-029"},
+            {"email": "elena.r@example.com", "name": "Elena Rostova", "role": UserRole.customer, "phone": "+1 (555) 678-9012", "customer_id": "CUST-030"},
+            {"email": "mihirk.brainerhub@gmail.com", "name": "Mihir", "role": UserRole.customer},
 
             # Omnichannel Customer Profiles
             {"email": "whatsapp_919824052103@channel.supporthub.internal", "name": "👑 Heet Sanghani 👑", "role": UserRole.customer, "phone": "+91 98240 52103", "channel": "whatsapp", "channel_customer_id": "919824052103"},
@@ -210,9 +234,49 @@ async def run_clean_and_seed():
             await session.commit()
             print("✅ Canned Macros created.")
 
+        # 6b. Seed Quick Reply Templates
+        existing_qr = (await session.exec(select(QuickReply))).all()
+        if not existing_qr:
+            sample_qr = [
+                QuickReply(
+                    category="Billing",
+                    keyword_pattern="refund, money back, credit",
+                    response_text="Your refund has been processed and should appear in 5-7 business days.",
+                    priority=1,
+                ),
+                QuickReply(
+                    category="Orders",
+                    keyword_pattern="track, order status, where is my order",
+                    response_text="I checked your order status — it is currently in transit. You can track your shipment live under the Orders tab in your dashboard.",
+                    priority=2,
+                ),
+                QuickReply(
+                    category="Returns",
+                    keyword_pattern="return, replace, exchange",
+                    response_text="To initiate a return, visit your Orders page, select your order, and click Request Return. Items can be returned within 30 days of delivery.",
+                    priority=3,
+                ),
+                QuickReply(
+                    category="Shipping",
+                    keyword_pattern="delivery, shipping, courier",
+                    response_text="Standard delivery takes 3–5 business days for metro areas and 5–7 business days for non-metro locations.",
+                    priority=4,
+                ),
+                QuickReply(
+                    category="Billing",
+                    keyword_pattern="refund policy, cancel refund",
+                    response_text="Refunds are initiated within 2 to 4 hours of courier pickup for damaged items, and credited to your original payment method.",
+                    priority=5,
+                ),
+            ]
+            for qr in sample_qr:
+                session.add(qr)
+            await session.commit()
+            print("✅ Quick Reply templates created.")
+
         # 7. Seed Pristine Tickets Across All 5 Channels
-        agent_emma = user_map["emma.wilson@supporthub.com"]
         agent_user = user_map["agent@supporthub.com"]
+        agent_emma = agent_user  # All agent assignments go to Agent User
         cust_sarah = user_map["sarah.j@example.com"]
         cust_alex = user_map["alex.t@example.com"]
         cust_michael = user_map["michael.c@example.com"]

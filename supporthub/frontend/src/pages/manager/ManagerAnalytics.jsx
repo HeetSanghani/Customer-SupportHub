@@ -448,7 +448,8 @@ export default function ManagerAnalytics() {
           {Object.entries(channels).map(([ch, count]) => (
             <div 
               key={ch}
-              onClick={() => navigate('/manager/inbox/all')}
+              onClick={() => navigate(`/manager/inbox/all?channel=${ch}`)}
+              title={`View ${ch.replace('_', ' ')} tickets`}
               className="p-4 rounded-xl border border-[#E5E7F3] hover:border-indigo-300 hover:bg-indigo-50/30 transition-all cursor-pointer flex justify-between items-center"
             >
               <div>

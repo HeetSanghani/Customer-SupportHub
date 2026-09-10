@@ -243,6 +243,31 @@ async def websocket_chat(
 
                 # Phase 11: SupportHub AI Architecture Live Chat Integration
                 if user.role.value == "customer":
+                    try:
+                        from app.ai.subject import generate_ai_ticket_subject
+                        ai_subj = await generate_ai_ticket_subject(session, ticket.id)
+                        if ai_subj and ticket.subject != ai_subj:
+                            ticket.subject = ai_subj
+                            session.add(ticket)
+                            await session.commit()
+                            await session.refresh(ticket)
+                            await manager.broadcast(ticket_id, {
+                                "type": "ticket_update",
+                                "status": ticket.status.value if hasattr(ticket.status, "value") else str(ticket.status),
+                                "subject": ticket.subject,
+                                "ai_resolved": getattr(ticket, "ai_resolved", False),
+                            })
+                            await manager.broadcast_to_agents({
+                                "type": "inbox_update",
+                                "ticket_id": ticket_id,
+                                "preview": body[:80],
+                                "sender_name": user.name,
+                                "subject": ticket.subject,
+                                "status": ticket.status.value if hasattr(ticket.status, "value") else str(ticket.status),
+                            })
+                    except Exception:
+                        pass
+
                     import asyncio
                     from app.services.ai.live_chat_adapter import live_chat_ai_adapter
 

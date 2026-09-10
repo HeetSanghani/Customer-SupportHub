@@ -14,7 +14,7 @@ export default function ManagerOverview() {
   const { data: tickets = [], isLoading: isLoadingTickets } = useQuery({
     queryKey: ['tickets', 'all'],
     queryFn: async () => {
-      const res = await ticketsApi.list()
+      const res = await ticketsApi.list({ all_tickets: true, limit: 200 })
       return res.data
     }
   })
@@ -57,8 +57,21 @@ export default function ManagerOverview() {
   const aiResolved = tickets.filter(t => t.ai_resolved).length
   const aiResolutionRate = totalTickets > 0 ? Math.round((aiResolved / totalTickets) * 100) : 0
   
+  // Filter to only real company agents (only @supporthub.com accounts, exclude seed/placeholder accounts)
+  const realAgents = agents.filter(a => a.email?.endsWith('@supporthub.com'))
+  const placeholderAgentCount = agents.length - realAgents.length
+
+  // Human-intervention tickets: those that agents see via human_only filter
+  // (escalated status, has agent_id, urgent priority, or escalation category)
+  const humanTickets = tickets.filter(t =>
+    t.status === 'escalated' ||
+    t.agent_id != null ||
+    t.priority === 'urgent' ||
+    (t.category || '').toLowerCase().includes('escalat')
+  )
+
   const slaCompliance = totalTickets > 0 ? Math.round((closedTickets / totalTickets) * 100) : 100
-  const recentActivity = tickets.slice(0, 4)
+  const recentActivity = tickets.slice(0, 5)
 
   // 1. Purely Dynamic Channels Breakdown from actual DB tickets
   const channelCounts = {
@@ -164,9 +177,9 @@ export default function ManagerOverview() {
           </div>
         </div>
 
-        {/* AI Resolution Rate -> All Tickets */}
+        {/* AI Resolution Rate -> Closed Tickets */}
         <div
-          onClick={() => navigate('/manager/inbox/all')}
+          onClick={() => navigate('/manager/inbox/closed')}
           className="bg-white p-5 rounded-2xl border border-[#E5E7F3] shadow-sm cursor-pointer hover:border-purple-400 hover:shadow-md transition-all group"
         >
           <div className="flex justify-between items-start mb-2">
@@ -205,7 +218,7 @@ export default function ManagerOverview() {
               return (
                 <div
                   key={ch.id}
-                  onClick={() => navigate('/manager/inbox/all')}
+                  onClick={() => navigate(`/manager/inbox/all?channel=${ch.id}`)}
                   className="flex-1 flex flex-col items-center gap-2 group cursor-pointer h-full justify-end"
                 >
                   <div className="w-full bg-slate-100 rounded-t-lg flex-1 flex items-end p-1 relative overflow-hidden group-hover:bg-slate-200 transition-colors">
@@ -301,81 +314,130 @@ export default function ManagerOverview() {
         {/* Agent Snapshot */}
         <div className="bg-white p-6 rounded-2xl border border-[#E5E7F3] shadow-sm">
           <div className="flex justify-between items-center mb-4">
-            <h2 className="text-base font-bold text-[#1C1B2E]">Agent Performance Snapshot</h2>
-            <span className="text-xs font-bold text-[#6C7089]">{agents.length} Active Agents</span>
+            <div>
+              <h2 className="text-base font-bold text-[#1C1B2E]">Agent Performance Snapshot</h2>
+              <p className="text-xs text-[#9598B0] mt-0.5">
+                {realAgents.length} active agent{realAgents.length !== 1 ? 's' : ''}
+                {placeholderAgentCount > 0 && (
+                  <span className="ml-1 text-[#9598B0]">· {placeholderAgentCount} seed accounts hidden</span>
+                )}
+              </p>
+            </div>
+            <button
+              onClick={() => navigate('/manager/agent-performance')}
+              className="text-xs font-bold text-indigo-600 hover:underline"
+            >
+              Full Report →
+            </button>
           </div>
-          <div className="space-y-4">
-            {agents.map((agent) => {
-              const agentTickets = tickets.filter(t => t.agent_id === agent.id)
-              const agentClosed = agentTickets.filter(t => t.status === 'resolved' || t.status === 'closed').length
-              const agentTicketIds = agentTickets.map(t => t.id)
-              const agentCsats = csatReviews.filter(r => agentTicketIds.includes(r.ticket_id))
-              const avgCsat = agentCsats.length > 0
-                ? (agentCsats.reduce((sum, r) => sum + r.rating, 0) / agentCsats.length).toFixed(1)
-                : (csatReviews.length > 0 ? (csatReviews.reduce((sum, r) => sum + r.rating, 0) / csatReviews.length).toFixed(1) : '5.0')
-              const agentSla = agentTickets.length > 0 ? Math.round((agentClosed / agentTickets.length) * 100) : 100
 
-              return (
-                <div key={agent.id} className="flex items-center justify-between p-3 rounded-xl hover:bg-slate-50 transition-colors">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-600 text-white flex items-center justify-center font-bold text-sm shadow-sm">
-                      {agent.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase()}
+          {realAgents.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-10 text-center">
+              <div className="w-12 h-12 bg-indigo-50 rounded-2xl flex items-center justify-center mb-3">
+                <CheckCircle2 size={22} className="text-indigo-400" />
+              </div>
+              <p className="text-sm font-bold text-[#1C1B2E]">No active agents yet</p>
+              <p className="text-xs text-[#9598B0] mt-1">Agents will appear here once assigned tickets.</p>
+            </div>
+          ) : (
+            <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+              {realAgents.map((agent) => {
+                // Tickets directly assigned to this agent via agent_id
+                const directTickets = tickets.filter(t => t.agent_id === agent.id)
+                // Human-intervention tickets visible in this agent's queue
+                // If there's only 1 agent, their queue includes all human intervention tickets
+                const visibleTickets = (realAgents.length === 1)
+                  ? tickets.filter(t => t.agent_id === agent.id || humanTickets.some(ht => ht.id === t.id))
+                  : (directTickets.length > 0 ? directTickets : humanTickets)
+                const visibleClosed = visibleTickets.filter(t => t.status === 'resolved' || t.status === 'closed').length
+                const visibleOpen = visibleTickets.filter(t => t.status !== 'resolved' && t.status !== 'closed').length
+                const visibleIds = visibleTickets.map(t => t.id)
+                const agentCsats = csatReviews.filter(r => visibleIds.includes(r.ticket_id))
+                const avgCsat = agentCsats.length > 0
+                  ? (agentCsats.reduce((sum, r) => sum + r.rating, 0) / agentCsats.length).toFixed(1)
+                  : (csatReviews.length > 0 ? (csatReviews.reduce((sum, r) => sum + r.rating, 0) / csatReviews.length).toFixed(1) : '5.0')
+                const agentSla = visibleTickets.length > 0 ? Math.round((visibleClosed / visibleTickets.length) * 100) : 100
+                const isDirectlyAssigned = directTickets.length > 0
+                const initials = agent.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase()
+
+                return (
+                  <div key={agent.id} className="flex items-center gap-4 p-3.5 rounded-xl bg-slate-50 hover:bg-indigo-50/50 transition-colors border border-transparent hover:border-indigo-100">
+                    <div className="w-11 h-11 rounded-xl bg-gradient-to-tr from-indigo-500 to-purple-600 text-white flex items-center justify-center font-bold text-sm shadow-sm shrink-0">
+                      {initials}
                     </div>
-                    <div>
-                      <div className="font-bold text-sm text-[#1C1B2E]">{agent.name}</div>
-                      <div className="text-xs text-[#9598B0]">
-                        {agentTickets.length} assigned tickets · CSAT {avgCsat} ★
+                    <div className="flex-1 min-w-0">
+                      <div className="font-bold text-sm text-[#1C1B2E] truncate">{agent.name}</div>
+                      <div className="text-xs text-[#9598B0] mt-0.5">
+                        <span className="font-semibold text-indigo-600">{visibleTickets.length}</span> in queue &nbsp;·&nbsp;
+                        <span className="font-semibold text-emerald-600">{visibleClosed}</span> resolved &nbsp;·&nbsp;
+                        <span className="font-semibold text-amber-600">{visibleOpen}</span> open
                       </div>
+                      {!isDirectlyAssigned && visibleTickets.length > 0 && (
+                        <div className="text-[10px] text-indigo-400 font-semibold mt-0.5">👤 Human-intervention queue</div>
+                      )}
+                    </div>
+                    <div className="text-right shrink-0">
+                      <div className={`text-xs font-bold ${agentSla >= 80 ? 'text-emerald-600' : agentSla >= 50 ? 'text-amber-600' : 'text-rose-600'}`}>
+                        {agentSla}% SLA
+                      </div>
+                      <div className="text-[11px] text-[#9598B0] mt-0.5">CSAT {avgCsat} ★</div>
                     </div>
                   </div>
-                  <div className="text-right">
-                    <div className="text-xs font-bold text-emerald-600">{agentSla}% SLA</div>
-                    <div className="text-[11px] text-[#9598B0]">{agentClosed} resolved</div>
-                  </div>
-                </div>
-              )
-            })}
-            {agents.length === 0 && <div className="text-sm text-[#9598B0] text-center py-4">No active agents found</div>}
-          </div>
+                )
+              })}
+            </div>
+          )}
         </div>
 
         {/* Recent Activity */}
         <div className="bg-white p-6 rounded-2xl border border-[#E5E7F3] shadow-sm">
           <div className="flex justify-between items-center mb-4">
-            <h2 className="text-base font-bold text-[#1C1B2E]">Recent Activity</h2>
+            <div>
+              <h2 className="text-base font-bold text-[#1C1B2E]">Recent Activity</h2>
+              <p className="text-xs text-[#9598B0] mt-0.5">Latest 5 ticket events</p>
+            </div>
             <button onClick={() => navigate('/manager/inbox/all')} className="text-xs font-bold text-indigo-600 hover:underline">View All</button>
           </div>
-          <div className="space-y-4">
+          <div className="space-y-2">
             {recentActivity.map((ticket) => (
-              <div key={ticket.id} className="flex gap-3.5 p-2 rounded-xl hover:bg-slate-50 transition-colors">
-                <div className="mt-0.5">
+              <div
+                key={ticket.id}
+                onClick={() => navigate(`/manager/tickets/${ticket.id}`)}
+                className="flex gap-3 p-3 rounded-xl hover:bg-slate-50 transition-colors cursor-pointer group"
+              >
+                <div className="mt-0.5 shrink-0">
                   {ticket.ai_resolved ? (
                     <div className="w-7 h-7 bg-purple-100 rounded-lg flex items-center justify-center text-purple-600">
-                      <Bot size={15} />
+                      <Bot size={14} />
                     </div>
                   ) : ticket.priority === 'urgent' ? (
                     <div className="w-7 h-7 bg-red-100 rounded-lg flex items-center justify-center text-red-600">
-                      <AlertTriangle size={15} />
+                      <AlertTriangle size={14} />
                     </div>
                   ) : (
                     <div className="w-7 h-7 bg-emerald-100 rounded-lg flex items-center justify-center text-emerald-600">
-                      <CheckCircle2 size={15} />
+                      <CheckCircle2 size={14} />
                     </div>
                   )}
                 </div>
-                <div className="flex-1">
-                  <div className="text-sm font-bold text-[#1C1B2E]">
-                    {ticket.ai_resolved ? `AI resolved ticket ${ticket.ref} automatically` :
-                     ticket.priority === 'urgent' ? `High priority ticket ${ticket.ref} escalated` :
-                     `New ticket ${ticket.ref} created via ${ticket.channel}`}
+                <div className="flex-1 min-w-0">
+                  <div className="text-xs font-bold text-[#1C1B2E] group-hover:text-indigo-600 transition-colors truncate">
+                    {ticket.ai_resolved
+                      ? `AI resolved ${ticket.ref} automatically`
+                      : ticket.priority === 'urgent'
+                      ? `Urgent: ${ticket.ref} escalated`
+                      : `${ticket.ref} created via ${ticket.channel}`}
                   </div>
-                  <div className="text-xs text-[#6C7089] truncate max-w-md">{ticket.subject}</div>
-                  <div className="text-[11px] text-[#9598B0] mt-1 font-medium">
-                    {formatDateTime(ticket.created_at)}
-                  </div>
+                  <div className="text-[11px] text-[#9598B0] truncate mt-0.5">{ticket.subject}</div>
+                </div>
+                <div className="text-[10px] text-[#9598B0] shrink-0 pt-0.5 font-medium">
+                  {formatDateTime(ticket.created_at)}
                 </div>
               </div>
             ))}
+            {recentActivity.length === 0 && (
+              <div className="text-sm text-[#9598B0] text-center py-8">No recent activity</div>
+            )}
           </div>
         </div>
       </div>

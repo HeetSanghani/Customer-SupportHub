@@ -12,7 +12,7 @@ from sqlmodel import select
 from app.config import get_settings
 from app.database import get_session
 from app.dependencies import get_current_user
-from app.models import User, UserRole, UserStatus, ChannelIntegration, ChannelType, ChannelStatus, Ticket, TicketStatus, TicketPriority, SenderType, Message
+from app.models import User, UserRole, UserStatus, ChannelIntegration, ChannelType, ChannelStatus, Ticket, TicketStatus, TicketPriority, SenderType, Message, AiSettings
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -154,41 +154,106 @@ async def delete_channel(
 
 # ─── AI Settings ───────────────────────────────────────────────────────────────
 
+def _settings_to_dict(ai: AiSettings) -> dict:
+    threshold_val = ai.confidence_threshold
+    if threshold_val is not None and 0.0 <= threshold_val <= 1.0:
+        threshold_display = int(round(threshold_val * 100))
+    elif threshold_val is not None:
+        threshold_display = int(threshold_val)
+    else:
+        threshold_display = 85
+    return {
+        "enable_ai_assistant": ai.enabled,
+        "auto_resolve": ai.auto_resolve,
+        "ai_reply_suggestions": ai.suggest_replies,
+        "ai_summaries": ai.auto_summary,
+        "sentiment_detection": ai.sentiment_detection,
+        "confidence_threshold": threshold_display,
+    }
+
+
 class AISettingsRequest(BaseModel):
     enable_ai_assistant: Optional[bool] = None
     auto_resolve: Optional[bool] = None
     ai_reply_suggestions: Optional[bool] = None
     ai_summaries: Optional[bool] = None
     sentiment_detection: Optional[bool] = None
-    confidence_threshold: Optional[int] = None
+    confidence_threshold: Optional[float] = None
 
 
 @router.get("/ai-settings")
-async def get_ai_settings(current_user: User = Depends(get_current_user)):
+async def get_ai_settings(
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
     if current_user.role not in (UserRole.admin, UserRole.manager):
         raise HTTPException(status_code=403, detail="Not authorized")
+
+    global _current_ai_settings
+    ai_row = await session.get(AiSettings, 1)
+    if not ai_row:
+        ai_row = AiSettings(
+            id=1,
+            enabled=True,
+            auto_resolve=True,
+            suggest_replies=True,
+            auto_summary=True,
+            sentiment_detection=True,
+            confidence_threshold=0.85,
+        )
+        session.add(ai_row)
+        await session.commit()
+        await session.refresh(ai_row)
+
+    _current_ai_settings = _settings_to_dict(ai_row)
     return _current_ai_settings
 
 
 @router.post("/ai-settings")
+@router.put("/ai-settings")
+@router.patch("/ai-settings")
 async def update_ai_settings(
     body: AISettingsRequest,
     current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
 ):
     if current_user.role != UserRole.admin:
         raise HTTPException(status_code=403, detail="Only admins can update AI settings")
 
     global _current_ai_settings
+    ai_row = await session.get(AiSettings, 1)
+    if not ai_row:
+        ai_row = AiSettings(
+            id=1,
+            enabled=True,
+            auto_resolve=True,
+            suggest_replies=True,
+            auto_summary=True,
+            sentiment_detection=True,
+            confidence_threshold=0.85,
+        )
+        session.add(ai_row)
+
     if body.enable_ai_assistant is not None:
-        _current_ai_settings["enable_ai_assistant"] = body.enable_ai_assistant
+        ai_row.enabled = body.enable_ai_assistant
     if body.auto_resolve is not None:
-        _current_ai_settings["auto_resolve"] = body.auto_resolve
+        ai_row.auto_resolve = body.auto_resolve
     if body.ai_reply_suggestions is not None:
-        _current_ai_settings["ai_reply_suggestions"] = body.ai_reply_suggestions
+        ai_row.suggest_replies = body.ai_reply_suggestions
     if body.ai_summaries is not None:
-        _current_ai_settings["ai_summaries"] = body.ai_summaries
+        ai_row.auto_summary = body.ai_summaries
     if body.sentiment_detection is not None:
-        _current_ai_settings["sentiment_detection"] = body.sentiment_detection
+        ai_row.sentiment_detection = body.sentiment_detection
+    if body.confidence_threshold is not None:
+        raw = float(body.confidence_threshold)
+        ai_row.confidence_threshold = (raw / 100.0) if raw > 1.0 else raw
+
+    ai_row.updated_at = datetime.now()
+    session.add(ai_row)
+    await session.commit()
+    await session.refresh(ai_row)
+
+    _current_ai_settings = _settings_to_dict(ai_row)
     return _current_ai_settings
 
 

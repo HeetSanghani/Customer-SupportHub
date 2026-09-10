@@ -13,6 +13,7 @@ import {
 
 export default function FacebookInbox({ basePath = '/agent' }) {
   const { token, role, name: currentName } = useAuthStore()
+  const isAgent = basePath === '/agent' || (role === 'agent' && basePath !== '/manager' && basePath !== '/admin')
   const queryClient = useQueryClient()
   const messagesEndRef = useRef(null)
   const inputRef = useRef(null)
@@ -163,9 +164,13 @@ export default function FacebookInbox({ basePath = '/agent' }) {
 
   // 1. Query Facebook Tickets
   const { data: rawTickets = [], isLoading: loadingTickets } = useQuery({
-    queryKey: ['facebook-tickets', 'human-only'],
+    queryKey: ['facebook-tickets', isAgent ? 'human-only' : 'all'],
     queryFn: async () => {
-      const res = await ticketsApi.list({ channel: 'facebook', human_only: true })
+      const params = {
+        channel: 'facebook',
+        ...(isAgent ? { human_only: true } : { all_tickets: true })
+      }
+      const res = await ticketsApi.list(params)
       return res.data
     },
     refetchInterval: 5000,
@@ -838,32 +843,6 @@ export default function FacebookInbox({ basePath = '/agent' }) {
                 <Zap size={18} />
               </button>
 
-              <button
-                type="button"
-                onClick={async () => {
-                  const input = document.createElement('input')
-                  input.type = 'file'
-                  input.onchange = async (e) => {
-                    const file = e.target.files[0]
-                    if (!file) return
-                    const formData = new FormData()
-                    formData.append('file', file)
-                    try {
-                      const res = await client.post(`/tickets/${selectedTicketId}/upload`, formData, {
-                        headers: { 'Content-Type': 'multipart/form-data' }
-                      })
-                      setInputText(prev => prev + ` 📎 [Attachment: ${res.data.filename}](${res.data.url})`)
-                    } catch (err) {
-                      alert('Failed to upload file')
-                    }
-                  }
-                  input.click()
-                }}
-                className="p-2.5 rounded-xl border border-[#E5E7F3] bg-[#F6F7FC] hover:bg-blue-50 text-[#6C7089] hover:text-blue-600 transition-colors"
-                title="Attach Document / Media"
-              >
-                <Paperclip size={18} />
-              </button>
 
               <div className="flex-1 relative flex items-center">
                 <input

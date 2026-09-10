@@ -39,8 +39,8 @@ SLA_HOURS = {
 # ─── Schemas ──────────────────────────────────────────────────────────────────
 
 class TicketCreate(BaseModel):
-    subject: str
-    category: str
+    subject: Optional[str] = "Support Conversation"
+    category: Optional[str] = "general"
     channel: TicketChannel = TicketChannel.website_chat
     priority: TicketPriority = TicketPriority.medium
     body: Optional[str] = None  # first message body
@@ -51,6 +51,20 @@ class TicketCreate(BaseModel):
         if isinstance(v, str) and v.lower() in ('web', 'chat', 'website', 'web_chat'):
             return TicketChannel.website_chat
         return v
+
+    @field_validator('subject', mode='before')
+    @classmethod
+    def normalize_subject(cls, v):
+        if v is None or not str(v).strip():
+            return "Support Conversation"
+        return str(v).strip()
+
+    @field_validator('category', mode='before')
+    @classmethod
+    def normalize_category(cls, v):
+        if v is None or not str(v).strip():
+            return "general"
+        return str(v).strip()
 
 
 class TicketUpdate(BaseModel):
@@ -66,6 +80,13 @@ class CustomerOut(BaseModel):
     email: Optional[str] = None
     phone: Optional[str] = None
     channel_customer_id: Optional[str] = None
+    avatar_url: Optional[str] = None
+
+
+class AgentOut(BaseModel):
+    id: str
+    name: Optional[str] = None
+    email: Optional[str] = None
     avatar_url: Optional[str] = None
 
 
@@ -85,11 +106,12 @@ class TicketOut(BaseModel):
     customer_id: str
     agent_id: Optional[str]
     customer: Optional[CustomerOut] = None
+    agent: Optional[AgentOut] = None
     created_at: datetime
     updated_at: datetime
 
     @classmethod
-    def from_orm(cls, t: Ticket, customer_obj: Optional[User] = None) -> "TicketOut":
+    def from_orm(cls, t: Ticket, customer_obj: Optional[User] = None, agent_obj: Optional[User] = None) -> "TicketOut":
         cust_out = None
         cust = customer_obj
         if not cust and 'customer' in getattr(t, '__dict__', {}):
@@ -102,6 +124,17 @@ class TicketOut(BaseModel):
                 phone=cust.phone,
                 channel_customer_id=cust.channel_customer_id,
                 avatar_url=cust.avatar_url,
+            )
+        ag_out = None
+        ag = agent_obj
+        if not ag and 'agent' in getattr(t, '__dict__', {}):
+            ag = t.__dict__['agent']
+        if ag:
+            ag_out = AgentOut(
+                id=str(ag.id),
+                name=ag.name,
+                email=ag.email,
+                avatar_url=ag.avatar_url,
             )
         return cls(
             id=str(t.id),
@@ -119,6 +152,7 @@ class TicketOut(BaseModel):
             customer_id=str(t.customer_id),
             agent_id=str(t.agent_id) if t.agent_id else None,
             customer=cust_out,
+            agent=ag_out,
             created_at=t.created_at,
             updated_at=t.updated_at,
         )
@@ -192,11 +226,13 @@ async def create_ticket(
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ):
+    ticket_subj = body.subject or "Support Conversation"
+    ticket_cat = body.category or "general"
     ticket = Ticket(
         ref=_generate_ref(),
         customer_id=current_user.id,
-        subject=body.subject,
-        category=body.category,
+        subject=ticket_subj,
+        category=ticket_cat,
         channel=body.channel,
         priority=body.priority,
         sla_due_at=_compute_sla(body.priority),
@@ -216,6 +252,20 @@ async def create_ticket(
             body=body.body
         )
         session.add(initial_message)
+        await session.commit()
+
+        # Dynamic AI subject extraction from initial customer message
+        try:
+            from app.ai.subject import is_generic_subject, format_subject_from_query
+            if is_generic_subject(ticket.subject):
+                ai_subj = format_subject_from_query(body.body)
+                if ai_subj and ai_subj.lower() != ticket.subject.lower():
+                    ticket.subject = ai_subj
+                    session.add(ticket)
+                    await session.commit()
+                    await session.refresh(ticket)
+        except Exception:
+            pass
         
     # Contextual response from AI / System
     customer_name = current_user.name or 'there'
@@ -285,7 +335,7 @@ async def list_tickets(
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ):
-    stmt = select(Ticket).where(Ticket.deleted_at.is_(None)).options(selectinload(Ticket.customer))
+    stmt = select(Ticket).where(Ticket.deleted_at.is_(None)).options(selectinload(Ticket.customer), selectinload(Ticket.agent))
 
     # Ownership: customers only see their own tickets
     if current_user.role == UserRole.customer:
@@ -323,7 +373,7 @@ async def get_ticket(
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ):
-    stmt = select(Ticket).where(Ticket.id == ticket_id).options(selectinload(Ticket.customer))
+    stmt = select(Ticket).where(Ticket.id == ticket_id).options(selectinload(Ticket.customer), selectinload(Ticket.agent))
     result = await session.exec(stmt)
     ticket = result.first()
     if not ticket or ticket.deleted_at:
@@ -715,6 +765,26 @@ async def create_ticket_message(
     await session.commit()
     await session.refresh(msg)
 
+    # Generate/update dynamic subject title from customer's inquiry if currently generic
+    if sender_type == SenderType.customer:
+        try:
+            from app.ai.subject import generate_ai_ticket_subject
+            ai_subj = await generate_ai_ticket_subject(session, ticket.id)
+            if ai_subj and ticket.subject != ai_subj:
+                ticket.subject = ai_subj
+                session.add(ticket)
+                await session.commit()
+                await session.refresh(ticket)
+                from app.ws.manager import manager
+                await manager.broadcast(str(ticket.id), {
+                    "type": "ticket_update",
+                    "status": str(ticket.status.value if hasattr(ticket.status, 'value') else ticket.status),
+                    "subject": ticket.subject,
+                    "ai_resolved": getattr(ticket, "ai_resolved", False),
+                })
+        except Exception:
+            pass
+
     # Broadcast via WebSocket to room & agent inbox
     from app.ws.manager import manager
     await manager.broadcast(str(ticket.id), {
@@ -732,8 +802,20 @@ async def create_ticket_message(
         "ticket_id": str(ticket.id),
         "preview": msg.body[:80],
         "sender_name": current_user.name,
+        "subject": ticket.subject or "",
         "status": str(ticket.status.value if hasattr(ticket.status, 'value') else ticket.status),
     })
+
+    # BUG-006 Fix: Trigger AI response for follow-up customer inquiries on unassigned tickets
+    if sender_type == SenderType.customer and ticket.agent_id is None and ticket.status not in (TicketStatus.resolved, TicketStatus.closed):
+        try:
+            from app.services.ai.live_chat_adapter import live_chat_ai_adapter
+            await live_chat_ai_adapter.process_live_chat_message(
+                ticket_id=str(ticket.id),
+                message_body=msg.body,
+            )
+        except Exception as exc:
+            logger.error("[create_ticket_message] AI follow-up processing error: %s", exc)
 
     return MessageOut(
         id=str(msg.id),

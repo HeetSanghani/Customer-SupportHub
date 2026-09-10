@@ -67,6 +67,11 @@ async def auth_customer():
             session.add(user)
             await session.commit()
             await session.refresh(user)
+        elif user.customer_id != "CUST-001":
+            user.customer_id = "CUST-001"
+            session.add(user)
+            await session.commit()
+            await session.refresh(user)
 
         token = create_access_token(str(user.id), user.role.value)
         return user, token

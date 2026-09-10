@@ -1,6 +1,7 @@
 """Response builder and ground-truth synthesizer with LLM reasoning and deterministic validation."""
 import json
 import logging
+import re
 from dataclasses import dataclass, field
 from typing import Dict, Any, List, Optional
 
@@ -102,6 +103,34 @@ class ResponseSynthesizer:
 
         citations = rag_result.get("citations", [])
         top_citation = citations[0] if citations else {}
+        top_score = top_citation.get("score", 0.0)
+
+        # Off-topic and irrelevant query guard: redirect politely to ShopKart support
+        q_low = query.lower()
+        off_topic_phrases = [
+            "poem", "poetry", "write a song", "write a story", "tell me a joke", "tell a joke", "joke",
+            "weather", "recipe", "cook", "who are you", "what is your name", "capital of", "who invented",
+            "who is the president", "who won", "write code", "python script", "meaning of life",
+            "how many countries", "history of", "tell me about history", "translate", "solve this math"
+        ]
+        core_keywords = [
+            "order", "refund", "return", "cancel", "ship", "deliver", "delivery", "pay", "payment",
+            "prod-", "ord-", "track", "warranty", "invoice", "address", "account", "login", "password",
+            "otp", "item", "exchange", "replacement", "shopkart", "policy", "seller", "cart", "price",
+            "discount", "coupon", "cod", "cost", "stock", "spec", "brand", "help", "support", "service",
+            "faq", "guideline", "shipping", "charge", "upi", "card", "bank"
+        ]
+        is_off_topic = any(w in q_low for w in off_topic_phrases)
+        has_core_kw = any(k in q_low for k in core_keywords)
+
+        if is_off_topic or not has_core_kw or top_score <= 0.0:
+            return AIResponse(
+                content="I am your ShopKart AI Customer Support assistant. I specialize in helping you with orders, deliveries, returns, refunds, product specifications, and shopping policies. How may I assist you with your ShopKart order or account today?",
+                route_type="RAG",
+                rag_citations=citations,
+                is_grounded=True
+            )
+
         source_title = top_citation.get("title", "ShopKart Policy")
         source_id = top_citation.get("source_id", "KB")
 
@@ -123,6 +152,87 @@ class ResponseSynthesizer:
         query: str
     ) -> AIResponse:
         q_lower = query.lower()
+        has_explicit_order_id = bool(re.search(r'\bORD-\d+\b', query, re.IGNORECASE))
+        is_all_orders_query = not has_explicit_order_id and (
+            any(w in q_lower for w in [
+                "all order", "all orders", "my orders", "all info", "my all orders",
+                "where is my orders", "where are my orders", "what are my orders",
+                "show my orders", "show all orders", "list my orders", "list all orders",
+                "every order", "order history", "how many orders", "all of my orders",
+                "info of my all orders", "info of all my orders", "info on all my orders"
+            ]) or (
+                ("where" in q_lower or "track" in q_lower or "status" in q_lower or "info" in q_lower or "give" in q_lower or "show" in q_lower)
+                and ("orders" in q_lower or "my all orders" in q_lower)
+            )
+        )
+
+        # All Orders Inquiry (Multi-order response)
+        c_orders = data.get("customer_orders_detailed") or data.get("customer_orders")
+        if (is_all_orders_query or ("customer_orders" in data and "order" not in data)) and c_orders is not None:
+            if not c_orders:
+                return AIResponse(
+                    content="You do not have any orders placed under your account yet.",
+                    route_type="STRUCTURED",
+                    structured_data=data,
+                    is_grounded=True
+                )
+
+            sections = []
+            for ord_item in c_orders:
+                oid = ord_item.get("order_id") if isinstance(ord_item, dict) else getattr(ord_item, "order_id", "")
+                ostatus = ord_item.get("status") if isinstance(ord_item, dict) else getattr(ord_item, "status", "UNKNOWN")
+                ototal = ord_item.get("total_amount", 0) if isinstance(ord_item, dict) else getattr(ord_item, "total_amount", 0)
+
+                shipment = ord_item.get("shipment")
+                if not shipment and oid:
+                    try:
+                        from app.ai.tools import tool_registry
+                        shipment = tool_registry.get_shipment_by_order(oid)
+                    except Exception:
+                        shipment = None
+
+                items = ord_item.get("items")
+                if items is None and oid:
+                    try:
+                        from app.ai.tools import tool_registry
+                        items = tool_registry.get_order_items(oid)
+                    except Exception:
+                        items = []
+
+                header_line = f"Order {oid} status: **{ostatus}** (Total: ₹{ototal:,.2f})."
+
+                order_block = [header_line]
+                if items:
+                    item_strs = []
+                    for it in items:
+                        p_name = it.get("product_name") if isinstance(it, dict) else getattr(it, "product_name", "Product")
+                        qty = it.get("quantity", 1) if isinstance(it, dict) else getattr(it, "quantity", 1)
+                        item_strs.append(f"{p_name} (Qty {qty})")
+                    order_block.append(f"Items: {', '.join(item_strs)}.")
+
+                if shipment:
+                    s_id = shipment.get("shipment_id", "")
+                    s_status = shipment.get("status", "")
+                    s_carrier = shipment.get("carrier", "")
+                    s_trk = shipment.get("tracking_number", "")
+                    s_est = shipment.get("estimated_delivery_date") or shipment.get("actual_delivery_date") or ""
+                    del_text = f", Estimated Delivery: {s_est}" if s_est else ""
+                    if s_status.upper() == "DELIVERED" and shipment.get("actual_delivery_date"):
+                        del_text = f", Estimated Delivery: {shipment.get('actual_delivery_date')}"
+                    order_block.append(f"Shipment {s_id} for order {oid} is **{s_status}** via {s_carrier} (Tracking: {s_trk}{del_text}).")
+                else:
+                    order_block.append(f"Shipment for order {oid} is **PROCESSING** (preparing for dispatch).")
+
+                sections.append("\n".join(order_block))
+
+            content = "\n\n".join(sections)
+            return AIResponse(
+                content=content,
+                route_type="STRUCTURED",
+                structured_data=data,
+                is_grounded=True
+            )
+
         is_product_info_query = any(w in q_lower for w in [
             "product", "products", "item", "items", "sku", "skus",
             "product info", "product information", "product detail", "product details",
@@ -263,9 +373,79 @@ class ResponseSynthesizer:
                         is_grounded=True
                     )
 
+        # All Products Catalog Response
+        if "catalog_products" in data and data["catalog_products"]:
+            products = data["catalog_products"]
+            by_category: Dict[str, list] = {}
+            for prod in products:
+                cat = prod.get("category_name") or "General"
+                by_category.setdefault(cat, []).append(prod)
+
+            sections = ["Here is an overview of popular products currently available in our ShopKart catalog:\n"]
+            category_icons = {
+                "Electronics": "📱", "Mobiles": "📱", "Audio": "🎧", "Computers": "💻",
+                "Home & Kitchen": "🍳", "Home Appliances": "🏠", "Fashion": "👕", "Footwear": "👟"
+            }
+
+            for cat_name, p_list in by_category.items():
+                icon = next((v for k, v in category_icons.items() if k.lower() in cat_name.lower()), "🛍️")
+                sections.append(f"### {icon} {cat_name}")
+                for p in p_list[:4]:
+                    p_id = p.get("product_id", "")
+                    p_name = p.get("name", "Product")
+                    p_price = p.get("price", 0)
+                    p_disc = p.get("discount_percentage", 0)
+                    p_stock = p.get("stock_quantity", 0)
+                    p_status = p.get("availability_status", "IN_STOCK")
+                    disc_str = f" ({p_disc}% off)" if p_disc > 0 else ""
+                    sections.append(
+                        f"• **{p_name}** (`{p_id}`) — **₹{p_price:,.2f}**{disc_str} | Status: *{p_status}* ({p_stock} in stock)"
+                    )
+                if len(p_list) > 4:
+                    sections.append(f"  *...and {len(p_list) - 4} more items in {cat_name}*")
+                sections.append("")
+
+            sections.append("💡 *Tip: Ask for full specs, pricing, or warranty details on any item by specifying its name or ID (e.g., `Tell me about PROD-001`).*")
+            content = "\n".join(sections)
+            return AIResponse(
+                content=content,
+                route_type="STRUCTURED",
+                structured_data=data,
+                is_grounded=True
+            )
+
+        # Product Search / Category Filtered Results
+        if "search_products" in data and data["search_products"] and "product" not in data:
+            products = data["search_products"]
+            sections = [f"Found {len(products)} matching product(s) in our store:\n"]
+            for p in products:
+                p_id = p.get("product_id", "")
+                p_name = p.get("name", "Product")
+                p_brand = p.get("brand", "")
+                p_price = p.get("price", 0)
+                p_mrp = p.get("mrp", 0)
+                p_disc = p.get("discount_percentage", 0)
+                p_stock = p.get("stock_quantity", 0)
+                p_status = p.get("availability_status", "IN_STOCK")
+                p_cat = p.get("category_name", "")
+                disc_str = f" (MRP: ₹{p_mrp:,.2f}, {p_disc}% off)" if p_disc > 0 else ""
+                sections.append(
+                    f"• **{p_name}** (`{p_id}`) by *{p_brand}* — **₹{p_price:,.2f}**{disc_str}\n"
+                    f"   Category: {p_cat} | Status: *{p_status}* ({p_stock} available)"
+                )
+            sections.append("\n💡 *Ask me about any specific Product ID or model for warranty, return policies, and full technical specifications!*")
+            content = "\n".join(sections)
+            return AIResponse(
+                content=content,
+                route_type="STRUCTURED",
+                structured_data=data,
+                is_grounded=True
+            )
+
         # Product Response (Direct Product entity search e.g. PROD-001)
         if "product" in data and data["product"] and "order" not in data:
             p = data["product"]
+            p_id = p.get('product_id') if isinstance(p, dict) else getattr(p, 'product_id', '')
             p_name = p.get('name') if isinstance(p, dict) else getattr(p, 'name', '')
             p_brand = p.get('brand') if isinstance(p, dict) else getattr(p, 'brand', '')
             p_price = p.get('price', 0) if isinstance(p, dict) else getattr(p, 'price', 0)
@@ -273,11 +453,37 @@ class ResponseSynthesizer:
             p_disc = p.get('discount_percentage', 0) if isinstance(p, dict) else getattr(p, 'discount_percentage', 0)
             p_avail = p.get('availability_status') if isinstance(p, dict) else getattr(p, 'availability_status', '')
             p_stock = p.get('stock_quantity') if isinstance(p, dict) else getattr(p, 'stock_quantity', 0)
-            content = (
-                f"Product: {p_name} by {p_brand}.\n"
-                f"Price: ₹{p_price:,.2f} (MRP: ₹{p_mrp:,.2f}, Discount: {p_disc}%).\n"
-                f"Availability: {p_avail} (In Stock: {p_stock})."
-            )
+            p_warranty_avail = p.get('warranty_available') if isinstance(p, dict) else getattr(p, 'warranty_available', False)
+            p_warranty_period = p.get('warranty_period') if isinstance(p, dict) else getattr(p, 'warranty_period', None)
+            p_return_eligible = p.get('return_eligible') if isinstance(p, dict) else getattr(p, 'return_eligible', True)
+            p_return_window = p.get('return_window_days') if isinstance(p, dict) else getattr(p, 'return_window_days', 7)
+
+            q_low = query.lower()
+            if "warranty" in q_low or "guarantee" in q_low:
+                if p_warranty_avail and p_warranty_period:
+                    content = (
+                        f"Yes! **{p_name}** ({p_id}) comes with a **{p_warranty_period}**.\n"
+                        f"Brand: {p_brand} • Price: ₹{p_price:,.2f} • Availability: {p_avail}."
+                    )
+                else:
+                    content = (
+                        f"Product **{p_name}** ({p_id}) does not include a separate manufacturer warranty.\n"
+                        f"Brand: {p_brand} • Price: ₹{p_price:,.2f} • Availability: {p_avail}."
+                    )
+            elif "return" in q_low or "returnable" in q_low:
+                status_str = f"eligible for return within {p_return_window} days" if p_return_eligible else "non-returnable"
+                content = (
+                    f"**{p_name}** ({p_id}) is **{status_str}**.\n"
+                    f"Brand: {p_brand} • Price: ₹{p_price:,.2f} • Availability: {p_avail}."
+                )
+            else:
+                warranty_note = f"\nWarranty: {p_warranty_period}." if p_warranty_avail and p_warranty_period else ""
+                content = (
+                    f"Product: {p_name} ({p_id}) by {p_brand}.\n"
+                    f"Price: ₹{p_price:,.2f} (MRP: ₹{p_mrp:,.2f}, Discount: {p_disc}%).\n"
+                    f"Availability: {p_avail} (In Stock: {p_stock})."
+                    f"{warranty_note}"
+                )
             return AIResponse(
                 content=content,
                 route_type="STRUCTURED",
@@ -509,6 +715,110 @@ class ResponseSynthesizer:
                 content = (
                     f"Order **{ord_id}** is currently **{status}** (not yet dispatched). "
                     f"You can cancel this order free of charge directly from **My Orders** in your ShopKart profile, or ask our support team to process the cancellation."
+                )
+            return AIResponse(
+                content=content,
+                route_type="HYBRID",
+                structured_data=structured_data,
+                rag_citations=citations,
+                is_grounded=True
+            )
+
+        # Custom handling for product warranty queries in HYBRID route
+        if product and any(w in query.lower() for w in ["warranty", "guarantee"]):
+            p_name = product.get('name') if isinstance(product, dict) else getattr(product, 'name', '')
+            p_id = product.get('product_id') if isinstance(product, dict) else getattr(product, 'product_id', '')
+            p_warranty_avail = product.get('warranty_available') if isinstance(product, dict) else getattr(product, 'warranty_available', False)
+            p_warranty_period = product.get('warranty_period') if isinstance(product, dict) else getattr(product, 'warranty_period', None)
+            if p_warranty_avail and p_warranty_period:
+                content = (
+                    f"Yes! **{p_name}** ({p_id}) includes a **{p_warranty_period}**.\n\n"
+                    f"To claim warranty support, please present your ShopKart invoice at an authorized brand service center, or contact our support team for warranty assistance."
+                )
+            else:
+                content = (
+                    f"Product **{p_name}** ({p_id}) does not include a separate manufacturer warranty.\n"
+                    f"However, it is covered by ShopKart's standard return & replacement policy if it arrives defective or damaged."
+                )
+            return AIResponse(
+                content=content,
+                route_type="HYBRID",
+                structured_data=structured_data,
+                rag_citations=citations,
+                is_grounded=True
+            )
+
+        # Custom handling for product return eligibility queries in HYBRID route
+        if product and any(w in query.lower() for w in ["return", "returnable", "return window"]):
+            p_name = product.get('name') if isinstance(product, dict) else getattr(product, 'name', '')
+            p_id = product.get('product_id') if isinstance(product, dict) else getattr(product, 'product_id', '')
+            p_ret_elig = product.get('return_eligible') if isinstance(product, dict) else getattr(product, 'return_eligible', True)
+            p_ret_win = product.get('return_window_days') if isinstance(product, dict) else getattr(product, 'return_window_days', 7)
+            if p_ret_elig:
+                content = (
+                    f"Yes, **{p_name}** ({p_id}) is eligible for return within **{p_ret_win} days** of delivery.\n\n"
+                    f"Items must be unused, in original packaging with all tags intact. You can initiate a return directly from **My Orders**."
+                )
+            else:
+                content = (
+                    f"Product **{p_name}** ({p_id}) is marked as **Non-Returnable** for category hygiene or safety standards.\n"
+                    f"If the item arrives damaged or defective, please contact support within 48 hours for a replacement."
+                )
+            return AIResponse(
+                content=content,
+                route_type="HYBRID",
+                structured_data=structured_data,
+                rag_citations=citations,
+                is_grounded=True
+            )
+
+        # Custom handling for damaged product / refund requests in HYBRID route
+        if any(w in query.lower() for w in ["damaged", "defective", "broken", "want a refund", "request a refund", "claim a refund", "refund for my order", "refund my order", "refund"]):
+            # Check if customer explicitly requested an order ID in their query
+            req_m = re.findall(r"\b(?:ORD|ORDER)[-_# ]*(\d{1,5})\b", query, re.IGNORECASE)
+            req_order_id = f"ORD-{req_m[0].zfill(3)}" if req_m else None
+
+            ord_id = order.get('order_id') if isinstance(order, dict) else getattr(order, 'order_id', None) if order else None
+
+            # If customer specifically specified an order ID that doesn't exist or doesn't belong to them
+            if req_order_id and (not ord_id or ord_id != req_order_id):
+                content = (
+                    f"I was unable to find order **{req_order_id}** under your account. "
+                    f"Please verify the order number in **My Orders** or check if you placed it under a different account."
+                )
+                return AIResponse(
+                    content=content,
+                    route_type="HYBRID",
+                    structured_data=structured_data,
+                    rag_citations=citations,
+                    is_grounded=True
+                )
+
+            ref_id = refund.get('refund_id') if isinstance(refund, dict) else getattr(refund, 'refund_id', None) if refund else None
+            ret_id = return_obj.get('return_id') if isinstance(return_obj, dict) else getattr(return_obj, 'return_id', None) if return_obj else None
+
+            if ref_id:
+                r_stat = refund.get('status') if isinstance(refund, dict) else getattr(refund, 'status', '')
+                r_amt = refund.get('refund_amount', 0) if isinstance(refund, dict) else getattr(refund, 'refund_amount', 0)
+                content = (
+                    f"A refund ({ref_id}) for order **{ord_id}** is currently in status **{r_stat}** (Amount: ₹{r_amt:,.2f}).\n\n"
+                    f"Doorstep refunds are credited within 2 to 4 hours of physical pickup. Warehouse return refunds are credited within 24 to 48 hours."
+                )
+            elif ret_id:
+                ret_stat = return_obj.get('status') if isinstance(return_obj, dict) else getattr(return_obj, 'status', '')
+                content = (
+                    f"Return request **{ret_id}** for order **{ord_id}** is currently **{ret_stat}**.\n\n"
+                    f"Our courier partner will pick up the item and your replacement or refund will be initiated immediately upon pickup."
+                )
+            else:
+                ord_ref = f"for order **{ord_id}** " if ord_id else ""
+                content = (
+                    f"If you received a damaged or defective product {ord_ref}, you are fully eligible for a **Free Replacement** or **Full Refund** under ShopKart's Return & Refund Policy.\n\n"
+                    f"**How to request your replacement or refund:**\n"
+                    f"1. Go to **My Orders** in your ShopKart profile.\n"
+                    f"2. Select **'Request Return / Replacement'** on your delivered order.\n"
+                    f"3. Select **'Damaged/Defective'** as the reason and choose **Replacement** or **Refund**.\n"
+                    f"4. Our courier partner will pick up the item from your doorstep. Refunds are initiated within 2 to 4 hours of pickup."
                 )
             return AIResponse(
                 content=content,

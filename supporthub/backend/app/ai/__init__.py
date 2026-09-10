@@ -7,21 +7,34 @@ from app.ai.escalation import EscalationDecision, EscalationEvaluator, escalatio
 from app.ai.tools import ToolRegistry, tool_registry
 from app.ai.router import RouteType, RouteDecision, AIRouter, ai_router
 from app.ai.response import AIResponse, ResponseSynthesizer, response_synthesizer
+from app.ai.subject import generate_ai_ticket_subject, is_generic_subject, format_subject_from_query
 # Lazy imports to break circular dependency with app.rag
 _embedding_provider = None
 
 def generate_embedding(text: str) -> list[float]:
-    """Generates a 1536-dimensional embedding vector for pgvector storage."""
+    """Generates a 768-dimensional embedding vector for pgvector storage."""
     global _embedding_provider
     if _embedding_provider is None:
-        from app.rag.embeddings import LocalVectorEmbeddingProvider
-        _embedding_provider = LocalVectorEmbeddingProvider()
-    vec = _embedding_provider.embed_text(text)
-    if len(vec) < 1536:
-        vec.extend([0.0] * (1536 - len(vec)))
-    elif len(vec) > 1536:
-        vec = vec[:1536]
-    return vec
+        try:
+            from app.rag.embeddings import get_embedding_provider
+            _embedding_provider = get_embedding_provider()
+        except Exception:
+            _embedding_provider = None
+
+    if _embedding_provider is not None:
+        try:
+            vec = _embedding_provider.embed_text(text)
+            if vec and len(vec) == 768:
+                return vec
+            elif vec:
+                if len(vec) < 768:
+                    return list(vec) + [0.0] * (768 - len(vec))
+                return list(vec[:768])
+        except Exception:
+            pass
+
+    from app.rag.embeddings import _make_fallback_vector
+    return _make_fallback_vector(text)
 
 def __getattr__(name: str):
     if name in ("AIOrchestrator", "ai_orchestrator"):
@@ -56,4 +69,7 @@ __all__ = [
     "AIOrchestrator",
     "ai_orchestrator",
     "generate_embedding",
+    "generate_ai_ticket_subject",
+    "is_generic_subject",
+    "format_subject_from_query",
 ]

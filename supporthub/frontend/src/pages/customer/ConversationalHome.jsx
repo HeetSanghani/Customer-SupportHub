@@ -7,10 +7,11 @@ import { authApi } from '../../api/auth'
 import client from '../../api/client'
 import { formatSmartTime } from '../../utils/dateUtils'
 import {
-  Plus, Send, Star, Paperclip, X, HelpCircle, CreditCard,
+  Plus, Send, Star, X, HelpCircle, CreditCard,
   Wrench, User as UserIcon, MessageSquare, Sparkles, AlertTriangle,
   RefreshCw, ShoppingBag, Truck, CheckCircle2, Clock, Zap, ChevronRight,
-  RotateCcw, DollarSign, PackageSearch, ArrowLeft, ShieldAlert
+  RotateCcw, DollarSign, PackageSearch, ArrowLeft, ShieldAlert,
+  PanelLeftClose, PanelLeftOpen
 } from 'lucide-react'
 
 // ── CsatWidget ────────────────────────────────────────────────
@@ -251,7 +252,7 @@ function TypingIndicator() {
 }
 
 // ── EmptyState: Clean, Conversation-First Initial Screen ─────
-function EmptyState({ profile, onQuickAction }) {
+function EmptyState({ profile, onQuickAction, sidebarOpen, onToggleSidebar, onNewChat }) {
   const commonQuestions = [
     "Where is my order?",
     "How do I return an item?",
@@ -262,7 +263,37 @@ function EmptyState({ profile, onQuickAction }) {
   ]
 
   return (
-    <div className="flex-1 overflow-y-auto px-4 py-8 md:px-12 md:py-12 flex flex-col items-center justify-center max-w-4xl mx-auto w-full animate-fadeIn">
+    <div className="relative flex-1 overflow-y-auto px-4 py-8 md:px-12 md:py-12 flex flex-col items-center justify-center w-full animate-fadeIn">
+      {/* Collapsed Sidebar Toggle (Floating Top Left) */}
+      {!sidebarOpen && (
+        <div className="absolute top-4 left-4 z-20 hidden md:flex items-center gap-1.5">
+          <button
+            onClick={onToggleSidebar}
+            className="p-2 rounded-xl text-[#64748B] hover:text-[#0F172A] hover:bg-[#F1F5F9] bg-white border border-[#E2E8F0] transition-all group relative cursor-pointer shadow-2xs"
+            title="Open sidebar (Ctrl+B)"
+            aria-label="Open sidebar"
+          >
+            <PanelLeftOpen size={18} />
+            <span className="pointer-events-none absolute left-0 top-full mt-1.5 z-50 whitespace-nowrap rounded-lg bg-slate-900/95 backdrop-blur-xs px-2.5 py-1 text-[11px] font-medium text-white opacity-0 shadow-lg transition-all duration-150 group-hover:opacity-100 group-hover:translate-y-0.5">
+              Open sidebar <span className="text-[10px] text-slate-400 ml-1">Ctrl+B</span>
+            </span>
+          </button>
+          {onNewChat && (
+            <button
+              onClick={onNewChat}
+              className="p-2 rounded-xl text-[#64748B] hover:text-indigo-600 hover:bg-indigo-50 bg-white border border-[#E2E8F0] hover:border-indigo-200 transition-all group relative cursor-pointer shadow-2xs"
+              title="New conversation"
+              aria-label="New conversation"
+            >
+              <Plus size={18} />
+              <span className="pointer-events-none absolute left-0 top-full mt-1.5 z-50 whitespace-nowrap rounded-lg bg-slate-900/95 backdrop-blur-xs px-2.5 py-1 text-[11px] font-medium text-white opacity-0 shadow-lg transition-all duration-150 group-hover:opacity-100 group-hover:translate-y-0.5">
+                New conversation
+              </span>
+            </button>
+          )}
+        </div>
+      )}
+
       {/* AI Assistant Hero */}
       <div className="text-center space-y-3 mb-8">
         <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-indigo-600 to-purple-600 flex items-center justify-center mx-auto shadow-lg shadow-indigo-200">
@@ -301,7 +332,7 @@ function EmptyState({ profile, onQuickAction }) {
 }
 
 // ── ChatView: Active Ticket Conversation ──────────────────────
-function ChatView({ ticketId, onBack, onQuickAction }) {
+function ChatView({ ticketId, onBack, onQuickAction, sidebarOpen, onToggleSidebar, onNewChat }) {
   const token = useAuthStore(s => s.token)
   const queryClient = useQueryClient()
   const messagesEndRef = useRef(null)
@@ -320,11 +351,19 @@ function ChatView({ ticketId, onBack, onQuickAction }) {
   const { data: history = [], isLoading: histLoading } = useQuery({
     queryKey: ['ticket-msgs', ticketId],
     queryFn: async () => { const r = await ticketsApi.getMessages(ticketId); return r.data },
-    enabled: !!ticketId, staleTime: 3000,
+    enabled: !!ticketId,
+    staleTime: 1000,
+    refetchInterval: 2500,
   })
 
   useEffect(() => {
-    if (history.length) setMsgs(history)
+    if (history.length) {
+      setMsgs(history)
+      const last = history[history.length - 1]
+      if (last && (last.sender_type === 'ai' || last.sender_type === 'agent' || last.sender_role === 'ai')) {
+        setTyping(false)
+      }
+    }
   }, [history])
 
   // WebSocket connection management
@@ -350,6 +389,12 @@ function ChatView({ ticketId, onBack, onQuickAction }) {
           setMsgs(p => {
             const exists = p.some(m => (m.id && m.id === normalized.id) || (m.created_at === normalized.created_at && m.body === normalized.body))
             if (exists) return p
+            const optIndex = p.findIndex(m => typeof m.id === 'string' && m.id.startsWith('user-opt-') && m.body === normalized.body)
+            if (optIndex !== -1) {
+              const updated = [...p]
+              updated[optIndex] = normalized
+              return updated
+            }
             return [...p, normalized]
           })
         } else if (d.type === 'typing') {
@@ -377,22 +422,17 @@ function ChatView({ ticketId, onBack, onQuickAction }) {
   const send = e => {
     if (e) e.preventDefault()
     if (!text.trim() || !wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return
-    wsRef.current.send(JSON.stringify({ type: 'message', body: text }))
+    const outgoing = text.trim()
+    wsRef.current.send(JSON.stringify({ type: 'message', body: outgoing }))
     setText('')
+    setTyping(true)
+    // Add optimistic user message to thread immediately
+    setMsgs(p => {
+      const optimisticId = `user-opt-${Date.now()}`
+      return [...p, { id: optimisticId, sender_type: 'customer', body: outgoing, created_at: new Date().toISOString() }]
+    })
   }
 
-  const uploadFile = async () => {
-    const inp = document.createElement('input'); inp.type = 'file'
-    inp.onchange = async ev => {
-      const file = ev.target.files[0]; if (!file) return
-      const fd = new FormData(); fd.append('file', file)
-      try {
-        const res = await client.post(`/tickets/${ticketId}/upload`, fd, { headers: { 'Content-Type': 'multipart/form-data' } })
-        setText(p => `${p} 📎 [Attachment: ${res.data.filename}](${res.data.url})`.trim())
-      } catch(err) { alert(`Upload failed: ${err?.response?.data?.detail || err.message}`) }
-    }
-    inp.click()
-  }
 
   const escalate = async () => {
     setEscalating(true)
@@ -453,6 +493,36 @@ function ChatView({ ticketId, onBack, onQuickAction }) {
       {/* Active Conversation Header */}
       <div className="flex items-center justify-between px-5 py-3.5 border-b border-[#E2E8F0] bg-white shrink-0 shadow-2xs">
         <div className="flex items-center gap-3 min-w-0">
+          {/* Desktop sidebar toggle button when sidebar is collapsed */}
+          {!sidebarOpen && (
+            <div className="hidden md:flex items-center gap-1.5 shrink-0">
+              <button
+                onClick={onToggleSidebar}
+                className="p-2 rounded-xl text-[#64748B] hover:text-[#0F172A] hover:bg-[#F1F5F9] border border-[#E2E8F0] transition-all group relative cursor-pointer shadow-2xs"
+                title="Open sidebar (Ctrl+B)"
+                aria-label="Open sidebar"
+              >
+                <PanelLeftOpen size={18} />
+                <span className="pointer-events-none absolute left-0 top-full mt-1.5 z-50 whitespace-nowrap rounded-lg bg-slate-900/95 backdrop-blur-xs px-2.5 py-1 text-[11px] font-medium text-white opacity-0 shadow-lg transition-all duration-150 group-hover:opacity-100 group-hover:translate-y-0.5">
+                  Open sidebar <span className="text-[10px] text-slate-400 ml-1">Ctrl+B</span>
+                </span>
+              </button>
+              {onNewChat && (
+                <button
+                  onClick={onNewChat}
+                  className="p-2 rounded-xl text-[#64748B] hover:text-indigo-600 hover:bg-indigo-50 border border-[#E2E8F0] hover:border-indigo-200 transition-all group relative cursor-pointer shadow-2xs"
+                  title="New conversation"
+                  aria-label="New conversation"
+                >
+                  <Plus size={18} />
+                  <span className="pointer-events-none absolute left-0 top-full mt-1.5 z-50 whitespace-nowrap rounded-lg bg-slate-900/95 backdrop-blur-xs px-2.5 py-1 text-[11px] font-medium text-white opacity-0 shadow-lg transition-all duration-150 group-hover:opacity-100 group-hover:translate-y-0.5">
+                    New conversation
+                  </span>
+                </button>
+              )}
+            </div>
+          )}
+
           {onBack && (
             <button onClick={onBack} className="md:hidden p-1.5 rounded-xl hover:bg-gray-100 text-[#64748B]" aria-label="Back to conversations">
               <ArrowLeft size={18} />
@@ -486,100 +556,91 @@ function ChatView({ ticketId, onBack, onQuickAction }) {
       <WSDisconnectBanner wsStatus={wsStatus} onReconnect={() => { wsRef.current?.close(); connectWS() }} />
 
       {/* Messages Thread */}
-      <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4 min-h-0" role="log" aria-live="polite" aria-label="Messages">
+      <div className="flex-1 overflow-y-auto px-4 md:px-8 py-5 space-y-4 min-h-0" role="log" aria-live="polite" aria-label="Messages">
         {msgs.map((m, i) => {
-          const sType      = m.sender_type || m.sender_role || m.sender
-          const isCustomer = sType === 'customer'
-          const isSystem   = sType === 'system'
-          const isAgent    = sType === 'agent'
+            const sType      = m.sender_type || m.sender_role || m.sender
+            const isCustomer = sType === 'customer'
+            const isSystem   = sType === 'system'
+            const isAgent    = sType === 'agent'
 
-          if (isSystem) {
+            if (isSystem) {
+              return (
+                <div key={m.id || i} className="text-center my-2">
+                  <span className="text-[11px] font-semibold text-[#64748B] bg-[#F1F5F9] px-3.5 py-1 rounded-full inline-block border border-[#E2E8F0]">
+                    {m.body}
+                  </span>
+                </div>
+              )
+            }
+
             return (
-              <div key={m.id || i} className="text-center my-2">
-                <span className="text-[11px] font-semibold text-[#64748B] bg-[#F1F5F9] px-3.5 py-1 rounded-full inline-block border border-[#E2E8F0]">
-                  {m.body}
-                </span>
+              <div key={m.id || i} className={`flex flex-col msg-enter ${isCustomer ? 'items-end' : 'items-start'}`}>
+                {!isCustomer && (
+                  <div className="flex items-center gap-1.5 mb-1 px-1">
+                    {isAgent ? (
+                      <span className="text-[11px] font-bold text-emerald-700 flex items-center gap-1">
+                        <UserIcon size={12} /> 👤 {m.sender_name || 'Support Agent'}
+                      </span>
+                    ) : (
+                      <span className="text-[11px] font-bold text-indigo-600 flex items-center gap-1">
+                        <Sparkles size={12} className="text-amber-400" /> ✨ SupportHub AI
+                      </span>
+                    )}
+                  </div>
+                )}
+
+                <div className={`max-w-[85%] md:max-w-[75%] px-4 py-3 rounded-2xl shadow-2xs ${
+                  isCustomer
+                    ? 'bg-gradient-to-r from-indigo-600 to-indigo-700 text-white rounded-br-xs'
+                    : isAgent
+                    ? 'bg-emerald-50/90 text-[#0F172A] border border-emerald-200 rounded-bl-xs'
+                    : 'bg-[#F8FAFC] text-[#0F172A] border border-[#E2E8F0] rounded-bl-xs'
+                }`}>
+                  <MessageBody msg={m} />
+                </div>
+                <span className="text-[10px] text-[#94A3B8] mt-1 px-1">{formatSmartTime(m.created_at)}</span>
               </div>
             )
-          }
-
-          return (
-            <div key={m.id || i} className={`flex flex-col msg-enter ${isCustomer ? 'items-end' : 'items-start'}`}>
-              {!isCustomer && (
-                <div className="flex items-center gap-1.5 mb-1 px-1">
-                  {isAgent ? (
-                    <span className="text-[11px] font-bold text-emerald-700 flex items-center gap-1">
-                      <UserIcon size={12} /> 👤 {m.sender_name || 'Support Agent'}
-                    </span>
-                  ) : (
-                    <span className="text-[11px] font-bold text-indigo-600 flex items-center gap-1">
-                      <Sparkles size={12} className="text-amber-400" /> ✨ SupportHub AI
-                    </span>
-                  )}
-                </div>
-              )}
-
-              <div className={`max-w-[80%] md:max-w-[70%] px-4 py-3 rounded-2xl shadow-2xs ${
-                isCustomer
-                  ? 'bg-gradient-to-r from-indigo-600 to-indigo-700 text-white rounded-br-xs'
-                  : isAgent
-                  ? 'bg-emerald-50/90 text-[#0F172A] border border-emerald-200 rounded-bl-xs'
-                  : 'bg-[#F8FAFC] text-[#0F172A] border border-[#E2E8F0] rounded-bl-xs'
-              }`}>
-                <MessageBody msg={m} />
-              </div>
-              <span className="text-[10px] text-[#94A3B8] mt-1 px-1">{formatSmartTime(m.created_at)}</span>
-            </div>
-          )
-        })}
-        {typing && <TypingIndicator />}
-        <div ref={messagesEndRef} />
+          })}
+          {typing && <TypingIndicator />}
+          <div ref={messagesEndRef} />
       </div>
 
       {/* Sticky Bottom Composer */}
-      <div className="px-5 py-3.5 border-t border-[#E2E8F0] bg-white shrink-0 space-y-3">
-        {['resolved', 'closed'].includes(ticket.status) ? (
-          <div className="space-y-3">
-            <CsatWidget ticketId={ticketId} />
-            <button
-              onClick={() => reopenMut.mutate()}
-              disabled={reopenMut.isPending}
-              className="w-full py-2.5 border-2 border-dashed border-[#E2E8F0] hover:border-indigo-400 hover:bg-indigo-50/50 text-[#64748B] hover:text-indigo-600 rounded-2xl text-xs font-bold transition-all"
-            >
-              {reopenMut.isPending ? 'Reopening…' : '↺ Reopen Conversation'}
-            </button>
-          </div>
-        ) : (
-          <form onSubmit={send} className="flex items-center gap-2 bg-[#F8FAFC] border border-[#E2E8F0] focus-within:border-indigo-500 focus-within:ring-2 focus-within:ring-indigo-100 rounded-2xl p-1.5 transition-all">
-            <button
-              type="button"
-              onClick={uploadFile}
-              className="p-2.5 rounded-xl hover:bg-white text-[#64748B] hover:text-indigo-600 transition-colors shrink-0"
-              title="Attach file"
-              aria-label="Attach file"
-            >
-              <Paperclip size={18} />
-            </button>
+      <div className="px-4 md:px-8 py-3.5 border-t border-[#E2E8F0] bg-white shrink-0 space-y-3">
+          {['resolved', 'closed'].includes(ticket.status) ? (
+            <div className="space-y-3">
+              <CsatWidget ticketId={ticketId} />
+              <button
+                onClick={() => reopenMut.mutate()}
+                disabled={reopenMut.isPending}
+                className="w-full py-2.5 border-2 border-dashed border-[#E2E8F0] hover:border-indigo-400 hover:bg-indigo-50/50 text-[#64748B] hover:text-indigo-600 rounded-2xl text-xs font-bold transition-all cursor-pointer"
+              >
+                {reopenMut.isPending ? 'Reopening…' : '↺ Reopen Conversation'}
+              </button>
+            </div>
+          ) : (
+            <form onSubmit={send} className="flex items-center gap-2 bg-[#F8FAFC] border border-[#E2E8F0] focus-within:border-indigo-500 focus-within:ring-2 focus-within:ring-indigo-100 rounded-2xl p-1.5 transition-all">
 
-            <input
-              value={text}
-              onChange={e => setText(e.target.value)}
-              placeholder="Ask anything about your order, delivery, refund or account..."
-              className="flex-1 bg-transparent px-2 py-1.5 text-sm text-[#0F172A] placeholder-[#94A3B8] outline-none"
-              aria-label="Message composer input"
-            />
+              <input
+                value={text}
+                onChange={e => setText(e.target.value)}
+                placeholder="Ask anything about your order, delivery, refund or account..."
+                className="flex-1 bg-transparent px-2 py-1.5 text-sm text-[#0F172A] placeholder-[#94A3B8] outline-none"
+                aria-label="Message composer input"
+              />
 
-            <button
-              type="submit"
-              disabled={!text.trim() || wsStatus !== 'connected'}
-              className="bg-indigo-600 hover:bg-indigo-700 text-white p-2.5 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-colors disabled:opacity-40 shrink-0 shadow-sm"
-              aria-label="Send message"
-            >
-              <Send size={16} />
-              <span className="hidden sm:inline">Send</span>
-            </button>
-          </form>
-        )}
+              <button
+                type="submit"
+                disabled={!text.trim() || wsStatus !== 'connected'}
+                className="bg-indigo-600 hover:bg-indigo-700 text-white p-2.5 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-colors disabled:opacity-40 shrink-0 shadow-sm cursor-pointer"
+                aria-label="Send message"
+              >
+                <Send size={16} />
+                <span className="hidden sm:inline">Send</span>
+              </button>
+            </form>
+          )}
       </div>
     </div>
   )
@@ -668,6 +729,25 @@ export default function ConversationalHome() {
   const [filter, setSelectedFilter] = useState('active') // active | completed | all
   const [search, setSearch]          = useState('')
   const [showModal, setShowModal]    = useState(false)
+  const [sidebarOpen, setSidebarOpen] = useState(true)
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('supporthub_customer_sidebar', String(sidebarOpen))
+    } catch {}
+  }, [sidebarOpen])
+
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      // Ctrl+B or Cmd+B to toggle sidebar like ChatGPT / IDEs
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'b') {
+        e.preventDefault()
+        setSidebarOpen(prev => !prev)
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [])
 
   // Fetch customer profile
   const { data: profile } = useQuery({
@@ -732,111 +812,151 @@ export default function ConversationalHome() {
 
   return (
     <div className="flex-1 flex flex-col md:flex-row h-full overflow-hidden bg-[#F8FAFC]">
-      {/* LEFT: Conversation Sidebar (300px width desktop) */}
-      <div className={`w-full md:w-80 border-r border-[#E2E8F0] bg-white flex flex-col shrink-0 ${selectedId ? 'hidden md:flex' : 'flex'} h-full shadow-2xs z-10`}>
-        {/* New Conversation + Search */}
-        <div className="p-4 border-b border-[#E2E8F0] space-y-3">
-          <button
-            onClick={() => setShowModal(true)}
-            className="w-full py-2.5 px-4 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white rounded-xl text-xs font-extrabold flex items-center justify-center gap-2 transition-all shadow-md shadow-indigo-100"
-          >
-            <Plus size={16} />
-            <span>New conversation</span>
-          </button>
-
-          {/* Search conversations */}
-          <input
-            type="text"
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            placeholder="Search conversations…"
-            className="w-full px-3.5 py-2 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl text-xs focus:outline-none focus:border-indigo-500 font-medium"
-          />
-
-          {/* Conversation filters */}
-          <div className="flex bg-[#F1F5F9] p-1 rounded-xl border border-[#E2E8F0] text-xs font-bold">
-            {['active', 'completed', 'all'].map(f => (
+      {/* LEFT: Collapsible Conversation Sidebar */}
+      <div
+        className={`
+          bg-white flex flex-col shrink-0 h-full z-10
+          transition-all duration-300 ease-in-out overflow-hidden
+          ${selectedId ? (sidebarOpen ? 'hidden md:flex' : 'hidden') : 'flex'}
+          ${sidebarOpen ? 'w-full md:w-80 border-r border-[#E2E8F0] opacity-100' : 'w-0 md:w-0 border-r-0 opacity-0 pointer-events-none'}
+        `}
+        style={{ width: sidebarOpen ? undefined : 0 }}
+      >
+        <div className="w-full md:w-80 flex flex-col h-full shrink-0">
+          {/* New Conversation + Search + Close Sidebar Toggle */}
+          <div className="p-3.5 border-b border-[#E2E8F0] space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <MessageSquare size={16} className="text-indigo-600" />
+                <span className="text-xs font-bold text-[#0F172A] uppercase tracking-wider">Conversations</span>
+                <span className="text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded-full font-mono font-semibold">
+                  {filteredTickets.length}
+                </span>
+              </div>
               <button
-                key={f}
-                onClick={() => setSelectedFilter(f)}
-                className={`flex-1 py-1 rounded-lg capitalize transition-all ${filter === f ? 'bg-white text-indigo-600 shadow-xs' : 'text-[#64748B] hover:text-[#0F172A]'}`}
+                onClick={() => setSidebarOpen(false)}
+                className="p-1.5 rounded-xl text-[#64748B] hover:text-[#0F172A] hover:bg-[#F1F5F9] transition-all group relative cursor-pointer"
+                title="Close sidebar (Ctrl+B)"
+                aria-label="Close sidebar"
               >
-                {f}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Conversation List Cards */}
-        <div className="flex-1 overflow-y-auto p-3 space-y-2">
-          {ticketsLoading ? (
-            <div className="p-6 text-center text-xs text-[#94A3B8]">Loading conversations…</div>
-          ) : filteredTickets.length === 0 ? (
-            <div className="p-8 text-center space-y-3">
-              <MessageSquare size={32} className="mx-auto text-gray-300" />
-              <p className="text-xs font-semibold text-[#64748B]">No conversations found</p>
-              <button onClick={() => setShowModal(true)} className="text-xs font-bold text-indigo-600 hover:underline">
-                + Start a new chat
+                <PanelLeftClose size={18} />
+                <span className="pointer-events-none absolute right-0 top-full mt-1.5 z-50 whitespace-nowrap rounded-lg bg-slate-900/95 backdrop-blur-xs px-2.5 py-1 text-[11px] font-medium text-white opacity-0 shadow-lg transition-all duration-150 group-hover:opacity-100 group-hover:translate-y-0.5">
+                  Close sidebar <span className="text-[10px] text-slate-400 ml-1">Ctrl+B</span>
+                </span>
               </button>
             </div>
-          ) : (
-            filteredTickets.map(t => {
-              const isSelected = selectedId === t.id
-              const isClosed   = ['resolved', 'closed'].includes(t.status)
-              
-              let statusLabel = 'AI Active'
-              let statusStyle = 'bg-indigo-50 text-indigo-700 border-indigo-200'
 
-              if (t.status === 'escalated') {
-                if (t.agent_id) {
-                  statusLabel = 'Agent Joined'
-                  statusStyle = 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                } else {
-                  statusLabel = 'Escalated'
-                  statusStyle = 'bg-amber-50 text-amber-700 border-amber-200'
-                }
-              } else if (isClosed) {
-                statusLabel = t.status === 'resolved' ? 'Resolved' : 'Closed'
-                statusStyle = 'bg-gray-100 text-gray-600 border-gray-200'
-              }
+            <button
+              onClick={() => setShowModal(true)}
+              className="w-full py-2.5 px-4 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white rounded-xl text-xs font-extrabold flex items-center justify-center gap-2 transition-all shadow-md shadow-indigo-100 cursor-pointer"
+            >
+              <Plus size={16} />
+              <span>New conversation</span>
+            </button>
 
-              return (
-                <div
-                  key={t.id}
-                  onClick={() => selectTicket(t.id)}
-                  className={`p-3.5 rounded-2xl border transition-all cursor-pointer space-y-1.5 ${
-                    isSelected
-                      ? 'bg-indigo-50/80 border-indigo-300 shadow-xs ring-1 ring-indigo-200'
-                      : 'bg-white border-[#E2E8F0] hover:border-indigo-200 hover:bg-gray-50/50'
-                  }`}
+            {/* Search conversations */}
+            <input
+              type="text"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Search conversations…"
+              className="w-full px-3.5 py-2 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl text-xs focus:outline-none focus:border-indigo-500 font-medium"
+            />
+
+            {/* Conversation filters */}
+            <div className="flex bg-[#F1F5F9] p-1 rounded-xl border border-[#E2E8F0] text-xs font-bold">
+              {['active', 'completed', 'all'].map(f => (
+                <button
+                  key={f}
+                  onClick={() => setSelectedFilter(f)}
+                  className={`flex-1 py-1 rounded-lg capitalize transition-all cursor-pointer ${filter === f ? 'bg-white text-indigo-600 shadow-xs' : 'text-[#64748B] hover:text-[#0F172A]'}`}
                 >
-                  <div className="flex items-start justify-between gap-2">
-                    <span className="font-bold text-xs text-[#0F172A] line-clamp-1 flex-1">{t.subject}</span>
-                    <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full border shrink-0 ${statusStyle}`}>
-                      {statusLabel}
-                    </span>
+                  {f}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Conversation List Cards */}
+          <div className="flex-1 overflow-y-auto p-3 space-y-2">
+            {ticketsLoading ? (
+              <div className="p-6 text-center text-xs text-[#94A3B8]">Loading conversations…</div>
+            ) : filteredTickets.length === 0 ? (
+              <div className="p-8 text-center space-y-3">
+                <MessageSquare size={32} className="mx-auto text-gray-300" />
+                <p className="text-xs font-semibold text-[#64748B]">No conversations found</p>
+                <button onClick={() => setShowModal(true)} className="text-xs font-bold text-indigo-600 hover:underline">
+                  + Start a new chat
+                </button>
+              </div>
+            ) : (
+              filteredTickets.map(t => {
+                const isSelected = selectedId === t.id
+                const isClosed   = ['resolved', 'closed'].includes(t.status)
+                
+                let statusLabel = 'AI Active'
+                let statusStyle = 'bg-indigo-50 text-indigo-700 border-indigo-200'
+
+                if (t.status === 'escalated') {
+                  if (t.agent_id) {
+                    statusLabel = 'Agent Joined'
+                    statusStyle = 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                  } else {
+                    statusLabel = 'Escalated'
+                    statusStyle = 'bg-amber-50 text-amber-700 border-amber-200'
+                  }
+                } else if (isClosed) {
+                  statusLabel = t.status === 'resolved' ? 'Resolved' : 'Closed'
+                  statusStyle = 'bg-gray-100 text-gray-600 border-gray-200'
+                }
+
+                return (
+                  <div
+                    key={t.id}
+                    onClick={() => selectTicket(t.id)}
+                    className={`p-3.5 rounded-2xl border transition-all cursor-pointer space-y-1.5 ${
+                      isSelected
+                        ? 'bg-indigo-50/80 border-indigo-300 shadow-xs ring-1 ring-indigo-200'
+                        : 'bg-white border-[#E2E8F0] hover:border-indigo-200 hover:bg-gray-50/50'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <span className="font-bold text-xs text-[#0F172A] line-clamp-1 flex-1">{t.subject}</span>
+                      <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full border shrink-0 ${statusStyle}`}>
+                        {statusLabel}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between text-[10px] text-[#94A3B8]">
+                      <span className="font-mono">{t.ref}</span>
+                      <span>{formatSmartTime(t.updated_at || t.created_at)}</span>
+                    </div>
                   </div>
-                  <div className="flex items-center justify-between text-[10px] text-[#94A3B8]">
-                    <span className="font-mono">{t.ref}</span>
-                    <span>{formatSmartTime(t.updated_at || t.created_at)}</span>
-                  </div>
-                </div>
-              )
-            })
-          )}
+                )
+              })
+            )}
+          </div>
         </div>
       </div>
 
       {/* RIGHT: Main Workspace (Empty state or active ChatView) */}
-      <div className={`flex-1 flex flex-col h-full overflow-hidden ${!selectedId ? 'flex' : 'hidden md:flex'}`}>
+      <div className={`flex-1 flex flex-col h-full overflow-hidden ${!selectedId ? 'flex' : (sidebarOpen ? 'hidden md:flex' : 'flex')}`}>
         {selectedId ? (
           <ChatView
             ticketId={selectedId}
             onBack={() => { setSelectedId(null); navigate('/customer/chat') }}
             onQuickAction={handleQuickAction}
+            sidebarOpen={sidebarOpen}
+            onToggleSidebar={() => setSidebarOpen(prev => !prev)}
+            onNewChat={() => setShowModal(true)}
           />
         ) : (
-          <EmptyState profile={profile} onQuickAction={handleQuickAction} />
+          <EmptyState
+            profile={profile}
+            onQuickAction={handleQuickAction}
+            sidebarOpen={sidebarOpen}
+            onToggleSidebar={() => setSidebarOpen(prev => !prev)}
+            onNewChat={() => setShowModal(true)}
+          />
         )}
       </div>
 

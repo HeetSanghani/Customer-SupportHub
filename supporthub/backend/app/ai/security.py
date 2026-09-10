@@ -23,7 +23,7 @@ class SecurityValidator:
     
     # Specific security exploit patterns (SEC01, SEC02, SEC03, SEC04)
     THIRD_PARTY_PII_PATTERNS = [
-        re.compile(r"\b(phone number|email|address|details)\s*(of|for)\s*(customer\s+[a-zA-Z]+|[a-zA-Z]+\s+[a-zA-Z]+|another\s+customer|other\s+customer)\b", re.IGNORECASE),
+        re.compile(r"\b(phone number|email|address|details)\s*(of|for)\s*(customer\s+[a-zA-Z]+|(?!my\b|this\b|the\b|that\b|an?\b|our\b)[a-zA-Z]+\s+[a-zA-Z]+|another\s+customer|other\s+customer)\b", re.IGNORECASE),
         re.compile(r"\b(what\s+items\s+did\s+[a-zA-Z]+\s+[a-zA-Z]+\s+order)\b", re.IGNORECASE),
         re.compile(r"\b(give\s+me\s+the\s+shipping\s+address\s+associated\s+with\s+ord-\d+)\b", re.IGNORECASE),
         re.compile(r"\b(give\s+me|what\s+is)\s*(the\s*)?(phone|address|email|orders?)\s*(of|for)\s*cust-\d+\b", re.IGNORECASE),

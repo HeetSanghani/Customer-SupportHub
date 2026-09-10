@@ -75,8 +75,20 @@ def is_resolution_intent(text: str) -> bool:
         if re.search(pat, cleaned_norm):
             return True
 
-    return False
-
+def normalize_query_typos(text: str) -> str:
+    """Normalizes common typos and Hinglish variations in customer support queries."""
+    if not text:
+        return ""
+    t = text.lower().strip()
+    t = re.sub(r"\bcan[cl]{2,4}e\b", "cancel", t)
+    t = re.sub(r"\bord[re]{1,3}\b", "order", t)
+    t = re.sub(r"\bclame\b", "claim", t)
+    t = re.sub(r"\bwarr?a?n?t[ye]{1,2}\b", "warranty", t)
+    t = re.sub(r"\bpaym[en]{1,3}t\b", "payment", t)
+    t = re.sub(r"\bdeclind\b", "declined", t)
+    t = re.sub(r"\bret[ur]{1,3}n\b", "return", t)
+    t = re.sub(r"\bdeliv[er]{1,3}y?\b", "delivery", t)
+    return t
 
 
 @dataclass
@@ -99,8 +111,8 @@ class IntentClassifier:
     """Deterministic pattern and regex-based intent classifier."""
 
     # Entity Regex Patterns
-    ORDER_REGEX = re.compile(r"\bORD-\d{3,5}\b", re.IGNORECASE)
-    PRODUCT_REGEX = re.compile(r"\bPROD-\d{3,5}\b", re.IGNORECASE)
+    ORDER_REGEX = re.compile(r"\b(?:ORD|ORDER)[-_# ]*(\d{1,5})\b", re.IGNORECASE)
+    PRODUCT_REGEX = re.compile(r"\b(?:PROD|PRODUCT)[-_# ]*(\d{1,5})\b", re.IGNORECASE)
     SELLER_REGEX = re.compile(r"\b(SELL|SELLER)-\d{3,5}\b", re.IGNORECASE)
     RETURN_REGEX = re.compile(r"\bRET-\d{3,5}\b", re.IGNORECASE)
     REFUND_REGEX = re.compile(r"\bREF-\d{3,5}\b", re.IGNORECASE)
@@ -146,11 +158,11 @@ class IntentClassifier:
         # Regex entities
         order_m = self.ORDER_REGEX.findall(text)
         if order_m:
-            entities["order_id"] = order_m[0].upper()
+            entities["order_id"] = f"ORD-{order_m[0].zfill(3)}"
 
         prod_m = self.PRODUCT_REGEX.findall(text)
         if prod_m:
-            entities["product_id"] = prod_m[0].upper()
+            entities["product_id"] = f"PROD-{prod_m[0].zfill(3)}"
 
         seller_m = self.SELLER_REGEX.findall(text)
         if seller_m:
@@ -200,7 +212,7 @@ class IntentClassifier:
         This prevents a context-inherited order_id (for example) from hijacking
         a current product query into ORDER_INQUIRY.
         """
-        text = query.lower().strip()
+        text = normalize_query_typos(query)
 
         # Separate concerns: what the CURRENT query explicitly mentions vs prior context.
         explicit_entities: Dict[str, Any] = self.extract_entities(query)
@@ -430,7 +442,11 @@ class IntentClassifier:
             "which payment options", "do you support", "can i pay using", "can i pay with",
             "do you accept", "which cards", "which card", "cash on delivery",
             "payment options available", "modes of payment", "accepted payment",
-            "payment modes", "how can i pay", "how do i pay"
+            "payment modes", "how can i pay", "how do i pay",
+            # Payment failure troubleshooting
+            "payment declined", "payment failed", "why was my payment declined",
+            "money deducted", "transaction failed", "card declined", "payment error", "deducted from bank",
+            "what to do when payment fails"
         ]
         if any(w in text for w in _general_policy_phrases):
             return IntentResult(
@@ -450,7 +466,9 @@ class IntentClassifier:
         product_keywords = [
             "price of", "price", "cost", "how much", "available", "availability", "stock", "in stock",
             "out of stock", "tell me about", "product details", "product specs", "specifications", "specs", "warranty",
-            "novaphone", "zenbook", "pixelite", "comfywear", "product", "details", "features", "color", "ram", "storage"
+            "novaphone", "zenbook", "pixelite", "comfywear", "product", "products", "catalog", "details", "features", "color", "ram", "storage",
+            "all products", "list products", "show products", "show me products", "what products", "what do you sell", "do you have",
+            "headphones", "headphone", "phones", "phone", "mobile", "laptop", "laptops", "tablet", "tablets", "induction", "cooktop", "keyboard", "mouse", "speaker", "speakers"
         ]
         # Do not treat generic price/cost keywords as PRODUCT when an explicit order ID is present.
         _product_keyword_match = _has_explicit_product or (

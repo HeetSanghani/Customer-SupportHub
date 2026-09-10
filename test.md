@@ -6,25 +6,43 @@ This document outlines how to run automated unit/integration test suites as well
 
 ## 🧪 1. Running Automated Tests
 
-SupportHub includes a consolidated **pytest** suite with 70 passing tests covering all core systems:
+SupportHub includes an extensive automated test ecosystem with **660+ backend tests** and **Vitest frontend component tests**:
 
+### Backend Test Suites (FastAPI / Pytest)
 ```bash
 cd supporthub/backend
 uv run pytest
 ```
 
-To run tests with detailed output:
+To run individual test suites:
 ```bash
-uv run pytest -v
-```
+# Product Catalog, Category Search & Payment FAQ Routing
+uv run pytest tests/ai/test_catalog_and_category_search.py -v
 
-To run a specific test suite:
-```bash
+# Multi-Turn Conversation & Session State Isolation
+uv run pytest tests/ai/test_conversation_session_state.py -v
+
+# Multilingual (Hinglish), Typo Robustness & Embedding Fallback
+uv run pytest tests/ai/test_multilingual_and_robustness.py -v
+
+# High Concurrency & WebSocket Stress Testing
+uv run pytest tests/test_concurrency_and_stress.py -v
+
+# Full Customer Journey & Support Lifecycle (173 tests)
+uv run pytest -k "test_phase15"
+
+# Omnichannel Message Parsers & Automation
 uv run pytest tests/test_whatsapp_parser.py
 uv run pytest tests/test_conversations.py
-uv run pytest tests/test_ai_orchestrator.py
 uv run pytest tests/test_automations.py
 ```
+
+### Frontend Test Suites (React / Vitest)
+```bash
+cd supporthub/frontend
+npm test
+```
+Covers Admin sidebar navigation, Global Inbox subpages (Active, Closed, All), and "All Users" role filtering.
 
 ---
 

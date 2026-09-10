@@ -211,9 +211,15 @@ class GoogleEmbeddingProvider(BaseEmbeddingProvider):
         content: str | List[str],
         task_type: str,
         title: Optional[str] = None,
-        max_retries: int = 5,
+        max_retries: int = 1,
     ) -> dict:
         import time
+
+        if self.quota_exceeded:
+            if isinstance(content, list):
+                return {"embeddings": [_make_fallback_vector(str(txt)) for txt in content]}
+            else:
+                return {"embedding": _make_fallback_vector(str(content))}
 
         kwargs = {
             "model": self.active_model,
@@ -230,33 +236,25 @@ class GoogleEmbeddingProvider(BaseEmbeddingProvider):
         def _do_call(kw):
             return self._genai.embed_content(**kw)
 
-        def _trigger_fallback(reason: str, cooldown_seconds: float = 20.0):
+        def _trigger_fallback(reason: str, cooldown_seconds: float = 60.0):
             was_exceeded = self.quota_exceeded
             self._quota_cooldown_until = time.time() + cooldown_seconds
             if not was_exceeded:
-                content_preview = str(content)[:200] if content else "N/A"
-                logger.error(
-                    "[Embeddings ERROR] Google Gemini API rate limit fallback triggered (%s). "
-                    "Entering %.1fs temporary cooldown; falling back to local feature hashing. Affected content preview: '%s'",
+                content_preview = str(content)[:100] if content else "N/A"
+                logger.warning(
+                    "[Embeddings] Google Gemini API rate limit fallback triggered (%s). "
+                    "Entering %.1fs temporary cooldown; using fast local vector fallback.",
                     reason,
                     cooldown_seconds,
-                    content_preview
                 )
-                try:
-                    from app.rag.pipeline import rag_pipeline
-                    if rag_pipeline.chunks:
-                        logger.error("[Embeddings ERROR] Updating pgvector storage with feature hashing fallback vectors for %d chunks...", len(rag_pipeline.chunks))
-                        rag_pipeline.retriever.index_chunks(rag_pipeline.chunks)
-                except Exception as e:
-                    logger.error("[Embeddings ERROR] Failed to update fallback database vectors: %s", e)
 
         for attempt in range(1, max_retries + 1):
             try:
                 with ThreadPoolExecutor(max_workers=1) as executor:
                     fut = executor.submit(_do_call, kwargs)
-                    return fut.result(timeout=15.0)
+                    return fut.result(timeout=3.0)
             except FutureTimeoutError:
-                _trigger_fallback("Timeout > 15.0s", cooldown_seconds=15.0)
+                _trigger_fallback("Timeout > 3.0s", cooldown_seconds=60.0)
                 if isinstance(content, list):
                     return {"embeddings": [_make_fallback_vector(str(txt)) for txt in content]}
                 else:

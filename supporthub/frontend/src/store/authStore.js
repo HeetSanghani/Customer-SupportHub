@@ -8,6 +8,7 @@ export const useAuthStore = create(
       token: null,
       refreshToken: null,
       userId: null,
+      id: null,
       role: null,
       name: null,
       isAuthenticated: false,
@@ -18,7 +19,7 @@ export const useAuthStore = create(
         } catch (e) {
           console.error('Failed to clear query cache on login:', e)
         }
-        set({ token, refreshToken, userId, role, name, isAuthenticated: true })
+        set({ token, refreshToken, userId, id: userId, role, name, isAuthenticated: true })
       },
 
       setToken: (token, refreshToken = null) =>

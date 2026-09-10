@@ -59,6 +59,7 @@ function WhatsAppCustomerAvatar({ customer, size = 'md', className = '' }) {
 
 export default function WhatsAppInbox({ basePath = '/agent' }) {
   const { token, role, name: currentName } = useAuthStore()
+  const isAgent = basePath === '/agent' || (role === 'agent' && basePath !== '/manager' && basePath !== '/admin')
   const queryClient = useQueryClient()
   const messagesEndRef = useRef(null)
   const inputRef = useRef(null)
@@ -182,9 +183,13 @@ export default function WhatsAppInbox({ basePath = '/agent' }) {
 
   // 1. Query WhatsApp Tickets
   const { data: rawTickets = [], isLoading: loadingTickets } = useQuery({
-    queryKey: ['whatsapp-tickets', 'human-only'],
+    queryKey: ['whatsapp-tickets', isAgent ? 'human-only' : 'all'],
     queryFn: async () => {
-      const res = await ticketsApi.list({ channel: 'whatsapp', human_only: true })
+      const params = {
+        channel: 'whatsapp',
+        ...(isAgent ? { human_only: true } : { all_tickets: true })
+      }
+      const res = await ticketsApi.list(params)
       return res.data
     },
     refetchInterval: 5000,
@@ -837,32 +842,6 @@ export default function WhatsAppInbox({ basePath = '/agent' }) {
                 <Zap size={18} />
               </button>
 
-              <button
-                type="button"
-                onClick={async () => {
-                  const input = document.createElement('input')
-                  input.type = 'file'
-                  input.onchange = async (e) => {
-                    const file = e.target.files[0]
-                    if (!file) return
-                    const formData = new FormData()
-                    formData.append('file', file)
-                    try {
-                      const res = await client.post(`/tickets/${selectedTicketId}/upload`, formData, {
-                        headers: { 'Content-Type': 'multipart/form-data' }
-                      })
-                      setInputText(prev => prev + ` 📎 [Attachment: ${res.data.filename}](${res.data.url})`)
-                    } catch (err) {
-                      alert('Failed to upload file')
-                    }
-                  }
-                  input.click()
-                }}
-                className="p-2.5 rounded-xl border border-[#E5E7F3] bg-[#F6F7FC] hover:bg-emerald-50 text-[#6C7089] hover:text-emerald-600 transition-colors"
-                title="Attach Document / Media"
-              >
-                <Paperclip size={18} />
-              </button>
 
               <input
                 ref={inputRef}

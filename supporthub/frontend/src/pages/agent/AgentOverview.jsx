@@ -8,7 +8,8 @@ import CsatReviewsModal from '../../components/CsatReviewsModal'
 
 export default function AgentOverview() {
   const navigate = useNavigate()
-  const { name, id: agentId } = useAuthStore()
+  const { name, userId, id } = useAuthStore()
+  const agentId = userId || id
   const [showReviewsModal, setShowReviewsModal] = useState(false)
 
   const { data: tickets = [], isLoading } = useQuery({

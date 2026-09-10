@@ -15,7 +15,7 @@ export default function ManagerTicketReports() {
 
   const { data: tickets = [], isLoading } = useQuery({
     queryKey: ['tickets', 'all'],
-    queryFn: async () => (await ticketsApi.list()).data
+    queryFn: async () => (await ticketsApi.list({ all_tickets: true, limit: 200 })).data
   })
 
   if (isLoading) {

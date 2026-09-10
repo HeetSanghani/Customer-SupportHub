@@ -3,7 +3,7 @@ import { Routes, Route, Navigate, Link, useNavigate, useLocation } from 'react-r
 import { useAuthStore } from '../../store/authStore'
 import { 
   Inbox, CheckCircle, Clock, LogOut, LayoutDashboard, 
-  ListFilter, Zap, BookOpen, MessageSquare, User, Shield, FileText
+  ListFilter, Zap, BookOpen, MessageSquare, Shield, FileText
 } from 'lucide-react'
 
 import UnifiedInbox from '../../components/UnifiedInbox'
@@ -18,12 +18,14 @@ import AgentHelpCenter from './AgentHelpCenter'
 import AgentProfile from './AgentProfile'
 import TicketDetail from '../../components/TicketDetail'
 import AgentHeader from '../../components/AgentHeader'
+import StaffProfile from '../../components/StaffProfile'
+import StaffSecurity from '../../components/StaffSecurity'
 
 export default function AgentLayout() {
   const { role, logout, name, isAuthenticated } = useAuthStore()
   const location = useLocation()
   const navigate = useNavigate()
-  const [agentStatus, setAgentStatus] = useState('online') // 'online' | 'away' | 'offline'
+
 
   if (!isAuthenticated || (role !== 'agent' && role !== 'admin' && role !== 'manager')) {
     return <Navigate to="/login" replace />
@@ -155,35 +157,18 @@ export default function AgentLayout() {
           </Link>
         </nav>
         
-        {/* Footer Profile Bar */}
-        <div className="p-4 border-t border-white/10 bg-[#171626]">
-          <Link to="/agent/profile" className="flex items-center justify-between group hover:opacity-90 transition-opacity">
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-indigo-500 via-purple-500 to-pink-500 text-white font-extrabold text-xs flex items-center justify-center shadow-xs">
-                {userInitials}
-              </div>
-              <div className="text-left">
-                <div className="text-xs font-bold text-white truncate max-w-[110px] group-hover:text-indigo-300 transition-colors">
-                  {name || 'Emma Wilson'}
-                </div>
-                <div className="text-[10px] text-emerald-400 font-bold flex items-center gap-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> Profile & Settings
-                </div>
-              </div>
-            </div>
-            <User size={16} className="text-[#9598B0] group-hover:text-white transition-colors" />
-          </Link>
-        </div>
       </aside>
 
       {/* Main Content Area */}
       <main className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
-        <AgentHeader agentStatus={agentStatus} setAgentStatus={setAgentStatus} />
+        <AgentHeader />
         
         <div className="flex-1 overflow-y-auto">
           <Routes>
             <Route path="/" element={<AgentOverview />} />
-            <Route path="/profile" element={<AgentProfile />} />
+            <Route path="/profile" element={<StaffProfile basePath="/agent" />} />
+            <Route path="/security" element={<StaffSecurity basePath="/agent" />} />
+            <Route path="/agent-profile" element={<AgentProfile />} />
             <Route path="/whatsapp" element={<WhatsAppInbox basePath="/agent" />} />
             <Route path="/instagram" element={<InstagramInbox basePath="/agent" />} />
             <Route path="/facebook" element={<FacebookInbox basePath="/agent" />} />
