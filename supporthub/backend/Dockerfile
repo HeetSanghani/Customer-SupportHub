@@ -10,18 +10,19 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     build-essential \
     libpq-dev \
+    postgresql-client \
     && rm -rf /var/lib/apt/lists/*
 
 # Install python dependencies with uv
 COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev
 
-# Copy application source
+# Copy application source and pristine database dump
 COPY app ./app
 COPY main.py ./
 COPY alembic.ini ./
 COPY alembic ./alembic
-COPY clean_and_seed.py ./
+COPY supporthub_dump.sql ./
 COPY start.sh ./
 RUN chmod +x start.sh
 
