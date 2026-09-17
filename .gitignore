@@ -51,12 +51,6 @@ app/output/
 output/
 **/output/
 
-# Root-level local debug / scratch scripts (gitignored locally, not deleted)
-/db_explorer.py
-/inspect_db.py
-/test.md
-/BUG_TRACKER.md
-/__pycache__/
 
 # OS / IDE
 .DS_Store
