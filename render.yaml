@@ -90,22 +90,3 @@ services:
         sync: false
       - key: SENTRY_DSN
         sync: false
-
-
-  # ─── React Frontend (Static Site) ──────────────────────────────
-  - type: web
-    name: supporthub-frontend
-    runtime: static
-    buildCommand: cd supporthub/frontend && npm install && npm run build
-    staticPublishPath: ./supporthub/frontend/dist
-    pullRequestPreviewsEnabled: false
-    routes:
-      - type: rewrite
-        source: /*
-        destination: /index.html
-    envVars:
-      - key: VITE_API_URL
-        fromService:
-          name: supporthub-backend
-          type: web
-          property: host
