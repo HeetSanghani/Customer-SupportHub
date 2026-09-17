@@ -493,13 +493,22 @@ def _execute_tools(decision: RouteDecision, state: GraphState, ctx: Any) -> Dict
         "men", "mens", "women", "womens", "male", "female"
     ])
 
-    is_all_products_query = any(w in q_lower for w in [
-        "all product", "all products", "catalog", "what products", "list products",
-        "show products", "show me products", "products do you have", "what do you sell",
-        "browse products", "show all products", "give me info of all products",
-        "give me info of your all products", "all products info", "product list",
-        "available products", "tell me all products", "what can i buy", "what items do you sell"
-    ]) and not has_category_filter
+    q_words = set(re.sub(r'[^\w\s]', ' ', q_lower).split())
+    has_product_word = bool(q_words & {"product", "products", "item", "items", "catalog"})
+    has_all_or_info = bool(q_words & {"all", "every", "info", "information", "details", "list", "show", "browse", "catalog", "sell", "have", "offer"})
+
+    is_all_products_query = (
+        (has_product_word and has_all_or_info and not has_category_filter) or
+        any(w in q_lower for w in [
+            "all product", "all products", "catalog", "what products", "list products",
+            "show products", "show me products", "products do you have", "what do you sell",
+            "browse products", "show all products", "give me info of all products",
+            "give me info of your all products", "all products info", "product list",
+            "available products", "tell me all products", "what can i buy", "what items do you sell",
+            "all info of your products", "all info of products", "info of your products", "info of products",
+            "your products", "info about products"
+        ])
+    ) and not has_category_filter
 
     if is_all_orders_query:
         order_id = None
@@ -532,10 +541,13 @@ def _execute_tools(decision: RouteDecision, state: GraphState, ctx: Any) -> Dict
 
     for tool in decision.target_tools:
         try:
-            if tool == "list_all_products" or (is_all_products_query and tool == "get_product"):
+            if tool == "list_all_products" or (is_all_products_query and tool in ("get_product", "search_products")):
                 data["catalog_products"] = tool_registry.list_all_products()
             elif tool == "search_products":
-                if data.get("product"):
+                if data.get("product") or data.get("catalog_products"):
+                    continue
+                if is_all_products_query:
+                    data["catalog_products"] = tool_registry.list_all_products()
                     continue
                 if product_id:
                     full_p = tool_registry.get_product(product_id)
@@ -583,6 +595,8 @@ def _execute_tools(decision: RouteDecision, state: GraphState, ctx: Any) -> Dict
                             data["search_products"] = matches
                     else:
                         data["search_products"] = matches
+                elif is_all_products_query:
+                    data["catalog_products"] = tool_registry.list_all_products()
                 else:
                     data["search_products"] = []
             elif tool == "get_order":
@@ -666,6 +680,8 @@ def _execute_tools(decision: RouteDecision, state: GraphState, ctx: Any) -> Dict
                                 data["search_products"] = matches
                         else:
                             data["search_products"] = matches
+                    elif is_all_products_query:
+                        data["catalog_products"] = tool_registry.list_all_products()
                     else:
                         data["search_products"] = []
             elif tool == "get_seller" and seller_id:
