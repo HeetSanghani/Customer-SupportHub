@@ -1,7 +1,10 @@
 import axios from 'axios'
 import { useAuthStore } from '../store/authStore'
 
-const rawApiUrl = import.meta.env.VITE_API_URL
+let rawApiUrl = (import.meta.env.VITE_API_URL || '').trim()
+if (rawApiUrl && !rawApiUrl.includes('.')) {
+  rawApiUrl = `${rawApiUrl}.onrender.com`
+}
 const normalizedApiUrl = rawApiUrl
   ? (rawApiUrl.startsWith('http') ? rawApiUrl : `https://${rawApiUrl}`).replace(/\/+$/, '')
   : ''

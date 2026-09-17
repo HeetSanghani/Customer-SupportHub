@@ -5,7 +5,10 @@
  * - Production (split deploy): uses VITE_API_URL (the Render backend URL) converted to wss://
  */
 export function getWsBase() {
-  const rawApiUrl = import.meta.env.VITE_API_URL
+  let rawApiUrl = (import.meta.env.VITE_API_URL || '').trim()
+  if (rawApiUrl && !rawApiUrl.includes('.')) {
+    rawApiUrl = `${rawApiUrl}.onrender.com`
+  }
   if (rawApiUrl) {
     const withProtocol = rawApiUrl.startsWith('http') ? rawApiUrl : `https://${rawApiUrl}`
     return withProtocol.replace(/\/+$/, '').replace(/^http/, 'ws')
