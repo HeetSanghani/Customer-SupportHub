@@ -1,5 +1,6 @@
 import { useEffect, useRef, useCallback } from 'react'
 import { useAuthStore } from '../store/authStore'
+import { buildTicketWsUrl } from '../utils/wsUrl'
 
 export function useWebSocket(ticketId, onMessage) {
   const wsRef = useRef(null)
@@ -10,12 +11,7 @@ export function useWebSocket(ticketId, onMessage) {
   const connect = useCallback(() => {
     if (!ticketId || !token) return
 
-    // In production VITE_API_URL = "https://supporthub-backend.onrender.com"
-    // We convert that to wss://supporthub-backend.onrender.com for WebSocket
-    const wsBase = import.meta.env.VITE_API_URL
-      ? import.meta.env.VITE_API_URL.replace(/^http/, 'ws')
-      : `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}`
-    const url = `${wsBase}/ws/chat/${ticketId}?token=${token}`
+    const url = buildTicketWsUrl(ticketId, token)
     const ws = new WebSocket(url)
     wsRef.current = ws
 
