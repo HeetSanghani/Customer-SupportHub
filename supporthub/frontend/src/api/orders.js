@@ -7,6 +7,8 @@ export const ordersApi = {
   getMyReturns: () => client.get('/orders/returns/me'),
   getMyRefunds: () => client.get('/orders/refunds/me'),
   getMyPayments: () => client.get('/orders/payments/me'),
+  // Staff-only: fetch real orders for any customer by their User UUID (ticket.customer_id)
+  getOrdersByCustomerUserId: (userId) => client.get(`/orders/by-customer/${userId}`),
   getMyReviews: async () => {
     try {
       const res = await client.get('/tickets/csat/my-reviews')

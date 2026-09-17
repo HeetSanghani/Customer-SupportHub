@@ -109,7 +109,41 @@ def format_subject_from_query(query: str) -> str:
 
     s_lower = s.lower()
 
-    # 1. Product Catalog Overview
+    # 0. Human Agent Escalation Request
+    if any(p in s_lower for p in (
+        "human agent", "talk to human", "talk with human", "talk with humen", "talk to humen",
+        "talk with agent", "talk to agent", "human customer agent", "speak to human",
+        "speak with human", "speak with agent", "speak to agent", "real person", "live agent",
+        "transfer to human", "transfer me to a human", "transfer request to human",
+        "transfer to our human", "human support", "connect to human", "connect with human",
+        "connect me to an agent", "supervisor", "manager"
+    )) or re.search(r"\b(?:talk|speak|chat|connect|transfer)\s+(?:with|to|me\s+to)?\s*(?:a|an|the|our)?\s*(?:real|live)?\s*(?:hum[ae]n|agent|person)\b", s_lower):
+        return "Human Agent Support Request"
+
+    # 1. Category Product Search
+    has_category_kw = any(w in s_lower for w in ("product", "products", "item", "items", "catalog", "browse", "tell me every", "show me every", "gift", "gifting"))
+    if has_category_kw:
+        for cat_kw, cat_title in [
+            ("electronics", "Electronics Products"),
+            ("mobiles & tablets", "Mobiles & Tablets"),
+            ("mobile", "Mobiles & Tablets"),
+            ("tablet", "Mobiles & Tablets"),
+            ("laptops & computers", "Laptops & Computers"),
+            ("laptop", "Laptops & Computers"),
+            ("audio & headphones", "Audio & Headphones"),
+            ("headphone", "Audio & Headphones"),
+            ("kitchen", "Kitchen & Dining"),
+            ("furniture", "Home Furniture"),
+            ("appliances", "Home Appliances"),
+            ("appliance", "Home Appliances"),
+            ("footwear", "Footwear Products"),
+            ("women", "Women's Products & Gifts"),
+            ("men", "Men's Products & Gifts"),
+        ]:
+            if re.search(r"\b" + re.escape(cat_kw) + r"\b", s_lower):
+                return cat_title
+
+    # 2. Product Catalog Overview
     if any(p in s_lower for p in (
         "show all product", "show me all product", "all product", "all the product",
         "list all product", "product catalog", "what product", "view product",

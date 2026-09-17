@@ -1,49 +1,5 @@
 services:
-  nginx:
-    image: nginx:alpine
-    container_name: supporthub_nginx
-    restart: unless-stopped
-    ports:
-      - "80:80"
-    volumes:
-      - ./nginx.conf:/etc/nginx/nginx.conf:ro
-    depends_on:
-      - frontend
-      - backend
-    networks:
-      - app_net
-
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-    container_name: supporthub_frontend
-    restart: unless-stopped
-    networks:
-      - app_net
-
-  backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    container_name: supporthub_backend
-    restart: unless-stopped
-    environment:
-      - APP_ENV=production
-      - DATABASE_URL=postgresql+asyncpg://supporthub:supporthub_dev@db:5432/supporthub
-      - REDIS_URL=redis://redis:6379/0
-      - CELERY_BROKER_URL=redis://redis:6379/1
-      - CELERY_RESULT_BACKEND=redis://redis:6379/2
-      - FRONTEND_URL=http://localhost
-    depends_on:
-      db:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    networks:
-      - app_net
-      - db_net
-
+  # ─── Infrastructure ────────────────────────────────────
   db:
     image: pgvector/pgvector:pg16
     container_name: supporthub_db
@@ -57,10 +13,11 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U supporthub"]
+      test: ["CMD-SHELL", "pg_isready -U supporthub -d supporthub"]
       interval: 5s
       timeout: 5s
-      retries: 5
+      retries: 10
+      start_period: 10s
     networks:
       - db_net
 
@@ -68,16 +25,129 @@ services:
     image: redis:7-alpine
     container_name: supporthub_redis
     restart: unless-stopped
+    ports:
+      - "6381:6379"
+    volumes:
+      - redisdata:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
       timeout: 3s
-      retries: 5
+      retries: 10
+      start_period: 5s
     networks:
       - db_net
 
+  # ─── Migration Job (runs once, then exits) ─────────────
+  migrate:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: supporthub_migrate
+    restart: "no"
+    env_file:
+      - ./backend/.env
+    environment:
+      - APP_ENV=production
+      - DATABASE_URL=postgresql+asyncpg://supporthub:supporthub_dev@db:5432/supporthub
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://redis:6379/2
+    command: ["python", "-m", "alembic", "upgrade", "head"]
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - db_net
+
+  # ─── Application ───────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: supporthub_backend
+    restart: unless-stopped
+    env_file:
+      - ./backend/.env
+    environment:
+      - APP_ENV=production
+      - DATABASE_URL=postgresql+asyncpg://supporthub:supporthub_dev@db:5432/supporthub
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://redis:6379/2
+      - FRONTEND_URL=http://localhost
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    networks:
+      - app_net
+      - db_net
+
+  celery_worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: supporthub_celery
+    restart: unless-stopped
+    env_file:
+      - ./backend/.env
+    environment:
+      - APP_ENV=production
+      - DATABASE_URL=postgresql+asyncpg://supporthub:supporthub_dev@db:5432/supporthub
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://redis:6379/2
+    command: ["celery", "-A", "app.tasks.celery_app", "worker", "--loglevel=info", "--concurrency=4"]
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    networks:
+      - db_net
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: supporthub_frontend
+    restart: unless-stopped
+    networks:
+      - app_net
+
+  nginx:
+    image: nginx:alpine
+    container_name: supporthub_nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      backend:
+        condition: service_healthy
+      frontend:
+        condition: service_started
+    networks:
+      - app_net
+
 volumes:
   pgdata:
+    driver: local
+  redisdata:
+    driver: local
 
 networks:
   app_net:

@@ -85,8 +85,13 @@ class ToolRegistry:
         cat = self.product_svc.get_category(p.category_id)
         return {
             "product_id": p.product_id,
+            "company_id": getattr(p, "company_id", None),
+            "seller_id": p.seller_id,
+            "category_id": p.category_id,
+            "category_name": cat.name if cat else "General",
             "name": p.name,
             "brand": p.brand,
+            "description": getattr(p, "description", None),
             "price": p.price,
             "mrp": p.mrp,
             "discount_percentage": p.discount_percentage,
@@ -97,16 +102,13 @@ class ToolRegistry:
             "return_eligible": p.return_eligible,
             "return_window_days": p.return_window_days,
             "replacement_eligible": p.replacement_eligible,
-            "category_id": p.category_id,
-            "category_name": cat.name if cat else "General",
             "specifications": p.specifications,
-            "seller_id": p.seller_id
         }
 
-    def search_products(self, query: str) -> list:
+    def search_products(self, query: str, limit: int = 40) -> list:
         prods = self.product_svc.search_products_by_name(query)
         res = []
-        for p in prods[:8]:
+        for p in prods[:limit]:
             cat = self.product_svc.get_category(p.category_id)
             res.append({
                 "product_id": p.product_id,

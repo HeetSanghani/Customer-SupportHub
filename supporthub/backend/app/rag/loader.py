@@ -10,7 +10,10 @@ class RAGLoader:
             self.data_loader = data_loader
         else:
             self.data_loader = data_loader_instance
-        self._kb_dir = Path(__file__).resolve().parents[4] / "knowledge_base"
+        try:
+            self._kb_dir = Path(__file__).resolve().parents[4] / "knowledge_base"
+        except IndexError:
+            self._kb_dir = Path("/app/knowledge_base")
 
     def load_raw_policies(self) -> List[Dict[str, Any]]:
         """Load raw policy records from knowledge_base or policies.json."""

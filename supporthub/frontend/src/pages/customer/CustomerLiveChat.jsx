@@ -174,11 +174,17 @@ function ChatPane({ ticketId }) {
         setMessages(prev => {
           const exists = prev.some(m => (m.id && m.id === data.id) || (m.external_message_id && m.external_message_id === data.external_message_id))
           if (exists) return prev
-          return [...prev, {
-            ...data,
-            sender_type: data.sender_type || data.sender_role
-          }]
+          // Replace any optimistic version of this message
+          const optIndex = prev.findIndex(m => typeof m.id === 'string' && m.id.startsWith('opt-') && m.body === (data.body || data.body))
+          const normalized = { ...data, sender_type: data.sender_type || data.sender_role }
+          if (optIndex !== -1) {
+            const updated = [...prev]
+            updated[optIndex] = normalized
+            return updated
+          }
+          return [...prev, normalized]
         })
+        queryClient.invalidateQueries({ queryKey: ['ticket-msgs', ticketId] })
       } else if (data.type === 'agent_joined') {
         queryClient.invalidateQueries({ queryKey: ['ticket', ticketId] })
         queryClient.invalidateQueries({ queryKey: ['tickets'] })
@@ -222,10 +228,15 @@ function ChatPane({ ticketId }) {
   const sendMessage = (e) => {
     e.preventDefault()
     if (!inputText.trim() || !ws || isClosed) return
-    
-    ws.send(JSON.stringify({ type: 'message', body: inputText }))
+    const outgoing = inputText.trim()
+    ws.send(JSON.stringify({ type: 'message', body: outgoing }))
     setInputText('')
     setIsTyping(true)
+    // Optimistically add user message so it appears instantly
+    setMessages(prev => [
+      ...prev,
+      { id: `opt-${Date.now()}`, sender_type: 'customer', body: outgoing, created_at: new Date().toISOString() }
+    ])
   }
 
   if (!ticketId) {

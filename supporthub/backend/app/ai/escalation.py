@@ -1,4 +1,4 @@
-"""Human Escalation Evaluator and Handoff Manager."""
+import re
 from dataclasses import dataclass, field
 from typing import Optional, Dict, Any
 from datetime import datetime, timezone
@@ -23,11 +23,53 @@ class EscalationEvaluator:
     """Evaluates conversation state and messages to trigger human escalation."""
 
     HUMAN_KEYWORDS = [
-        "human agent", "talk to human", "talk to a human", "connect me to an agent",
-        "speak to a representative", "real person", "customer care executive",
-        "human support", "human", "talk to someone", "support agent", "live agent",
-        "connect me to a human", "transfer me to a human", "transfer to human",
-        "representative", "stop giving me automated responses"
+        "human agent", "talk to human", "talk to a human", "talk with human", "talk with a human",
+        "talk with humen", "talk with humen agent", "talk to humen", "talk to humen agent",
+        "talk with agent", "talk to agent", "talk to an agent", "talk with an agent",
+        "speak to a representative", "speak with a representative", "speak to representative",
+        "speak with representative", "speak to human", "speak with human", "speak to a human",
+        "speak with a human", "speak to agent", "speak with agent", "speak to an agent",
+        "speak with an agent", "real person", "real human", "actual human", "live person",
+        "live agent", "real agent", "customer care executive", "customer care agent",
+        "customer support agent", "customer service agent", "human customer agent", "customer agent",
+        "human support", "human", "humen", "talk to someone", "talk with someone", "speak to someone",
+        "speak with someone", "support agent", "connect me to an agent", "connect me to a human",
+        "connect me to human", "connect me with an agent", "connect me with a human", "connect to human",
+        "connect with human", "connect to agent", "connect with agent", "connect to customer care",
+        "connect with customer care", "transfer me to a human", "transfer me to human",
+        "transfer to human", "transfer to a human", "transfer to human agent",
+        "transfer to human customer agent", "transfer your request to our human customer agent",
+        "transfer my request to human", "transfer request to human",
+        "transfer request to our human customer agent", "transfer to customer agent",
+        "transfer me to an agent", "transfer to agent", "transfer me to live agent",
+        "representative", "stop giving me automated responses", "i want a human", "i want human",
+        "i need a human", "i need human", "want human agent", "need human agent",
+        "want to talk with", "want to talk to", "can i talk to a human", "can i speak with a human",
+        "can i talk to someone", "let me speak to a human", "put me through to an agent",
+        "switch to human", "hand over to human", "human representative"
+    ]
+
+    HUMAN_PATTERNS = [
+        # Match "talk/speak/chat/connect/transfer/handoff with/to (a) human/agent/representative"
+        re.compile(
+            r"\b(?:talk|speak|chat|connect|transfer|reach|switch|handoff|put\s+me\s+through)\s+(?:with|to|me\s+to|me\s+with|request\s+to|my\s+request\s+to|your\s+request\s+to)?\s*(?:a|an|the|our)?\s*(?:real|live|actual)?\s*(?:hum[ae]n|person|agent|representative|rep|executive|specialist|team)\b",
+            re.IGNORECASE
+        ),
+        # Match "want/need/get/give ... human/agent"
+        re.compile(
+            r"\b(?:want|need|get|give)\s+(?:to\s+(?:talk|speak|chat)\s+(?:with|to)|a|an)?\s*(?:real|live|actual)?\s*(?:hum[ae]n|person|agent|representative|customer\s+care)\b",
+            re.IGNORECASE
+        ),
+        # Match explicit phrases like "human customer agent", "customer support agent", "real person", "live agent"
+        re.compile(
+            r"\b(?:hum[ae]n\s+(?:customer\s+)?agent|customer\s+(?:support\s+|care\s+)?agent|real\s+person|live\s+agent|human\s+support|human\s+representative)\b",
+            re.IGNORECASE
+        ),
+        # Match "transfer ... to human"
+        re.compile(
+            r"\btransfer\s+(?:.*?\s+)?to\s+(?:our\s+|a\s+|an\s+)?hum[ae]n\b",
+            re.IGNORECASE
+        ),
     ]
     SUPERVISOR_KEYWORDS = [
         "manager", "supervisor", "escalate this", "escalation team", "head of support",
@@ -67,15 +109,22 @@ class EscalationEvaluator:
     ) -> EscalationDecision:
         """Evaluate if incoming query or session state warrants human escalation."""
         text = query.lower().strip()
+        from app.ai.intent import normalize_query_typos
+        text_norm = normalize_query_typos(query)
 
         if not active_order_id:
-            import re
             m = re.search(r"\bORD-\d{3,5}\b", query, re.IGNORECASE)
             if m:
                 active_order_id = m.group(0).upper()
 
         # 1. Explicit Human Agent Request (H01)
-        if any(kw in text for kw in self.HUMAN_KEYWORDS):
+        is_human_request = (
+            any(kw in text for kw in self.HUMAN_KEYWORDS) or
+            any(kw in text_norm for kw in self.HUMAN_KEYWORDS) or
+            any(pat.search(text) for pat in self.HUMAN_PATTERNS) or
+            any(pat.search(text_norm) for pat in self.HUMAN_PATTERNS)
+        )
+        if is_human_request:
             return EscalationDecision(
                 should_escalate=True,
                 reason="EXPLICIT_HUMAN_REQUEST",

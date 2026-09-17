@@ -59,6 +59,49 @@ class TestEscalationEvaluator(unittest.TestCase):
         self.assertTrue(dec_sec.should_escalate)
         self.assertEqual(dec_sec.priority, "CRITICAL")
 
+    def test_explicit_human_agent_typo_humen(self):
+        """Verify that typo 'humen' properly triggers human agent escalation."""
+        dec = escalation_evaluator.evaluate("i want to talk with humen agent!")
+        self.assertTrue(dec.should_escalate)
+        self.assertEqual(dec.reason, "EXPLICIT_HUMAN_REQUEST")
+        self.assertEqual(dec.priority, "HIGH")
+
+    def test_explicit_human_customer_agent(self):
+        """Verify that 'human customer agent' triggers human escalation."""
+        dec = escalation_evaluator.evaluate("i want to talk with human customer agent")
+        self.assertTrue(dec.should_escalate)
+        self.assertEqual(dec.reason, "EXPLICIT_HUMAN_REQUEST")
+
+    def test_transfer_to_human_customer_agent(self):
+        """Verify phrase 'transfer your request to our human customer agent' escalates."""
+        dec = escalation_evaluator.evaluate("transfer your request to our human customer agent")
+        self.assertTrue(dec.should_escalate)
+        self.assertEqual(dec.reason, "EXPLICIT_HUMAN_REQUEST")
+
+    def test_can_i_speak_with_a_human(self):
+        dec = escalation_evaluator.evaluate("Can I please speak with a human right now?")
+        self.assertTrue(dec.should_escalate)
+        self.assertEqual(dec.reason, "EXPLICIT_HUMAN_REQUEST")
+
+    def test_talk_with_agent(self):
+        dec = escalation_evaluator.evaluate("I need to talk with an agent")
+        self.assertTrue(dec.should_escalate)
+        self.assertEqual(dec.reason, "EXPLICIT_HUMAN_REQUEST")
+
+    def test_router_routes_humen_to_human_pipeline(self):
+        from app.ai.router import ai_router, RouteType
+        route = ai_router.route("i want to talk with humen agent!")
+        self.assertEqual(route.route_type, RouteType.HUMAN)
+        self.assertTrue(route.escalation_decision.should_escalate)
+
+    def test_ticket_subject_for_human_escalation(self):
+        from app.ai.subject import format_subject_from_query
+        subj = format_subject_from_query("i want to talk with humen agent!")
+        self.assertEqual(subj, "Human Agent Support Request")
+        subj2 = format_subject_from_query("i want to talk with human customer agent")
+        self.assertEqual(subj2, "Human Agent Support Request")
+
 
 if __name__ == "__main__":
     unittest.main()
+

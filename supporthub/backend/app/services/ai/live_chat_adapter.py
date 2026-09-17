@@ -118,7 +118,50 @@ class LiveChatAIAdapter:
                 logger.info("[LiveChatAIAdapter] Human agent %s assigned to ticket %s; suppressing AI response.", ticket.agent_id, ticket_id)
                 return None
 
-            # 1. If conversation is already escalated to a human agent (unassigned), emit hold notice
+            # 1. Handle Resolution Intent FIRST (customer closing statement marks ticket resolved)
+            if is_resolution_intent(message_body):
+                ticket.status = TicketStatus.resolved
+                ticket.ai_resolved = True
+                logger.info("[LiveChatAIAdapter] Ticket %s marked as resolved by user intent.", ticket_id)
+
+                session.add(AuditLog(
+                    actor_id=ticket.customer_id,
+                    action="ticket.auto_resolved",
+                    entity_type="ticket",
+                    entity_id=str(ticket.id),
+                    ticket_id=ticket.id,
+                    diff_json='{"status": "resolved", "ai_resolved": true, "trigger": "customer_intent"}',
+                ))
+
+                resolution_reply = (
+                    "I'm glad to hear that you got your answer and your issue has been resolved! "
+                    "I have marked this ticket as completed and resolved. "
+                    "If you need any further assistance in the future, please feel free to reach out anytime. Have a wonderful day!"
+                )
+                ai_msg = Message(
+                    ticket_id=ticket_uuid,
+                    sender_id=None,
+                    sender_type=SenderType.ai,
+                    body=resolution_reply,
+                )
+                session.add(ai_msg)
+                ticket.updated_at = datetime.now()
+                session.add(ticket)
+
+                try:
+                    from app.services.csat_delivery import deliver_csat_survey
+                    await deliver_csat_survey(session, ticket, user)
+                except Exception as e:
+                    logger.warning("[LiveChatAIAdapter] Failed to deliver CSAT survey: %s", e)
+
+                await session.commit()
+                await session.refresh(ai_msg)
+                await session.refresh(ticket)
+
+                await self._broadcast_ai_events(ticket_id, ai_msg, ticket, resolution_reply)
+                return ai_msg
+
+            # 2. If conversation is already escalated to a human agent (unassigned), emit hold notice
             if ticket.status == TicketStatus.escalated:
                 hold_text = (
                     "Your request is with a human support agent. An agent is reviewing your inquiry "
@@ -138,7 +181,7 @@ class LiveChatAIAdapter:
 
                 await self._broadcast_ai_events(ticket_id, ai_msg, ticket, hold_text)
                 return ai_msg
-            # 2. Anonymous vs Authenticated Behavior Guard (Phase 12.5)
+            # 3. Anonymous vs Authenticated Behavior Guard (Phase 12.5)
             # GUEST / Anonymous guard for private data requests
             private_keywords = ["order", "payment", "shipment", "return", "refund", "my account", "my order", "my refund"]
             msg_clean = message_body.lower()
@@ -178,48 +221,6 @@ class LiveChatAIAdapter:
                 await session.commit()
                 await session.refresh(ai_msg)
                 await self._broadcast_ai_events(ticket_id, ai_msg, ticket, unlinked_notice)
-                return ai_msg
-
-            # 3. Handle Resolution Intent BEFORE running AI Orchestrator
-            if is_resolution_intent(message_body):
-                ticket.status = TicketStatus.resolved
-                ticket.ai_resolved = True
-                logger.info("[LiveChatAIAdapter] Ticket %s marked as resolved by user intent.", ticket_id)
-
-                session.add(AuditLog(
-                    actor_id=ticket.customer_id,
-                    action="ticket.auto_resolved",
-                    entity_type="ticket",
-                    entity_id=str(ticket.id),
-                    ticket_id=ticket.id,
-                    diff_json='{"status": "resolved", "ai_resolved": true, "trigger": "customer_intent"}',
-                ))
-
-                resolution_reply = (
-                    "I'm glad to hear your issue has been resolved! I've marked this ticket as resolved. "
-                    "If you need any further assistance in the future, please feel free to reach out. Have a great day!"
-                )
-                ai_msg = Message(
-                    ticket_id=ticket_uuid,
-                    sender_id=None,
-                    sender_type=SenderType.ai,
-                    body=resolution_reply,
-                )
-                session.add(ai_msg)
-                ticket.updated_at = datetime.now()
-                session.add(ticket)
-
-                try:
-                    from app.services.csat_delivery import deliver_csat_survey
-                    await deliver_csat_survey(session, ticket, user)
-                except Exception as e:
-                    logger.warning("[LiveChatAIAdapter] Failed to deliver CSAT survey: %s", e)
-
-                await session.commit()
-                await session.refresh(ai_msg)
-                await session.refresh(ticket)
-
-                await self._broadcast_ai_events(ticket_id, ai_msg, ticket, resolution_reply)
                 return ai_msg
 
             # 4. Invoke AI Orchestrator

@@ -5,6 +5,7 @@
 
 # Python
 __pycache__/
+**/\_\_pycache\_\_/
 *.py[cod]
 *$py.class
 *.pyc
@@ -38,15 +39,24 @@ uploads/
 **/uploads/*
 !**/uploads/.gitkeep
 
-# Databases & Backups
+# Databases & Backups (SQLite only — supporthub_dump.sql IS intentionally committed)
 *.db
 *.sqlite
 *.sqlite3
 *.dump
 
-# Evaluation reports output
+# Evaluation & output reports
 supporthub/backend/app/output/
 app/output/
+output/
+**/output/
+
+# Root-level local debug / scratch scripts (gitignored locally, not deleted)
+/db_explorer.py
+/inspect_db.py
+/test.md
+/BUG_TRACKER.md
+/__pycache__/
 
 # OS / IDE
 .DS_Store
@@ -54,3 +64,4 @@ app/output/
 .idea/
 *.swp
 *.swo
+Thumbs.db

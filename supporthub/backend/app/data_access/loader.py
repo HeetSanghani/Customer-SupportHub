@@ -48,10 +48,18 @@ class DataLoader:
             if env_path:
                 dataset_path = Path(env_path)
             else:
-                p1 = Path(__file__).resolve().parents[4] / "output"
-                p2 = Path(__file__).resolve().parents[4] / "supporthub-data-generator" / "output"
-                p3 = Path(__file__).resolve().parents[5] / "supporthub-data-generator" / "output"
-                dataset_path = p1 if p1.exists() else (p2 if p2.exists() else p3)
+                _this = Path(__file__).resolve()
+                dataset_path = None
+                for _level, _suffix in [(4, "output"), (4, "supporthub-data-generator/output"), (5, "supporthub-data-generator/output"), (3, "output")]:
+                    try:
+                        _candidate = _this.parents[_level].joinpath(*_suffix.split("/"))
+                        if _candidate.exists():
+                            dataset_path = _candidate
+                            break
+                    except IndexError:
+                        continue
+                if dataset_path is None:
+                    dataset_path = Path("/app/data/output")
         self.dataset_path = dataset_path
         self._raw_data: Dict[str, Any] = {}
         self._loaded: bool = False

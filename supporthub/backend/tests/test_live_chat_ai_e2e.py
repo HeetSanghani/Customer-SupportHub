@@ -190,6 +190,30 @@ async def test_live_chat_human_escalation_mutates_ticket(sample_customer_and_tic
 
 
 @pytest.mark.asyncio
+async def test_live_chat_human_escalation_typo_humen(sample_customer_and_ticket):
+    """Verify that typo 'i want to talk with humen agent!' escalates ticket and notifies human agent."""
+    user, ticket = sample_customer_and_ticket
+    ticket_id = str(ticket.id)
+
+    ai_msg = await live_chat_ai_adapter.process_live_chat_message(
+        ticket_id=ticket_id,
+        message_body="i want to talk with humen agent!",
+    )
+
+    assert ai_msg is not None
+    assert "transferred" in ai_msg.body.lower()
+    assert "human" in ai_msg.body.lower()
+
+    async with AsyncSessionLocal() as session:
+        updated_ticket = await session.get(Ticket, ticket.id)
+        assert updated_ticket is not None
+        assert updated_ticket.status == TicketStatus.escalated
+        assert updated_ticket.priority in (TicketPriority.high, TicketPriority.urgent)
+        assert updated_ticket.category == "Escalation"
+
+
+
+@pytest.mark.asyncio
 async def test_live_chat_resolution_and_csat(sample_customer_and_ticket):
     """Verify that customer closing statement marks ticket as resolved and ai_resolved."""
     user, ticket = sample_customer_and_ticket
@@ -207,6 +231,48 @@ async def test_live_chat_resolution_and_csat(sample_customer_and_ticket):
         assert updated_ticket is not None
         assert updated_ticket.status == TicketStatus.resolved
         assert updated_ticket.ai_resolved is True
+
+
+@pytest.mark.asyncio
+async def test_live_chat_got_my_answer_resolves_ticket(sample_customer_and_ticket):
+    """Verify that 'thanks , i got my answer' marks ticket as resolved and emits friendly closing."""
+    user, ticket = sample_customer_and_ticket
+    ticket_id = str(ticket.id)
+
+    ai_msg = await live_chat_ai_adapter.process_live_chat_message(
+        ticket_id=ticket_id,
+        message_body="thanks , i got my answer",
+    )
+
+    assert ai_msg is not None
+    assert "resolved" in ai_msg.body.lower() or "completed" in ai_msg.body.lower()
+
+    async with AsyncSessionLocal() as session:
+        updated_ticket = await session.get(Ticket, ticket.id)
+        assert updated_ticket is not None
+        assert updated_ticket.status == TicketStatus.resolved
+        assert updated_ticket.ai_resolved is True
+
+
+@pytest.mark.asyncio
+async def test_live_chat_mark_completed_resolves_ticket(sample_customer_and_ticket):
+    """Verify that 'mark as completed' marks ticket as resolved."""
+    user, ticket = sample_customer_and_ticket
+    ticket_id = str(ticket.id)
+
+    ai_msg = await live_chat_ai_adapter.process_live_chat_message(
+        ticket_id=ticket_id,
+        message_body="mark as completed",
+    )
+
+    assert ai_msg is not None
+
+    async with AsyncSessionLocal() as session:
+        updated_ticket = await session.get(Ticket, ticket.id)
+        assert updated_ticket is not None
+        assert updated_ticket.status == TicketStatus.resolved
+        assert updated_ticket.ai_resolved is True
+
 
 
 @pytest.mark.asyncio

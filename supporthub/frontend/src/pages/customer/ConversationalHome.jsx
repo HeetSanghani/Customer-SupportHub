@@ -352,17 +352,40 @@ function ChatView({ ticketId, onBack, onQuickAction, sidebarOpen, onToggleSideba
     queryKey: ['ticket-msgs', ticketId],
     queryFn: async () => { const r = await ticketsApi.getMessages(ticketId); return r.data },
     enabled: !!ticketId,
-    staleTime: 1000,
-    refetchInterval: 2500,
+    staleTime: 0,
+    refetchInterval: 8000,   // WS is primary; polling is a fallback safety net
   })
 
+  // Reset initializedRef and clear msgs when switching conversations
+  const initializedRef = useRef(false)
   useEffect(() => {
-    if (history.length) {
+    initializedRef.current = false
+    setMsgs([])
+    setTyping(false)
+  }, [ticketId])
+
+  // Seed msgs from history on initial load and merge in any DB-committed msgs the WS may have missed
+  useEffect(() => {
+    if (!history.length) return
+    if (!initializedRef.current) {
+      // First load: replace completely so we have the correct DB order
+      initializedRef.current = true
       setMsgs(history)
-      const last = history[history.length - 1]
-      if (last && (last.sender_type === 'ai' || last.sender_type === 'agent' || last.sender_role === 'ai')) {
-        setTyping(false)
-      }
+      return
+    }
+    // Subsequent polls: merge in any new messages by id that aren't in local state yet
+    setMsgs(prev => {
+      const existingIds = new Set(prev.map(m => m.id).filter(Boolean))
+      const newFromDB = history.filter(m => m.id && !existingIds.has(m.id))
+      if (!newFromDB.length) return prev
+      // Merge: combine and re-sort by created_at
+      const merged = [...prev, ...newFromDB]
+      merged.sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
+      return merged
+    })
+    const last = history[history.length - 1]
+    if (last && (last.sender_type === 'ai' || last.sender_type === 'agent' || last.sender_role === 'ai')) {
+      setTyping(false)
     }
   }, [history])
 
@@ -397,6 +420,8 @@ function ChatView({ ticketId, onBack, onQuickAction, sidebarOpen, onToggleSideba
             }
             return [...p, normalized]
           })
+          // Trigger a background poll so next refetch picks up the committed DB state
+          queryClient.invalidateQueries({ queryKey: ['ticket-msgs', ticketId] })
         } else if (d.type === 'typing') {
           setTyping(true)
           setTimeout(() => setTyping(false), 4000)

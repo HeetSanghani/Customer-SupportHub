@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { ticketsApi } from '../api/tickets'
+import { ordersApi } from '../api/orders'
 import { useAuthStore } from '../store/authStore'
 import { 
   ArrowLeft, Send, Clock, Zap, X, Search, 
@@ -229,51 +230,87 @@ export default function TicketDetail({ basePath }) {
   
   const customerEmail = ticket?.customer?.email || 'customer@supporthub.com'
   const customerPhone = ticket?.customer?.phone || '+91 98204 41120'
-  const customerInitials = customerName.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase()
+  const customerInitials = customerName.split(' ').filter(Boolean).map(n => n[0]).join('').substring(0, 2).toUpperCase() || 'CU'
+  const customerSince = ticket?.customer?.created_at
+    ? new Date(ticket.customer.created_at).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+    : ticket?.created_at
+    ? new Date(ticket.created_at).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+    : 'March 2023'
 
-  // Dynamic Relevant Orders for this customer context
-  const sampleOrders = [
-    {
-      id: 'ORD-009',
-      ref: '#ORD-009',
-      total: '₹2,598.00',
-      date: '21 Aug 2026',
-      status: 'Delivered',
-      deliveryDate: '21 Aug 2026',
-      paymentStatus: 'Paid',
-      courier: 'Shadowfax',
-      tracking: 'TRK-SHADOWFAX-344703907',
-      items: [
-        {
-          sku: 'PROD-021',
-          name: 'Classic Fit 100% Pure Cotton Oxford Shirt (Navy Blue)',
-          qty: 2,
-          price: '₹1,299.00',
-          subtotal: '₹2,598.00'
-        }
-      ]
+  // Fetch real orders for this ticket's customer (staff-only endpoint)
+  const customerId = ticket?.customer_id
+  const { data: relevantOrders = [], isLoading: ordersLoading } = useQuery({
+    queryKey: ['customer-orders', customerId],
+    queryFn: async () => {
+      const res = await ordersApi.getOrdersByCustomerUserId(customerId)
+      // Sort by order_date descending (most recent first)
+      return (res.data || []).sort((a, b) => {
+        if (!a.order_date && !b.order_date) return 0
+        if (!a.order_date) return 1
+        if (!b.order_date) return -1
+        return new Date(b.order_date) - new Date(a.order_date)
+      })
     },
-    {
-      id: 'ORD-001',
-      ref: '#ORD-001',
-      total: '₹7,499.00',
-      date: '26 Aug 2026',
-      status: 'In Transit',
-      deliveryDate: 'Expected Tomorrow',
-      paymentStatus: 'Paid',
-      courier: 'Delhivery',
-      tracking: 'TRK-DELHIVERY-9982401',
-      items: [
-        {
-          sku: 'PROD-004',
-          name: 'Aurora Wireless Noise-Cancelling Headphones',
-          qty: 1,
-          price: '₹7,499.00',
-          subtotal: '₹7,499.00'
-        }
-      ]
+    enabled: !!(customerId && (role === 'agent' || role === 'manager' || role === 'admin') && ticket),
+    staleTime: 30_000,
+  })
+
+  // Track manual order override by agent
+  const [manuallySelectedOrderId, setManuallySelectedOrderId] = useState(null)
+
+  // Scan messages and ticket subject for explicit order mentions (ORD-xxx)
+  const detectedOrderId = (() => {
+    const orderRegex = /\b(ORD-[A-Za-z0-9]+)\b/i
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const match = messages[i]?.body?.match(orderRegex)
+      if (match) return match[1].toUpperCase()
     }
-  ]
+    const subjMatch = ticket?.subject?.match(orderRegex)
+    if (subjMatch) return subjMatch[1].toUpperCase()
+    return null
+  })()
+
+  // Active Order ID: manual choice -> detected from chat/subject -> first order of customer -> null
+  const activeOrderId = manuallySelectedOrderId || detectedOrderId || (relevantOrders[0]?.order_id) || null
+
+  // Check if activeOrderId exists in relevantOrders
+  const matchedRelevantOrder = relevantOrders.find(
+    o => o.order_id?.toUpperCase() === activeOrderId?.toUpperCase()
+  )
+
+  // If order was mentioned in chat (e.g. ORD-003 or customer order not in list yet), fetch its full details directly
+  const { data: directFetchedOrder } = useQuery({
+    queryKey: ['order-detail', activeOrderId],
+    queryFn: async () => {
+      if (!activeOrderId) return null
+      try {
+        const res = await ordersApi.getOrderDetail(activeOrderId)
+        const d = res.data
+        return {
+          order_id: d.order?.order_id || activeOrderId,
+          status: d.order?.status,
+          order_date: d.order?.order_date,
+          total_amount: d.order?.total_amount,
+          shipping_address: d.order?.shipping_address,
+          items: d.items || [],
+          shipment_status: d.shipment?.status,
+          shipment_carrier: d.shipment?.carrier,
+          estimated_delivery_date: d.shipment?.estimated_delivery_date,
+          actual_delivery_date: d.shipment?.actual_delivery_date,
+          payment_status: d.payment?.status,
+        }
+      } catch (err) {
+        console.warn('Could not fetch direct order details:', err)
+        return null
+      }
+    },
+    enabled: !!(activeOrderId && !matchedRelevantOrder && (role === 'agent' || role === 'manager' || role === 'admin')),
+    staleTime: 60_000,
+  })
+
+  // Full active order object
+  const activeOrder = matchedRelevantOrder || directFetchedOrder || (activeOrderId ? { order_id: activeOrderId } : null)
+
 
   // Knowledge base articles sample
   const kbArticles = [
@@ -497,7 +534,7 @@ export default function TicketDetail({ basePath }) {
             <div>
               <h2 className="text-base font-extrabold text-[#1C1B2E] tracking-tight">{customerName}</h2>
               <p className="text-xs text-[#6C7089] font-medium mt-0.5">
-                Returning customer · customer since March 2023
+                {relevantOrders.length > 1 ? 'Returning customer' : relevantOrders.length === 1 ? 'Verified customer' : 'Customer'} · customer since {customerSince}
               </p>
             </div>
           </div>
@@ -515,25 +552,129 @@ export default function TicketDetail({ basePath }) {
             </div>
 
             <p className="text-xs text-[#1C1B2E] leading-relaxed font-medium">
-              Customer is inquiring about order & product info / return policy and explicitly requested a transfer to a human support agent for custom resolution.
+              {ticket.ai_summary || (
+                activeOrder?.order_id
+                  ? `Customer is inquiring regarding Order #${activeOrder.order_id}${ticket.subject ? ` (${ticket.subject})` : ''} and requested a transfer to a human support agent for resolution.`
+                  : ticket.subject
+                  ? `Customer inquiry regarding "${ticket.subject}". Transferred to a human support agent for resolution.`
+                  : "Customer is inquiring about order & product info / return policy and explicitly requested a transfer to a human support agent for custom resolution."
+              )}
             </p>
 
-            <div className="pt-2 border-t border-indigo-100/80 space-y-1.5 text-[11px]">
-              <div className="flex justify-between">
-                <span className="text-[#6C7089]">Order Reference:</span>
-                <span className="font-extrabold text-indigo-700 font-mono">#ORD-009</span>
+            <div className="pt-2 border-t border-indigo-100/80 space-y-2 text-[11px]">
+              {/* Dynamic Order Reference Row & Actual Info */}
+              <div>
+                <div className="flex justify-between items-center">
+                  <span className="text-[#6C7089]">Order Reference:</span>
+                  {activeOrder?.order_id ? (
+                    <button
+                      type="button"
+                      onClick={() => setSelectedOrderModal(activeOrder)}
+                      className="inline-flex items-center gap-1 font-extrabold text-indigo-700 hover:text-indigo-900 bg-indigo-100/80 hover:bg-indigo-200/80 border border-indigo-200 px-2 py-0.5 rounded-md font-mono text-xs transition-colors group cursor-pointer"
+                      title="Click to view full order details"
+                    >
+                      <span>#{activeOrder.order_id}</span>
+                      <ExternalLink size={11} className="opacity-70 group-hover:opacity-100" />
+                    </button>
+                  ) : (
+                    <span className="text-gray-400 font-medium italic">No order linked</span>
+                  )}
+                </div>
+
+                {/* Actual Order Reference Details Box */}
+                {activeOrder?.order_id && (
+                  <div className="mt-2 bg-white/90 border border-indigo-100/90 rounded-xl p-2.5 space-y-1.5 shadow-2xs">
+                    <div className="flex items-center justify-between text-[10px]">
+                      <span className="text-[#6C7089] font-medium">Order Status:</span>
+                      <span className={`font-bold px-1.5 py-0.5 rounded border uppercase tracking-wider text-[9px] ${
+                        activeOrder.status?.toLowerCase() === 'delivered' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+                        activeOrder.status?.toLowerCase() === 'cancelled' ? 'bg-red-50 text-red-700 border-red-200' :
+                        'bg-blue-50 text-blue-700 border-blue-200'
+                      }`}>
+                        {(activeOrder.shipment_status || activeOrder.status || 'Active').replace(/_/g, ' ')}
+                      </span>
+                    </div>
+
+                    {activeOrder.total_amount !== undefined && activeOrder.total_amount !== null && (
+                      <div className="flex items-center justify-between text-[10px]">
+                        <span className="text-[#6C7089] font-medium">Order Total:</span>
+                        <span className="font-extrabold text-indigo-900 font-mono">
+                          ₹{Number(activeOrder.total_amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                        </span>
+                      </div>
+                    )}
+
+                    {activeOrder.items && activeOrder.items.length > 0 && (
+                      <div className="flex items-center justify-between text-[10px]">
+                        <span className="text-[#6C7089] font-medium">Purchased Item:</span>
+                        <span className="font-semibold text-gray-800 truncate max-w-[150px]" title={activeOrder.items.map(i => i.product_name).join(', ')}>
+                          {activeOrder.items[0]?.product_name}
+                          {activeOrder.items.length > 1 && ` (+${activeOrder.items.length - 1} more)`}
+                        </span>
+                      </div>
+                    )}
+
+                    {activeOrder.order_date && (
+                      <div className="flex items-center justify-between text-[10px]">
+                        <span className="text-[#6C7089] font-medium">Placed Date:</span>
+                        <span className="text-gray-600 font-medium">
+                          {activeOrder.order_date.split(' ')[0] || activeOrder.order_date}
+                        </span>
+                      </div>
+                    )}
+
+                    <button
+                      type="button"
+                      onClick={() => setSelectedOrderModal(activeOrder)}
+                      className="w-full text-center text-[10px] font-bold text-indigo-600 hover:text-indigo-800 hover:underline pt-1 flex items-center justify-center gap-1 cursor-pointer border-t border-indigo-50 mt-1"
+                    >
+                      <Eye size={11} /> View Full Order & Tracking Details
+                    </button>
+                  </div>
+                )}
+
+                {/* Multiple customer orders switcher if customer has > 1 orders */}
+                {relevantOrders.length > 1 && (
+                  <div className="flex items-center justify-between pt-1.5 text-[10px]">
+                    <span className="text-[#6C7089] font-medium">Switch Order:</span>
+                    <div className="flex flex-wrap gap-1 justify-end">
+                      {relevantOrders.map(o => (
+                        <button
+                          key={o.order_id}
+                          type="button"
+                          onClick={() => setManuallySelectedOrderId(o.order_id)}
+                          className={`px-1.5 py-0.5 rounded font-mono text-[9px] font-bold transition-all cursor-pointer ${
+                            activeOrderId === o.order_id
+                              ? 'bg-indigo-600 text-white shadow-xs'
+                              : 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200/60'
+                          }`}
+                          title={`Select #${o.order_id}`}
+                        >
+                          #{o.order_id}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
+
               <div className="flex justify-between">
                 <span className="text-[#6C7089]">Primary Issue:</span>
-                <span className="font-bold text-gray-800">Return & Product Info</span>
+                <span className="font-bold text-gray-800 capitalize">{ticket.category || ticket.subject || 'Return & Product Info'}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-[#6C7089]">AI Action Taken:</span>
-                <span className="font-semibold text-gray-700">Checked shipment scan history & return policy (POL-001)</span>
+                <span className="font-semibold text-gray-700">
+                  {activeOrder?.order_id 
+                    ? `Checked order #${activeOrder.order_id} history & support policies` 
+                    : 'Checked shipment scan history & return policy (POL-001)'}
+                </span>
               </div>
               <div className="flex justify-between">
                 <span className="text-[#6C7089]">Handoff Reason:</span>
-                <span className="font-bold text-amber-700">Human assistance requested by customer</span>
+                <span className="font-bold text-amber-700">
+                  {ticket.status === 'escalated' ? 'Escalated by AI: human assistance requested' : 'Human assistance requested by customer'}
+                </span>
               </div>
             </div>
           </div>
@@ -563,12 +704,14 @@ export default function TicketDetail({ basePath }) {
                 <span className="text-[#6C7089] flex items-center gap-1.5">
                   <Calendar size={13} className="text-gray-400" /> Customer since
                 </span>
-                <span className="font-semibold text-gray-700">March 2023</span>
+                <span className="font-semibold text-gray-700">{customerSince}</span>
               </div>
 
               <div className="flex justify-between items-center">
                 <span className="text-[#6C7089]">Account Status</span>
-                <span className="font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">Returning</span>
+                <span className="font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+                  {relevantOrders.length > 1 ? 'Returning' : relevantOrders.length === 1 ? 'Customer (1 order)' : 'Active'}
+                </span>
               </div>
 
               <div className="flex justify-between items-center">
@@ -660,50 +803,92 @@ export default function TicketDetail({ basePath }) {
                 <ShoppingBag size={13} className="text-indigo-600" />
                 <span>RELEVANT ORDERS</span>
               </div>
-              <span className="text-[10px] font-bold text-gray-500">2 Orders</span>
+              <span className="text-[10px] font-bold text-gray-500">
+                {ordersLoading ? '...' : `${relevantOrders.length} Order${relevantOrders.length !== 1 ? 's' : ''}`}
+              </span>
             </div>
 
             <div className="space-y-3">
-              {sampleOrders.map(order => (
-                <div key={order.id} className="border border-[#E5E7F3] hover:border-indigo-300 rounded-2xl p-3.5 space-y-2.5 bg-gray-50/50 hover:bg-white transition-all shadow-2xs group">
-                  <div className="flex items-center justify-between">
-                    <span className="font-extrabold text-xs text-[#1C1B2E] font-mono">{order.ref}</span>
-                    <span className="font-black text-xs text-indigo-700">{order.total}</span>
-                  </div>
-
-                  {order.items.map((item, idx) => (
-                    <div key={idx} className="space-y-0.5">
-                      <div className="text-xs font-bold text-gray-800 line-clamp-2 group-hover:text-indigo-600 transition-colors">
-                        {item.name}
-                      </div>
-                      <div className="text-[10px] text-[#6C7089] font-medium">
-                        Qty {item.qty} · Placed {order.date}
-                      </div>
+              {ordersLoading ? (
+                <div className="space-y-2">
+                  {[1, 2].map(n => (
+                    <div key={n} className="border border-[#E5E7F3] rounded-2xl p-3.5 space-y-2 bg-gray-50/50 animate-pulse">
+                      <div className="h-3 bg-gray-200 rounded w-1/3" />
+                      <div className="h-3 bg-gray-200 rounded w-2/3" />
+                      <div className="h-3 bg-gray-200 rounded w-1/2" />
                     </div>
                   ))}
-
-                  <div className="flex flex-wrap gap-1.5 pt-1">
-                    <span className="text-[9px] font-bold px-2 py-0.5 rounded-md bg-white border border-gray-200 text-gray-700">
-                      Payment: {order.paymentStatus}
-                    </span>
-                    <span className={`text-[9px] font-bold px-2 py-0.5 rounded-md border ${
-                      order.status === 'Delivered' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-blue-50 text-blue-700 border-blue-200'
-                    }`}>
-                      {order.status}
-                    </span>
-                    <span className="text-[9px] font-semibold px-2 py-0.5 rounded-md bg-gray-100 text-gray-600">
-                      {order.deliveryDate}
-                    </span>
-                  </div>
-
-                  <button
-                    onClick={() => setSelectedOrderModal(order)}
-                    className="w-full py-1.5 bg-white hover:bg-indigo-50 border border-gray-200 hover:border-indigo-300 text-indigo-600 font-bold text-xs rounded-xl transition-colors flex items-center justify-center gap-1.5 shadow-2xs mt-1"
-                  >
-                    <Eye size={13} /> View Order Details
-                  </button>
                 </div>
-              ))}
+              ) : relevantOrders.length === 0 ? (
+                <div className="text-center py-4 text-[11px] text-gray-400">
+                  No orders found for this customer.
+                </div>
+              ) : (
+                relevantOrders.map(order => {
+                  const statusColor = {
+                    'delivered': 'bg-emerald-50 text-emerald-700 border-emerald-200',
+                    'in_transit': 'bg-blue-50 text-blue-700 border-blue-200',
+                    'shipped': 'bg-blue-50 text-blue-700 border-blue-200',
+                    'pending': 'bg-yellow-50 text-yellow-700 border-yellow-200',
+                    'cancelled': 'bg-red-50 text-red-600 border-red-200',
+                    'returned': 'bg-purple-50 text-purple-700 border-purple-200',
+                  }[order.status?.toLowerCase()] || 'bg-gray-100 text-gray-700 border-gray-200'
+
+                  const deliveryLabel = order.actual_delivery_date
+                    ? `Delivered ${order.actual_delivery_date}`
+                    : order.estimated_delivery_date
+                    ? `Est. ${order.estimated_delivery_date}`
+                    : null
+
+                  return (
+                    <div key={order.order_id} className="border border-[#E5E7F3] hover:border-indigo-300 rounded-2xl p-3.5 space-y-2.5 bg-gray-50/50 hover:bg-white transition-all shadow-2xs group">
+                      <div className="flex items-center justify-between">
+                        <span className="font-extrabold text-xs text-[#1C1B2E] font-mono">#{order.order_id}</span>
+                        <span className="font-black text-xs text-indigo-700">₹{Number(order.total_amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                      </div>
+
+                      {order.items?.slice(0, 2).map((item, idx) => (
+                        <div key={idx} className="space-y-0.5">
+                          <div className="text-xs font-bold text-gray-800 line-clamp-2 group-hover:text-indigo-600 transition-colors">
+                            {item.product_name}
+                          </div>
+                          <div className="text-[10px] text-[#6C7089] font-medium">
+                            Qty {item.quantity} · Placed {order.order_date || '—'}
+                          </div>
+                        </div>
+                      ))}
+                      {order.items?.length > 2 && (
+                        <div className="text-[10px] text-indigo-500 font-semibold">+{order.items.length - 2} more item{order.items.length - 2 !== 1 ? 's' : ''}</div>
+                      )}
+
+                      <div className="flex flex-wrap gap-1.5 pt-1">
+                        {order.payment_status && (
+                          <span className="text-[9px] font-bold px-2 py-0.5 rounded-md bg-white border border-gray-200 text-gray-700">
+                            Payment: {order.payment_status.charAt(0).toUpperCase() + order.payment_status.slice(1)}
+                          </span>
+                        )}
+                        <span className={`text-[9px] font-bold px-2 py-0.5 rounded-md border ${statusColor}`}>
+                          {order.shipment_status
+                            ? order.shipment_status.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+                            : order.status.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
+                        </span>
+                        {deliveryLabel && (
+                          <span className="text-[9px] font-semibold px-2 py-0.5 rounded-md bg-gray-100 text-gray-600">
+                            {deliveryLabel}
+                          </span>
+                        )}
+                      </div>
+
+                      <button
+                        onClick={() => setSelectedOrderModal(order)}
+                        className="w-full py-1.5 bg-white hover:bg-indigo-50 border border-gray-200 hover:border-indigo-300 text-indigo-600 font-bold text-xs rounded-xl transition-colors flex items-center justify-center gap-1.5 shadow-2xs mt-1"
+                      >
+                        <Eye size={13} /> View Order Details
+                      </button>
+                    </div>
+                  )
+                })
+              )}
             </div>
           </div>
 
@@ -774,8 +959,8 @@ export default function TicketDetail({ basePath }) {
                   <Package size={20} />
                 </div>
                 <div>
-                  <h3 className="font-extrabold text-base text-[#1C1B2E]">Order Details ({selectedOrderModal.ref})</h3>
-                  <p className="text-xs text-[#6C7089]">Placed on {selectedOrderModal.date}</p>
+                  <h3 className="font-extrabold text-base text-[#1C1B2E]">Order Details (#{selectedOrderModal.order_id})</h3>
+                  <p className="text-xs text-[#6C7089]">Placed on {selectedOrderModal.order_date || '—'}</p>
                 </div>
               </div>
               <button
@@ -789,33 +974,45 @@ export default function TicketDetail({ basePath }) {
             {/* Shipment & Tracking Info */}
             <div className="bg-gray-50 border border-gray-200/80 rounded-2xl p-4 space-y-2 text-xs">
               <div className="flex justify-between">
-                <span className="text-[#6C7089] font-medium">Status:</span>
-                <span className="font-extrabold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">{selectedOrderModal.status}</span>
+                <span className="text-[#6C7089] font-medium">Order Status:</span>
+                <span className="font-extrabold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+                  {(selectedOrderModal.shipment_status || selectedOrderModal.status || '—').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
+                </span>
               </div>
-              <div className="flex justify-between">
-                <span className="text-[#6C7089] font-medium">Courier Partner:</span>
-                <span className="font-bold text-gray-800">{selectedOrderModal.courier}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-[#6C7089] font-medium">Tracking Number:</span>
-                <span className="font-extrabold font-mono text-indigo-600">{selectedOrderModal.tracking}</span>
-              </div>
+              {selectedOrderModal.shipment_carrier && (
+                <div className="flex justify-between">
+                  <span className="text-[#6C7089] font-medium">Courier Partner:</span>
+                  <span className="font-bold text-gray-800">{selectedOrderModal.shipment_carrier}</span>
+                </div>
+              )}
+              {selectedOrderModal.payment_status && (
+                <div className="flex justify-between">
+                  <span className="text-[#6C7089] font-medium">Payment:</span>
+                  <span className="font-bold text-gray-800">{selectedOrderModal.payment_status.charAt(0).toUpperCase() + selectedOrderModal.payment_status.slice(1)}</span>
+                </div>
+              )}
               <div className="flex justify-between">
                 <span className="text-[#6C7089] font-medium">Delivery Date:</span>
-                <span className="font-semibold text-gray-800">{selectedOrderModal.deliveryDate}</span>
+                <span className="font-semibold text-gray-800">
+                  {selectedOrderModal.actual_delivery_date
+                    ? selectedOrderModal.actual_delivery_date
+                    : selectedOrderModal.estimated_delivery_date
+                    ? `Est. ${selectedOrderModal.estimated_delivery_date}`
+                    : '—'}
+                </span>
               </div>
             </div>
 
             {/* Purchased Items List */}
             <div className="space-y-3">
               <h4 className="text-xs font-extrabold text-[#9598B0] uppercase tracking-wider">Purchased Item(s)</h4>
-              {selectedOrderModal.items.map((item, idx) => (
+              {(selectedOrderModal.items || []).map((item, idx) => (
                 <div key={idx} className="flex justify-between items-center p-3 border border-gray-200 rounded-2xl bg-white shadow-2xs">
                   <div>
-                    <div className="text-xs font-extrabold text-[#1C1B2E]">{item.name}</div>
-                    <div className="text-[10px] text-[#6C7089] font-mono mt-0.5">SKU: {item.sku} · Qty: {item.qty}</div>
+                    <div className="text-xs font-extrabold text-[#1C1B2E]">{item.product_name}</div>
+                    <div className="text-[10px] text-[#6C7089] font-mono mt-0.5">SKU: {item.product_id} · Qty: {item.quantity}</div>
                   </div>
-                  <div className="font-black text-xs text-indigo-700">{item.subtotal}</div>
+                  <div className="font-black text-xs text-indigo-700">₹{Number(item.total_price).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
                 </div>
               ))}
             </div>
@@ -823,7 +1020,7 @@ export default function TicketDetail({ basePath }) {
             {/* Total Footer */}
             <div className="flex justify-between items-center pt-3 border-t border-gray-100">
               <span className="text-xs font-bold text-gray-600">Total Order Amount</span>
-              <span className="text-base font-black text-[#1C1B2E]">{selectedOrderModal.total}</span>
+              <span className="text-base font-black text-[#1C1B2E]">₹{Number(selectedOrderModal.total_amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
             </div>
 
             <button

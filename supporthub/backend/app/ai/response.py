@@ -118,7 +118,15 @@ class ResponseSynthesizer:
             "prod-", "ord-", "track", "warranty", "invoice", "address", "account", "login", "password",
             "otp", "item", "exchange", "replacement", "shopkart", "policy", "seller", "cart", "price",
             "discount", "coupon", "cod", "cost", "stock", "spec", "brand", "help", "support", "service",
-            "faq", "guideline", "shipping", "charge", "upi", "card", "bank"
+            "faq", "guideline", "shipping", "charge", "upi", "card", "bank",
+            # Product category keywords
+            "product", "shirt", "jeans", "denim", "dress", "kurta", "trousers", "shoes", "shoe",
+            "laptop", "phone", "mobile", "tablet", "headphone", "earbuds", "speaker", "monitor",
+            "keyboard", "mouse", "tv", "television", "vacuum", "purifier", "fryer", "mixer",
+            "chair", "desk", "table", "furniture", "cookware", "bottle", "serum", "cream", "shampoo",
+            "sunscreen", "trimmer", "toothbrush", "dryer", "microphone", "cooktop", "induction",
+            # Info / enquiry phrases
+            "info", "information", "all info", "give me info", "full info", "details",
         ]
         is_off_topic = any(w in q_low for w in off_topic_phrases)
         has_core_kw = any(k in q_low for k in core_keywords)
@@ -383,26 +391,29 @@ class ResponseSynthesizer:
 
             sections = ["Here is an overview of popular products currently available in our ShopKart catalog:\n"]
             category_icons = {
-                "Electronics": "📱", "Mobiles": "📱", "Audio": "🎧", "Computers": "💻",
-                "Home & Kitchen": "🍳", "Home Appliances": "🏠", "Fashion": "👕", "Footwear": "👟"
+                "Electronics": "⚡", "Mobiles": "📱", "Tablets": "📱", "Audio": "🎧",
+                "Headphones": "🎧", "Computers": "💻", "Laptops": "💻",
+                "Kitchen": "🍳", "Dining": "🍳", "Home & Kitchen": "🍳",
+                "Furniture": "🪑", "Home Furniture": "🪑",
+                "Appliances": "🏠", "Home Appliances": "🏠",
+                "Men": "👔", "Women": "👗", "Clothing": "👕", "Fashion": "✨",
+                "Footwear": "👟", "Shoes": "👟"
             }
 
             for cat_name, p_list in by_category.items():
                 icon = next((v for k, v in category_icons.items() if k.lower() in cat_name.lower()), "🛍️")
                 sections.append(f"### {icon} {cat_name}")
-                for p in p_list[:4]:
+                for p in p_list:
                     p_id = p.get("product_id", "")
                     p_name = p.get("name", "Product")
                     p_price = p.get("price", 0)
                     p_disc = p.get("discount_percentage", 0)
                     p_stock = p.get("stock_quantity", 0)
-                    p_status = p.get("availability_status", "IN_STOCK")
+                    p_status = "OUT_OF_STOCK" if p_stock <= 0 else p.get("availability_status", "IN_STOCK")
                     disc_str = f" ({p_disc}% off)" if p_disc > 0 else ""
                     sections.append(
                         f"• **{p_name}** (`{p_id}`) — **₹{p_price:,.2f}**{disc_str} | Status: *{p_status}* ({p_stock} in stock)"
                     )
-                if len(p_list) > 4:
-                    sections.append(f"  *...and {len(p_list) - 4} more items in {cat_name}*")
                 sections.append("")
 
             sections.append("💡 *Tip: Ask for full specs, pricing, or warranty details on any item by specifying its name or ID (e.g., `Tell me about PROD-001`).*")
@@ -417,26 +428,84 @@ class ResponseSynthesizer:
         # Product Search / Category Filtered Results
         if "search_products" in data and data["search_products"] and "product" not in data:
             products = data["search_products"]
-            sections = [f"Found {len(products)} matching product(s) in our store:\n"]
-            for p in products:
-                p_id = p.get("product_id", "")
-                p_name = p.get("name", "Product")
-                p_brand = p.get("brand", "")
-                p_price = p.get("price", 0)
-                p_mrp = p.get("mrp", 0)
-                p_disc = p.get("discount_percentage", 0)
-                p_stock = p.get("stock_quantity", 0)
-                p_status = p.get("availability_status", "IN_STOCK")
-                p_cat = p.get("category_name", "")
-                disc_str = f" (MRP: ₹{p_mrp:,.2f}, {p_disc}% off)" if p_disc > 0 else ""
-                sections.append(
-                    f"• **{p_name}** (`{p_id}`) by *{p_brand}* — **₹{p_price:,.2f}**{disc_str}\n"
-                    f"   Category: {p_cat} | Status: *{p_status}* ({p_stock} available)"
-                )
-            sections.append("\n💡 *Ask me about any specific Product ID or model for warranty, return policies, and full technical specifications!*")
+            is_info_q = any(k in q_lower for k in ["info", "tell me about", "details", "detail", "about", "specs", "specification", "specifications", "price", "warranty", "return policy", "spec", "cost", "feature"])
+            is_multi_listing_q = any(k in q_lower for k in ["show all", "list", "browse", "catalog", "every product", "products in", "products for", "categories", "category"])
+            if (len(products) == 1 or (is_info_q and not is_multi_listing_q)) and products:
+                from app.ai.tools import tool_registry
+                single_p = tool_registry.get_product(products[0]["product_id"])
+                if single_p:
+                    data["product"] = single_p
+                    del data["search_products"]
+                    return self.synthesize_structured_response(intent_name, data, query)
+
+            by_category: Dict[str, list] = {}
+            for prod in products:
+                cat = prod.get("category_name") or "General"
+                by_category.setdefault(cat, []).append(prod)
+
+            category_icons = {
+                "Electronics": "⚡", "Mobiles": "📱", "Tablets": "📱", "Audio": "🎧",
+                "Headphones": "🎧", "Computers": "💻", "Laptops": "💻",
+                "Kitchen": "🍳", "Dining": "🍳", "Home & Kitchen": "🍳",
+                "Furniture": "🪑", "Home Furniture": "🪑",
+                "Appliances": "🏠", "Home Appliances": "🏠",
+                "Men": "👔", "Women": "👗", "Clothing": "👕", "Fashion": "✨",
+                "Footwear": "👟", "Shoes": "👟"
+            }
+
+            if len(by_category) > 1:
+                sections = [f"Found {len(products)} matching product(s) across {len(by_category)} categories in our store:\n"]
+                for cat_name, p_list in by_category.items():
+                    icon = next((v for k, v in category_icons.items() if k.lower() in cat_name.lower()), "🛍️")
+                    sections.append(f"### {icon} {cat_name}")
+                    for p in p_list:
+                        p_id = p.get("product_id", "")
+                        p_name = p.get("name", "Product")
+                        p_brand = p.get("brand", "")
+                        p_price = p.get("price", 0)
+                        p_mrp = p.get("mrp", 0)
+                        p_disc = p.get("discount_percentage", 0)
+                        p_stock = p.get("stock_quantity", 0)
+                        p_status = "OUT_OF_STOCK" if p_stock <= 0 else p.get("availability_status", "IN_STOCK")
+                        disc_str = f" (MRP: ₹{p_mrp:,.2f}, {p_disc}% off)" if p_disc > 0 else ""
+                        sections.append(
+                            f"• **{p_name}** (`{p_id}`) by *{p_brand}* — **₹{p_price:,.2f}**{disc_str}\n"
+                            f"   Status: *{p_status}* ({p_stock} available)"
+                        )
+                    sections.append("")
+            else:
+                sections = [f"Found {len(products)} matching product(s) in our store:\n"]
+                for p in products:
+                    p_id = p.get("product_id", "")
+                    p_name = p.get("name", "Product")
+                    p_brand = p.get("brand", "")
+                    p_price = p.get("price", 0)
+                    p_mrp = p.get("mrp", 0)
+                    p_disc = p.get("discount_percentage", 0)
+                    p_stock = p.get("stock_quantity", 0)
+                    p_status = "OUT_OF_STOCK" if p_stock <= 0 else p.get("availability_status", "IN_STOCK")
+                    p_cat = p.get("category_name", "")
+                    disc_str = f" (MRP: ₹{p_mrp:,.2f}, {p_disc}% off)" if p_disc > 0 else ""
+                    sections.append(
+                        f"• **{p_name}** (`{p_id}`) by *{p_brand}* — **₹{p_price:,.2f}**{disc_str}\n"
+                        f"   Category: {p_cat} | Status: *{p_status}* ({p_stock} available)"
+                    )
+            sections.append("💡 *Ask me about any specific Product ID or model for warranty, return policies, and full technical specifications!*")
             content = "\n".join(sections)
             return AIResponse(
                 content=content,
+                route_type="STRUCTURED",
+                structured_data=data,
+                is_grounded=True
+            )
+
+        # Product Search / Category Filtered Results (Empty match fallback)
+        if "search_products" in data and not data["search_products"] and "product" not in data:
+            return AIResponse(
+                content=(
+                    "We couldn't find any products matching your query in our store.\n\n"
+                    "💡 *You can ask 'Show all products' to explore our complete catalog, or browse popular categories like Mobiles, Laptops, Audio, Men's Clothing, Women's Clothing, Footwear, or Electronics.*"
+                ),
                 route_type="STRUCTURED",
                 structured_data=data,
                 is_grounded=True
@@ -451,12 +520,43 @@ class ResponseSynthesizer:
             p_price = p.get('price', 0) if isinstance(p, dict) else getattr(p, 'price', 0)
             p_mrp = p.get('mrp', 0) if isinstance(p, dict) else getattr(p, 'mrp', 0)
             p_disc = p.get('discount_percentage', 0) if isinstance(p, dict) else getattr(p, 'discount_percentage', 0)
-            p_avail = p.get('availability_status') if isinstance(p, dict) else getattr(p, 'availability_status', '')
-            p_stock = p.get('stock_quantity') if isinstance(p, dict) else getattr(p, 'stock_quantity', 0)
+            p_stock = p.get('stock_quantity', 0) if isinstance(p, dict) else getattr(p, 'stock_quantity', 0)
+            p_avail_raw = p.get('availability_status') if isinstance(p, dict) else getattr(p, 'availability_status', '')
+            p_avail = "OUT_OF_STOCK" if p_stock <= 0 else (p_avail_raw or "IN_STOCK")
             p_warranty_avail = p.get('warranty_available') if isinstance(p, dict) else getattr(p, 'warranty_available', False)
             p_warranty_period = p.get('warranty_period') if isinstance(p, dict) else getattr(p, 'warranty_period', None)
             p_return_eligible = p.get('return_eligible') if isinstance(p, dict) else getattr(p, 'return_eligible', True)
             p_return_window = p.get('return_window_days') if isinstance(p, dict) else getattr(p, 'return_window_days', 7)
+
+            p_desc = p.get('description') if isinstance(p, dict) else getattr(p, 'description', '')
+            p_company = p.get('company_id') if isinstance(p, dict) else getattr(p, 'company_id', '')
+            p_seller = p.get('seller_id') if isinstance(p, dict) else getattr(p, 'seller_id', '')
+            p_cat_id = p.get('category_id') if isinstance(p, dict) else getattr(p, 'category_id', '')
+            p_cat_name = p.get('category_name') if isinstance(p, dict) else getattr(p, 'category_name', '')
+            p_replacement_eligible = p.get('replacement_eligible') if isinstance(p, dict) else getattr(p, 'replacement_eligible', False)
+            p_specs = p.get('specifications') if isinstance(p, dict) else getattr(p, 'specifications', {})
+
+            if isinstance(p_specs, str):
+                try:
+                    import json
+                    p_specs = json.loads(p_specs)
+                except Exception:
+                    p_specs = {}
+
+            # Fallback for description/company/seller if missing from dict
+            if (not p_desc or not p_company) and p_id:
+                try:
+                    from app.data_access.product_service import ProductService
+                    full_p = ProductService().get_product(p_id)
+                    if full_p:
+                        if not p_desc:
+                            p_desc = getattr(full_p, 'description', '')
+                        if not p_company:
+                            p_company = getattr(full_p, 'company_id', '')
+                        if not p_seller:
+                            p_seller = getattr(full_p, 'seller_id', '')
+                except Exception:
+                    pass
 
             q_low = query.lower()
             if "warranty" in q_low or "guarantee" in q_low:
@@ -477,13 +577,51 @@ class ResponseSynthesizer:
                     f"Brand: {p_brand} • Price: ₹{p_price:,.2f} • Availability: {p_avail}."
                 )
             else:
-                warranty_note = f"\nWarranty: {p_warranty_period}." if p_warranty_avail and p_warranty_period else ""
-                content = (
-                    f"Product: {p_name} ({p_id}) by {p_brand}.\n"
-                    f"Price: ₹{p_price:,.2f} (MRP: ₹{p_mrp:,.2f}, Discount: {p_disc}%).\n"
-                    f"Availability: {p_avail} (In Stock: {p_stock})."
-                    f"{warranty_note}"
-                )
+                lines = []
+                lines.append(f"Product: **{p_name}** (`{p_id}`) by **{p_brand}**.")
+                if p_cat_name or p_cat_id:
+                    cat_display = f"{p_cat_name} (`{p_cat_id}`)" if (p_cat_name and p_cat_id) else (p_cat_name or f"`{p_cat_id}`")
+                    lines.append(f"Category: {cat_display}")
+
+                if p_desc:
+                    lines.append("")
+                    lines.append("📝 **Overview:**")
+                    lines.append(p_desc)
+
+                lines.append("")
+                lines.append("💰 **Pricing & Availability:**")
+                disc_str = f", Discount: {p_disc}%" if p_disc > 0 else ""
+                lines.append(f"• **Price:** ₹{p_price:,.2f} (MRP: ₹{p_mrp:,.2f}{disc_str})")
+                lines.append(f"• **Availability:** {p_avail} (In Stock: {p_stock})")
+
+                if p_specs and isinstance(p_specs, dict) and len(p_specs) > 0:
+                    lines.append("")
+                    lines.append("⚙️ **Technical Specifications:**")
+                    for k, v in p_specs.items():
+                        lines.append(f"• **{k}:** {v}")
+
+                lines.append("")
+                lines.append("🛡️ **Policies & Store Details:**")
+                if p_return_eligible:
+                    repl_note = " (Replacement available)" if p_replacement_eligible else ""
+                    lines.append(f"• **Return Policy:** Eligible for return within {p_return_window} days{repl_note}")
+                else:
+                    lines.append("• **Return Policy:** Non-returnable")
+
+                if p_warranty_avail and p_warranty_period:
+                    lines.append(f"• **Warranty:** {p_warranty_period}")
+                else:
+                    lines.append("• **Warranty:** Standard manufacturer coverage")
+
+                ref_parts = []
+                if p_seller:
+                    ref_parts.append(f"Seller ID: `{p_seller}`")
+                if p_company:
+                    ref_parts.append(f"Company ID: `{p_company}`")
+                if ref_parts:
+                    lines.append(f"• **Reference IDs:** {' • '.join(ref_parts)}")
+
+                content = "\n".join(lines)
             return AIResponse(
                 content=content,
                 route_type="STRUCTURED",

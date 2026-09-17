@@ -8,9 +8,11 @@ Query parameters or body claims for customer_id are NEVER accepted or trusted.
 from typing import List, Optional, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
+from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.dependencies import get_current_user
 from app.models import User, UserRole
+from app.database import get_session
 from app.data_access.order_service import OrderService
 from app.data_access.shipment_service import ShipmentService
 from app.data_access.return_service import ReturnService
@@ -193,6 +195,88 @@ async def get_my_payments(current_user: User = Depends(get_current_user)):
             payment_date=str(p.payment_date) if p.payment_date else None,
         ) for p in payments
     ]
+
+
+# ─── Staff-Only: Fetch orders for a customer by their User UUID ───────────────
+
+class OrderSummaryWithShipment(BaseModel):
+    order_id: str
+    customer_id: str
+    status: str
+    order_date: Optional[str] = None
+    total_amount: float
+    items: List[OrderItemDetail] = []
+    shipment_status: Optional[str] = None
+    shipment_carrier: Optional[str] = None
+    estimated_delivery_date: Optional[str] = None
+    actual_delivery_date: Optional[str] = None
+    payment_status: Optional[str] = None
+
+
+@router.get("/by-customer/{user_id}", response_model=List[OrderSummaryWithShipment])
+async def get_orders_for_customer(
+    user_id: str,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    """Staff-only: Fetch all orders for a customer by their User UUID (ticket.customer_id)."""
+    if current_user.role not in (UserRole.agent, UserRole.manager, UserRole.admin):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+
+    # Resolve the user to get their business customer_id (e.g. CUST-001)
+    try:
+        import uuid as _uuid
+        uid = _uuid.UUID(user_id)
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Invalid user_id format")
+
+    target_user = await session.get(User, uid)
+    if not target_user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Customer not found")
+
+    # Use the business customer_id (e.g. CUST-001) or fall back to UUID string
+    cust_id = target_user.customer_id or str(target_user.id)
+
+    orders = order_service.get_customer_orders(cust_id)
+    result_list: List[OrderSummaryWithShipment] = []
+
+    for o in orders:
+        # Use get_order_full_details to get items with product names (returns dict list)
+        details = order_service.get_order_full_details(o.order_id)
+        items_dicts = details.get("items", []) if details else []
+        items = [
+            OrderItemDetail(
+                order_item_id=i["order_item_id"],
+                product_id=i["product_id"],
+                product_name=i.get("product_name", "Unknown"),
+                quantity=i["quantity"],
+                unit_price=float(i["unit_price"]),
+                total_price=float(i["total_price"]),
+            )
+            for i in items_dicts
+        ]
+
+        # Shipment & payment already fetched in full details
+        shipment = details.get("shipment") if details else None
+        payment = details.get("payment") if details else None
+
+        result_list.append(
+            OrderSummaryWithShipment(
+                order_id=o.order_id,
+                customer_id=o.customer_id,
+                status=o.status,
+                order_date=str(o.order_date) if o.order_date else None,
+                total_amount=float(o.total_amount) if o.total_amount is not None else 0.0,
+                items=items,
+                shipment_status=shipment.status if shipment else None,
+                shipment_carrier=shipment.carrier if shipment else None,
+                estimated_delivery_date=str(shipment.estimated_delivery_date) if shipment and shipment.estimated_delivery_date else None,
+                actual_delivery_date=str(shipment.actual_delivery_date) if shipment and shipment.actual_delivery_date else None,
+                payment_status=payment.status if payment else None,
+            )
+        )
+
+    return result_list
 
 
 @router.get("/{order_id}", response_model=OrderFullDetailResponse)

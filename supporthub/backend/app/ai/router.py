@@ -97,7 +97,12 @@ class AIRouter:
         text = normalize_query_typos(query)
 
         # 4. Check for Hybrid Queries first if explicit entity or entity context or hybrid intent is present
-        has_explicit_id = any(k in text for k in ["ord-", "prod-", "ret-", "ref-"])
+        has_explicit_id = any(k in text for k in ["ord-", "prod-", "ret-", "ref-"]) or bool(
+            intent.entities and (
+                intent.entities.get("product_id") or intent.entities.get("order_id") or
+                intent.entities.get("return_id") or intent.entities.get("refund_id")
+            )
+        )
         has_active_context_entity = bool(
             context_slots and (
                 context_slots.get("order_id") or context_slots.get("product_id") or
@@ -132,7 +137,9 @@ class AIRouter:
             is_hybrid = True
             target_tools = ["get_product"]
             rag_query = "ShopKart Warranty Policy and How to Claim Manufacturer Warranty"
-        elif intent.category == IntentCategory.PRODUCT and any(w in text for w in ["return", "fit", "modal innerwear", "password", "reset"]):
+        elif intent.category == IntentCategory.PRODUCT and any(w in text for w in ["return", "modal innerwear", "password", "reset"]) or (
+            intent.category == IntentCategory.PRODUCT and any(ph in text for ph in ["how does it fit", "does it fit", "will it fit", "size guide", "sizing"])
+        ):
             is_hybrid = True
             target_tools = ["get_product"]
             rag_query = "Product return policy and password reset guide"
@@ -203,23 +210,37 @@ class AIRouter:
             )
 
         # 6. Structured Data Cases: Specific entity status, pricing, tracking
+        has_category_or_filter = any(w in text for w in [
+            "electronic", "electronics", "mobile", "mobiles", "tablet", "tablets",
+            "phone", "phones", "laptop", "laptops", "computer", "computers", "audio",
+            "headphone", "headphones", "earbud", "earbuds", "speaker", "speakers",
+            "kitchen", "cookware", "furniture", "chair", "desk", "appliance", "appliances",
+            "clothing", "shirt", "jeans", "dress", "footwear", "shoe", "shoes",
+            "men", "mens", "women", "womens", "male", "female"
+        ])
+
         is_all_prods = any(w in text for w in [
             "all product", "all products", "catalog", "what products", "list products",
             "show products", "show me products", "products do you have", "what do you sell",
             "browse products", "show all products", "give me info of all products",
-            "all products info", "product list", "available products", "tell me all products",
-            "what can i buy", "what items do you sell"
-        ])
-        is_prod_search = any(w in text for w in [
+            "give me info of your all products", "all products info", "product list",
+            "available products", "tell me all products", "what can i buy", "what items do you sell"
+        ]) and not has_category_or_filter
+
+        has_matched_product = bool(intent.entities and intent.entities.get("product_id"))
+        is_prod_search = (has_category_or_filter or any(w in text for w in [
             "phone", "phones", "mobile", "laptop", "laptops", "headphone", "headphones",
             "tablet", "tablets", "cooktop", "induction", "keyboard", "mouse", "speaker",
-            "do you have", "do you sell", "search product", "search for"
-        ]) and intent.category == IntentCategory.PRODUCT and not has_explicit_id
+            "do you have", "do you sell", "search product", "search for", "every product",
+            "every products", "products for", "products in"
+        ])) and intent.category == IntentCategory.PRODUCT and not has_explicit_id and not has_matched_product
 
         if is_all_prods:
             product_tools = ["list_all_products"]
         elif is_prod_search:
             product_tools = ["search_products"]
+        elif has_matched_product or has_explicit_id or (intent and intent.entities.get("product_id")):
+            product_tools = ["get_product"]
         else:
             product_tools = ["get_product", "search_products"]
 

@@ -6,7 +6,7 @@
 [![Python](https://img.shields.io/badge/Python-3.12%20%7C%203.13-3776AB.svg?style=flat&logo=Python&logoColor=white)](https://www.python.org)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16+-4169E1.svg?style=flat&logo=PostgreSQL&logoColor=white)](https://www.postgresql.org)
 [![Redis](https://img.shields.io/badge/Redis-7+-DC382D.svg?style=flat&logo=Redis&logoColor=white)](https://redis.io)
-[![Tests](https://img.shields.io/badge/Tests-70%20Passing-brightgreen.svg?style=flat&logo=pytest&logoColor=white)](https://docs.pytest.org)
+[![Tests](https://img.shields.io/badge/Tests-687%20Passing-brightgreen.svg?style=flat&logo=pytest&logoColor=white)](https://docs.pytest.org)
 
 **SupportHub** is a production-grade, AI-first omnichannel customer support platform designed for modern enterprise workflows. It connects all customer touchpoints (**WhatsApp Cloud API, Instagram Direct, Facebook Messenger, Inbound/Outbound Email via Mailgun, and Website Live Chat**) into a unified, real-time agent dashboard powered by advanced multi-model AI reasoning.
 
@@ -15,9 +15,9 @@
 ## 🌟 Key Platform Features
 
 ### 1. 🤖 Advanced Multi-Model AI Orchestration
-- **Multi-Provider Adapter Engine**: Seamlessly switch or fallback between **Google Gemini (2.5 Flash / 1.5 Pro)**, **Anthropic Claude (3.5 Sonnet / 3.7)**, and **OpenAI (GPT-4o)** with zero code changes.
+- **Multi-Provider Adapter Engine**: Seamlessly switch or fallback between **Google Gemini (2.5 Flash / Flash Lite)**, **Anthropic Claude (Sonnet / Haiku)**, and **OpenAI (GPT-4o)** with zero code changes.
 - **Vision OCR & Image Reasoning**: Ingest customer screenshots, invoices, and damaged product photos directly from WhatsApp, Instagram, or Email attachments and extract relevant text and context automatically.
-- **RAG Knowledge Base**: Vector-less and semantic knowledge base retrieval that injects accurate company policies, shipping rules, and troubleshooting procedures directly into LLM prompts.
+- **RAG Knowledge Base**: Semantic knowledge base retrieval with pgvector that injects accurate company policies, shipping rules, and troubleshooting procedures directly into LLM prompts.
 - **Smart Debouncing System**: Automatically batches rapid-fire user messages within configurable debounce windows (e.g., 5 seconds) to prevent redundant AI API calls and disjointed responses.
 - **Dynamic Subject & Category Generation**: Analyzes inbound customer conversation context to generate crisp ticket subjects and classify urgency/category in real time.
 - **Automated Resolution Intent Detection**: Recognizes when customer queries are successfully answered (e.g., *"Thanks, that fixed it!"*) and initiates auto-closure flows.
@@ -82,11 +82,11 @@
 
 ## 💻 Tech Stack
 
-- **Backend**: Python 3.12 / 3.13, FastAPI, SQLModel (Async SQLAlchemy ORM), Pydantic v2, Uvicorn, AnyIO.
-- **Frontend**: React 18, Vite 6, Tailwind CSS, Lucide Icons, Zustand, React Router v6.
-- **Database & Cache**: PostgreSQL 16 (Relational Data), Redis 7 (Pub/Sub & Caching).
-- **AI & LLM Services**: Google Gemini API (`google-genai`), Anthropic Claude SDK, OpenAI SDK.
-- **Testing & Tooling**: Pytest, Pytest-Asyncio, Ruff, uv.
+- **Backend**: Python 3.12 / 3.13, FastAPI, SQLModel (Async SQLAlchemy ORM), Pydantic v2, Uvicorn, AnyIO, LangGraph.
+- **Frontend**: React 18, Vite 6, Tailwind CSS v4, Lucide Icons, Zustand, React Router v7, TanStack Query.
+- **Database & Cache**: PostgreSQL 16 + pgvector (Relational Data + Vector Search), Redis 7 (Pub/Sub & Caching, Celery broker).
+- **AI & LLM Services**: Google Gemini API (`google-generativeai`), Anthropic Claude SDK, OpenAI SDK.
+- **Testing & Tooling**: Pytest, Pytest-Asyncio, Ruff, uv (Python package manager).
 
 ---
 
@@ -103,7 +103,7 @@
 
 ### 2. Clone the Repository
 ```bash
-git clone https://github.com/<your-username>/Customer-SupportHub.git
+git clone https://github.com/heet-brainerhub/Customer-SupportHub.git
 cd Customer-SupportHub
 ```
 
@@ -118,14 +118,14 @@ cp .env.example .env
 
 Edit `supporthub/backend/.env` with your API keys:
 ```env
-# Database & Redis (matches docker-compose.yml)
+# Database & Redis (matches docker-compose.yml defaults)
 DATABASE_URL=postgresql+asyncpg://supporthub:supporthub_dev@localhost:5433/supporthub
 REDIS_URL=redis://localhost:6381/0
 SECRET_KEY=generate_with_openssl_rand_hex_32
 
-# AI Models (Gemini / Claude / OpenAI)
+# AI Models (Gemini — primary, Claude / OpenAI — optional fallback)
 GEMINI_API_KEY=your_gemini_api_key_here
-ANTHROPIC_API_KEY=your_anthropic_api_key_here
+ANTHROPIC_API_KEY=your_anthropic_api_key_here   # optional
 
 # Email Inbound / Outbound (Mailgun)
 MAILGUN_DOMAIN=your_domain.mailgun.org
@@ -136,7 +136,7 @@ META_APP_ID=your_meta_app_id
 META_APP_SECRET=your_meta_app_secret
 META_VERIFY_TOKEN=your_webhook_verification_token
 WHATSAPP_PHONE_ID=your_whatsapp_phone_id
-WHATSAPP_ACCESS_TOKEN=your_whatsapp_token
+PAGE_ACCESS_TOKEN=your_page_access_token
 ```
 
 ---
@@ -144,7 +144,7 @@ WHATSAPP_ACCESS_TOKEN=your_whatsapp_token
 ### 4. Start Infrastructure (Postgres & Redis)
 ```bash
 cd supporthub
-docker compose up -d
+docker compose up -d db redis
 ```
 
 Verify containers are running:
@@ -155,14 +155,19 @@ docker ps
 
 ---
 
-### 5. Seed Database with Demo Data
-To immediately restore complete demo data (including users, tickets across all channels, KB articles, and CSAT surveys):
+### 5. Restore Database with Demo Data
+Instantly load all users, tickets, KB articles, orders, and settings:
 ```bash
-# From the root directory:
+# From the project root:
+./scripts/restore_db.sh
+```
+
+Or manually:
+```bash
 cat supporthub_dump.sql | docker exec -i supporthub_db psql -U supporthub -d supporthub
 ```
 
-Alternatively, to run a fresh programmatic seed:
+Alternatively, run a fresh programmatic seed:
 ```bash
 cd supporthub/backend
 uv run python clean_and_seed.py
@@ -179,7 +184,7 @@ Open **3 terminal windows**:
 cd supporthub/backend
 uv run uvicorn app.main:app --reload --port 8000
 ```
-*API Swagger documentation available at: `http://localhost:8000/docs`*
+*API Swagger docs: `http://localhost:8000/api/docs`*
 
 #### Terminal 2 — React Frontend
 ```bash
@@ -187,7 +192,7 @@ cd supporthub/frontend
 npm install
 npm run dev
 ```
-*App UI available at: `http://localhost:5173`*
+*App UI: `http://localhost:5173`*
 
 #### Terminal 3 — ngrok Webhook Tunnel
 ```bash
@@ -199,7 +204,7 @@ ngrok http 8000
 
 ## 🔑 Default Login Credentials
 
-All seeded demo accounts use the standard password: `Password123!`
+All seeded demo accounts use the password: `Password123!`
 
 | Role | Email | Permissions / Features |
 |---|---|---|
@@ -212,30 +217,41 @@ All seeded demo accounts use the standard password: `Password123!`
 
 ## 🧪 Testing & Quality Assurance
 
-The project includes an enterprise-grade automated test suite with **70 tests** covering parser logic, AI orchestration, webhook idempotency, rate limiting, and WebSocket events:
+The project includes a comprehensive automated test suite with **687 tests** covering AI orchestration, parser logic, webhook idempotency, rate limiting, customer journey flows, security hardening, WebSocket events, and end-to-end conversation lifecycles:
 
 ```bash
 cd supporthub/backend
 uv run pytest
 ```
 
-Output:
-```text
-============================== test session starts ===============================
-collected 70 items
+Key test modules:
 
-tests/test_ai_orchestrator.py ...                                          [  4%]
-tests/test_automations.py ..........                                       [ 18%]
-tests/test_conversations.py .......                                        [ 28%]
-tests/test_instagram_ai.py .........                                       [ 41%]
-tests/test_instagram_client.py ............                                [ 58%]
-tests/test_instagram_webhook.py ...........                                [ 74%]
-tests/test_messenger_webhook.py ...                                        [ 78%]
-tests/test_websocket.py ......                                             [ 87%]
-tests/test_whatsapp_outbound.py .....                                      [ 94%]
-tests/test_whatsapp_parser.py ..........                                   [100%]
-
-======================= 70 passed, 50 warnings in 6.13s ==========================
+```
+tests/
+├── ai/
+│   ├── test_catalog_and_category_search.py    # Product search & catalog AI
+│   ├── test_escalation.py                     # AI escalation logic
+│   └── test_resolution_intent.py              # Resolution intent detection
+├── phase13/                                   # Phase 13 feature tests
+├── test_ai_orchestrator.py                    # Multi-model orchestration
+├── test_automations.py                        # Workflow automation rules
+├── test_conversations.py                      # Ticket matching & dedup
+├── test_copilot_hitl.py                       # Human-in-the-loop AI co-pilot
+├── test_instagram_ai.py                       # Instagram AI handling
+├── test_instagram_client.py                   # Instagram Graph API client
+├── test_instagram_webhook.py                  # Instagram webhook processing
+├── test_live_chat_ai_e2e.py                   # Live chat AI end-to-end
+├── test_messenger_webhook.py                  # Facebook Messenger webhook
+├── test_phase12_6_remediation.py              # Phase 12 security remediation
+├── test_phase12_security.py                   # Security & auth hardening
+├── test_phase15_1_hardening.py               # Platform hardening tests
+├── test_phase15_2_customer_journey.py         # Full customer journey e2e
+├── test_phase15_3_profile_orders.py           # Profile & order management
+├── test_phase15_4_customer_account_transactions.py  # Transactions e2e
+├── test_phase15_5_support_conversation_lifecycle.py # Support lifecycle e2e
+├── test_websocket.py                          # WebSocket connection manager
+├── test_whatsapp_outbound.py                  # WhatsApp outbound messaging
+└── test_whatsapp_parser.py                    # WhatsApp message parser
 ```
 
 To build and validate the frontend production bundle:
@@ -256,7 +272,7 @@ Configure the following endpoints on your external provider dashboards:
 | **Instagram Messaging**| `/api/v1/webhooks/instagram`| Inbound Instagram Direct Messages & story replies |
 | **Facebook Messenger** | `/api/v1/webhooks/messenger`| Inbound Facebook Page messages |
 | **Mailgun Inbound**    | `/api/v1/webhooks/email`    | Inbound customer emails and thread replies |
-| **Live Chat WebSocket**| `/api/v1/ws/chat/{ticket_id}`| Real-time bi-directional agent/customer live chat |
+| **Live Chat WebSocket**| `/ws/chat/{ticket_id}`      | Real-time bi-directional agent/customer live chat |
 
 ---
 
@@ -265,19 +281,34 @@ Configure the following endpoints on your external provider dashboards:
 ```
 Customer-SupportHub/
 ├── supporthub/
-│   ├── docker-compose.yml              # PostgreSQL and Redis containers
+│   ├── docker-compose.yml              # PostgreSQL, Redis, Nginx containers
+│   ├── nginx.conf                      # Nginx reverse proxy config
 │   ├── backend/
 │   │   ├── pyproject.toml              # Python dependencies & pytest configuration
-│   │   ├── clean_and_seed.py           # Database purge & robust seed script
-│   │   ├── restore_real_data.py        # Real sample customer dataset restore script
-│   │   ├── tests/                      # Consolidated Pytest Suite (70 tests)
+│   │   ├── alembic/                    # Database migration scripts
+│   │   ├── clean_and_seed.py           # Database purge & full seed script
+│   │   ├── restore_real_data.py        # Real sample customer dataset restore
+│   │   ├── restore_seed_customers.py   # Customer seed script
+│   │   ├── seed_admin.py               # Admin user seeder
+│   │   ├── tests/                      # Pytest suite (687 tests)
+│   │   │   ├── ai/                     # AI-specific tests
+│   │   │   ├── phase13/                # Phase 13 feature tests
 │   │   │   ├── test_ai_orchestrator.py
 │   │   │   ├── test_automations.py
 │   │   │   ├── test_conversations.py
+│   │   │   ├── test_copilot_hitl.py
 │   │   │   ├── test_instagram_ai.py
 │   │   │   ├── test_instagram_client.py
 │   │   │   ├── test_instagram_webhook.py
+│   │   │   ├── test_live_chat_ai_e2e.py
 │   │   │   ├── test_messenger_webhook.py
+│   │   │   ├── test_phase12_6_remediation.py
+│   │   │   ├── test_phase12_security.py
+│   │   │   ├── test_phase15_1_hardening.py
+│   │   │   ├── test_phase15_2_customer_journey.py
+│   │   │   ├── test_phase15_3_profile_orders.py
+│   │   │   ├── test_phase15_4_customer_account_transactions.py
+│   │   │   ├── test_phase15_5_support_conversation_lifecycle.py
 │   │   │   ├── test_websocket.py
 │   │   │   ├── test_whatsapp_outbound.py
 │   │   │   └── test_whatsapp_parser.py
@@ -285,17 +316,18 @@ Customer-SupportHub/
 │   │       ├── main.py                 # FastAPI application entrypoint
 │   │       ├── config.py               # Pydantic v2 application settings
 │   │       ├── database.py             # Async database session & engine
+│   │       ├── ai/                     # LangGraph AI orchestration
 │   │       ├── models/                 # SQLModel database schemas
 │   │       ├── routers/                # REST & Webhook endpoints
 │   │       ├── services/               # Core business services
 │   │       │   ├── ai/                 # Multi-model orchestrator & prompt engine
-│   │       │   ├── automations/        # Workflow rules evaluation engine
 │   │       │   ├── channels/           # Inbound message models & media handlers
 │   │       │   ├── conversations/      # Ticket matching & deduplication service
 │   │       │   ├── csat_delivery.py    # Multi-channel CSAT survey delivery
 │   │       │   ├── facebook/           # Meta Messenger client & handlers
 │   │       │   ├── instagram/          # Instagram Graph API client & handlers
 │   │       │   └── whatsapp/           # Meta WhatsApp Cloud API client & senders
+│   │       ├── rag/                    # RAG retrieval pipeline
 │   │       └── ws/                     # WebSocket connection manager
 │   └── frontend/
 │       ├── package.json                # Frontend dependencies & scripts
@@ -306,9 +338,26 @@ Customer-SupportHub/
 │           ├── pages/                  # Admin, Manager, Agent & Customer views
 │           ├── store/                  # Zustand authentication & state store
 │           └── utils/                  # Date & string utility formatters
-├── supporthub_dump.sql                 # Complete database backup for instant restore
+├── scripts/
+│   ├── dump_db.sh                      # Export current DB to supporthub_dump.sql
+│   └── restore_db.sh                   # Restore DB from supporthub_dump.sql
+├── supporthub_dump.sql                 # Complete database snapshot (clean demo data)
 ├── SETUP_NEW_MACHINE.md                # 10-minute setup guide for fresh machines
-└── README.md                           # Main project documentation
+└── README.md                           # This file
+```
+
+---
+
+## 🔄 Updating the Database Dump
+
+Whenever you change database records and want to commit the updated state:
+
+```bash
+# From the project root
+./scripts/dump_db.sh
+git add supporthub_dump.sql
+git commit -m "chore: update database dump"
+git push origin main
 ```
 
 ---

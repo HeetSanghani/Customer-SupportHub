@@ -4,6 +4,22 @@ from pathlib import Path
 from dataclasses import dataclass, field
 
 
+
+
+def _default_dataset_path() -> str:
+    """Compute the dataset path fallback safely for both local and Docker environments."""
+    _this = Path(__file__).resolve()
+    # Try progressively shallower parent levels (local dev has deeper nesting)
+    for level in (5, 4, 3):
+        try:
+            candidate = _this.parents[level] / "supporthub-data-generator" / "output"
+            return str(candidate)
+        except IndexError:
+            continue
+    # Final fallback: sibling of /app inside container
+    return "/app/data/output"
+
+
 @dataclass
 class Settings:
     """System settings for data access, RAG pipeline, and AI orchestration."""
@@ -13,7 +29,7 @@ class Settings:
     
     # Dataset path (configurable via DATASET_PATH env variable)
     DATASET_PATH: Path = field(default_factory=lambda: Path(
-        os.getenv("DATASET_PATH", str(Path(__file__).resolve().parents[5] / "supporthub-data-generator" / "output"))
+        os.getenv("DATASET_PATH", _default_dataset_path())
     ))
     
     # RAG Settings
@@ -44,12 +60,14 @@ class Settings:
         """Resolve dataset directory and verify existence."""
         path = self.DATASET_PATH
         if not path.exists():
-            p1 = Path(__file__).resolve().parents[3] / "output"
-            p2 = Path(__file__).resolve().parents[4] / "output"
-            if p1.exists():
-                return p1
-            if p2.exists():
-                return p2
+            _this = Path(__file__).resolve()
+            for _level in (3, 4):
+                try:
+                    _candidate = _this.parents[_level] / "output"
+                    if _candidate.exists():
+                        return _candidate
+                except IndexError:
+                    continue
         if not path.is_absolute():
             path = (self.BASE_DIR / path).resolve()
         return path

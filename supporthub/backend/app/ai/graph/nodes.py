@@ -408,6 +408,60 @@ def _handle_hybrid_route(route_decision: RouteDecision, query: str, state: Graph
         )
 
 
+def _extract_product_search_term(query: str) -> str:
+    q_clean = query.lower()
+    q_clean_alpha = " ".join(re.sub(r"[^\w\s]", " ", q_clean).split())
+
+    known_categories = [
+        ("mobiles & tablets", ["mobiles and tablets", "mobiles & tablets", "mobile & tablet", "mobile and tablet", "mobiles", "mobile", "tablets", "tablet", "smartphones", "smartphone", "phones", "phone"]),
+        ("laptops & computers", ["laptops and computers", "laptops & computers", "laptop & computer", "laptop and computer", "laptops", "laptop", "computers", "computer"]),
+        ("audio & headphones", ["audio and headphones", "audio & headphones", "audio", "headphones", "headphone", "earbuds", "earbud", "earphones", "earphone", "speakers", "speaker"]),
+        ("kitchen & dining", ["kitchen and dining", "kitchen & dining", "kitchen", "dining"]),
+        ("home furniture", ["home furniture", "furniture"]),
+        ("home appliances", ["home appliances", "appliances", "appliance"]),
+        ("mens clothing", [
+            "men's clothing", "mens clothing", "men clothing",
+            "gifting for men", "gifts for men", "gift for men", "products for men",
+            "for men", "for mens", "for him", "men's", "mens", "men", "male"
+        ]),
+        ("womens clothing", [
+            "women's clothing", "womens clothing", "women clothing",
+            "gifting for women", "gifts for women", "gift for women", "products for women",
+            "for women", "for womens", "for her", "women's", "womens", "women",
+            "female", "ladies"
+        ]),
+        ("footwear", ["footwear", "footwears", "shoes", "shoe", "sandals"]),
+        ("electronics", ["electronics", "electronic"]),
+        ("home & kitchen", ["home and kitchen", "home & kitchen"]),
+        ("fashion & lifestyle", ["fashion and lifestyle", "fashion & lifestyle", "fashion", "lifestyle"]),
+    ]
+
+    for cat_name, aliases in known_categories:
+        for alias in aliases:
+            if re.search(r"\b" + re.escape(alias) + r"\b", q_clean_alpha):
+                if cat_name == "mens clothing":
+                    return "men"
+                if cat_name == "womens clothing":
+                    return "women"
+                return alias
+
+    term = q_clean_alpha
+    for stopw in [
+        "do you have", "do you sell", "do you offer", "what kind of", "show me",
+        "tell me about", "tell me", "give me info of", "give me info on", "give me info",
+        "give me", "i want", "can i buy", "can i see", "search for", "search",
+        "gifting for", "gifts for", "gift for", "gifting", "gifts", "gift", "ideas for",
+        "info of", "info on", "information of", "information on", "details of",
+        "details on", "information", "info", "details", "detail", "every", "all of", "all",
+        "what", "are", "available", "products", "product", "items", "item", "in our store",
+        "in your store", "in the store", "in store", "for sale", "for", "in", "at", "the",
+        "a", "an", "your", "our", "category", "categories", "of", "about"
+    ]:
+        term = re.sub(r"\b" + re.escape(stopw) + r"\b", " ", term)
+    term = " ".join(term.split()).strip()
+    return term or q_clean.strip()
+
+
 def _execute_tools(decision: RouteDecision, state: GraphState, ctx: Any) -> Dict[str, Any]:
     data = {}
     ent = decision.intent.entities if decision.intent else {}
@@ -430,13 +484,22 @@ def _execute_tools(decision: RouteDecision, state: GraphState, ctx: Any) -> Dict
         )
     )
 
+    has_category_filter = any(w in q_lower for w in [
+        "electronic", "electronics", "mobile", "mobiles", "tablet", "tablets",
+        "phone", "phones", "laptop", "laptops", "computer", "computers", "audio",
+        "headphone", "headphones", "earbud", "earbuds", "speaker", "speakers",
+        "kitchen", "cookware", "furniture", "chair", "desk", "appliance", "appliances",
+        "clothing", "shirt", "jeans", "dress", "footwear", "shoe", "shoes",
+        "men", "mens", "women", "womens", "male", "female"
+    ])
+
     is_all_products_query = any(w in q_lower for w in [
         "all product", "all products", "catalog", "what products", "list products",
         "show products", "show me products", "products do you have", "what do you sell",
         "browse products", "show all products", "give me info of all products",
-        "all products info", "product list", "available products", "tell me all products",
-        "what can i buy", "what items do you sell"
-    ])
+        "give me info of your all products", "all products info", "product list",
+        "available products", "tell me all products", "what can i buy", "what items do you sell"
+    ]) and not has_category_filter
 
     if is_all_orders_query:
         order_id = None
@@ -462,8 +525,8 @@ def _execute_tools(decision: RouteDecision, state: GraphState, ctx: Any) -> Dict
                         o_dict["shipment"] = tool_registry.get_shipment_by_order(oid)
                         o_dict["items"] = tool_registry.get_order_items(oid)
                         detailed_orders.append(o_dict)
-                data["customer_orders_detailed"] = detailed_orders
-                data["customer_orders"] = c_orders
+                    data["customer_orders_detailed"] = detailed_orders
+                    data["customer_orders"] = c_orders
         except Exception:
             pass
 
@@ -472,27 +535,56 @@ def _execute_tools(decision: RouteDecision, state: GraphState, ctx: Any) -> Dict
             if tool == "list_all_products" or (is_all_products_query and tool == "get_product"):
                 data["catalog_products"] = tool_registry.list_all_products()
             elif tool == "search_products":
-                search_term = re.sub(r'[^\w\s]', '', q_lower)
-                for stopw in [
-                    "do you have", "do you sell", "do you offer", "what kind of", "show me",
-                    "what", "are", "available", "products", "search for", "search", "can i buy",
-                    "tell me about", "product", "items", "item", "any", "the"
-                ]:
-                    search_term = search_term.replace(stopw, "").strip()
-                matches = tool_registry.search_products(search_term or q_lower)
+                if data.get("product"):
+                    continue
+                if product_id:
+                    full_p = tool_registry.get_product(product_id)
+                    if full_p:
+                        data["product"] = full_p
+                        if ctx:
+                            ctx.active_product_id = product_id
+                        continue
+
+                search_term = _extract_product_search_term(q_lower)
+                matches = tool_registry.search_products(search_term, limit=40)
                 if not matches and search_term.endswith("s"):
-                    matches = tool_registry.search_products(search_term[:-1])
+                    matches = tool_registry.search_products(search_term[:-1], limit=40)
                 if not matches:
-                    words = [w for w in re.sub(r'[^\w\s]', '', q_lower).split() if len(w) > 3 and w not in (
-                        "what", "kind", "have", "sell", "offer", "show", "tell", "about", "your", "store", "shop"
-                    )]
+                    stopwords_fallback = {
+                        "what", "kind", "have", "sell", "offer", "show", "tell", "about",
+                        "your", "store", "shop", "every", "products", "product", "items",
+                        "item", "give", "info", "with", "from", "that", "this", "help",
+                        "need", "want", "more", "some", "like", "also", "please", "could",
+                        "would", "category", "categories", "many", "much", "good", "best"
+                    }
+                    words = [w for w in re.sub(r'[^\w\s]', '', q_lower).split() if len(w) > 3 and w not in stopwords_fallback]
                     for w in words:
-                        matches = tool_registry.search_products(w)
+                        matches = tool_registry.search_products(w, limit=40)
                         if not matches and w.endswith("s"):
-                            matches = tool_registry.search_products(w[:-1])
+                            matches = tool_registry.search_products(w[:-1], limit=40)
                         if matches:
                             break
-                data["search_products"] = matches
+                if matches:
+                    is_info_query = any(k in q_lower for k in ["info", "tell me about", "details", "detail", "about", "specs", "specification", "specifications", "price", "warranty", "return", "cost", "feature"])
+                    is_category_browsing = any(k in q_lower for k in ["show all", "list", "browse", "every product", "products in", "products for", "category", "categories"])
+                    if len(matches) == 1 or (is_info_query and not is_category_browsing):
+                        best_match = matches[0]
+                        if len(matches) > 1 and search_term:
+                            best_match = next((m for m in matches if search_term == m["name"].lower() or search_term in m["name"].lower()), None)
+                            if not best_match:
+                                best_match = next((m for m in matches if m["name"].lower() in search_term), matches[0])
+                        target_pid = best_match["product_id"]
+                        full_p = tool_registry.get_product(target_pid)
+                        if full_p:
+                            data["product"] = full_p
+                            if ctx:
+                                ctx.active_product_id = target_pid
+                        else:
+                            data["search_products"] = matches
+                    else:
+                        data["search_products"] = matches
+                else:
+                    data["search_products"] = []
             elif tool == "get_order":
                 if order_id:
                     data["order"] = tool_registry.get_order(order_id, customer_id=customer_id)
@@ -538,28 +630,44 @@ def _execute_tools(decision: RouteDecision, state: GraphState, ctx: Any) -> Dict
                 elif is_all_products_query:
                     data["catalog_products"] = tool_registry.list_all_products()
                 else:
-                    search_term = re.sub(r'[^\w\s]', '', q_lower)
-                    for stopw in [
-                        "do you have", "do you sell", "do you offer", "what kind of", "show me",
-                        "what", "are", "available", "products", "search for", "search", "can i buy",
-                        "tell me about", "product", "items", "item", "any", "the"
-                    ]:
-                        search_term = search_term.replace(stopw, "").strip()
-                    matches = tool_registry.search_products(search_term or q_lower)
+                    search_term = _extract_product_search_term(q_lower)
+                    matches = tool_registry.search_products(search_term, limit=40)
                     if not matches and search_term.endswith("s"):
-                        matches = tool_registry.search_products(search_term[:-1])
+                        matches = tool_registry.search_products(search_term[:-1], limit=40)
                     if not matches:
-                        words = [w for w in re.sub(r'[^\w\s]', '', q_lower).split() if len(w) > 3 and w not in (
-                            "what", "kind", "have", "sell", "offer", "show", "tell", "about", "your", "store", "shop"
-                        )]
+                        stopwords_fallback = {
+                            "what", "kind", "have", "sell", "offer", "show", "tell", "about",
+                            "your", "store", "shop", "every", "products", "product", "items",
+                            "item", "give", "info", "with", "from", "that", "this", "help",
+                            "need", "want", "more", "some", "like", "also", "please", "could",
+                            "would", "category", "categories", "many", "much", "good", "best"
+                        }
+                        words = [w for w in re.sub(r'[^\w\s]', '', q_lower).split() if len(w) > 3 and w not in stopwords_fallback]
                         for w in words:
-                            matches = tool_registry.search_products(w)
+                            matches = tool_registry.search_products(w, limit=40)
                             if not matches and w.endswith("s"):
-                                matches = tool_registry.search_products(w[:-1])
+                                matches = tool_registry.search_products(w[:-1], limit=40)
                             if matches:
                                 break
                     if matches:
-                        data["search_products"] = matches
+                        is_info_query = any(k in q_lower for k in ["info", "tell me about", "details", "detail", "about", "specs", "specification", "specifications", "price", "warranty", "return", "cost", "feature"])
+                        is_category_browsing = any(k in q_lower for k in ["show all", "list", "browse", "every product", "products in", "products for", "category", "categories"])
+                        if len(matches) == 1 or (is_info_query and not is_category_browsing):
+                            best_match = matches[0]
+                            if len(matches) > 1 and search_term:
+                                best_match = next((m for m in matches if search_term == m["name"].lower() or search_term in m["name"].lower() or m["name"].lower() in search_term), matches[0])
+                            target_pid = best_match["product_id"]
+                            full_p = tool_registry.get_product(target_pid)
+                            if full_p:
+                                data["product"] = full_p
+                                if ctx:
+                                    ctx.active_product_id = target_pid
+                            else:
+                                data["search_products"] = matches
+                        else:
+                            data["search_products"] = matches
+                    else:
+                        data["search_products"] = []
             elif tool == "get_seller" and seller_id:
                 data["seller"] = tool_registry.get_seller(seller_id)
             elif tool == "get_seller" and product_id and not seller_id:

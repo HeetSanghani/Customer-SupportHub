@@ -61,6 +61,82 @@ class TestCatalogAndCategorySearch:
         assert "Shipment SHIP-001" not in resp.content
         assert "PROD-" in resp.content
 
+    def test_catalog_overview_no_truncation_and_out_of_stock(self):
+        """CATALOG-03: 'give me info of your all products!' displays all items without truncation and shows OUT_OF_STOCK for 0-stock items."""
+        orch = make_orch()
+        resp = orch.process_message(
+            "give me info of your all products!",
+            customer_id="CUST-001",
+            conversation_id=uuid.uuid4().hex
+        )
+        assert resp.route_type == "STRUCTURED"
+        # Zero-stock items must show OUT_OF_STOCK, not IN_STOCK (0 in stock)
+        assert "IN_STOCK (0 in stock)" not in resp.content
+        assert "*OUT_OF_STOCK* (0 in stock)" in resp.content
+        # No artificial truncation
+        assert "...and" not in resp.content
+        assert "more items in" not in resp.content
+
+    def test_category_search_every_products_for_electronics(self):
+        """SEARCH-03: 'tell me every products for Electronics' returns Electronics products, not flip-flops."""
+        orch = make_orch()
+        resp = orch.process_message(
+            "tell me every products for Electronics",
+            customer_id="CUST-001",
+            conversation_id=uuid.uuid4().hex
+        )
+        assert resp.route_type == "STRUCTURED"
+        # Must include electronics products
+        assert any(k in resp.content for k in ["NovaPhone", "ZenBook", "SoundWave", "BeardMaster", "PROD-001", "PROD-005", "PROD-031"])
+        # Must NOT match flip-flop slides or unrelated clothing items via naive 'every' substring match
+        assert "CloudSlide" not in resp.content
+        assert "PROD-030" not in resp.content
+        assert "Flip-Flop" not in resp.content
+        # Zero-stock items in category show OUT_OF_STOCK
+        assert "IN_STOCK (0 available)" not in resp.content
+        if "PROD-003" in resp.content:
+            assert "*OUT_OF_STOCK* (0 available)" in resp.content
+
+    def test_category_search_all_products_in_electronics(self):
+        """SEARCH-04: 'show me all products in Electronics' routes to category search rather than full store dump."""
+        orch = make_orch()
+        resp = orch.process_message(
+            "show me all products in Electronics",
+            customer_id="CUST-001",
+            conversation_id=uuid.uuid4().hex
+        )
+        assert resp.route_type == "STRUCTURED"
+        assert any(k in resp.content for k in ["NovaPhone", "ZenBook", "SoundWave", "PROD-001"])
+        # Should not include footwear or furniture
+        assert "PROD-030" not in resp.content
+        assert "CloudSlide" not in resp.content
+
+    def test_category_search_gifting_for_men(self):
+        """SEARCH-05: 'tell me every products for gifting for men' returns Men's clothing and grooming products."""
+        orch = make_orch()
+        resp = orch.process_message(
+            "tell me every products for gifting for men",
+            customer_id="CUST-001",
+            conversation_id=uuid.uuid4().hex
+        )
+        assert resp.route_type == "STRUCTURED"
+        # Must return Men's clothing and/or BeardMaster Trimmer
+        assert any(k in resp.content for k in ["Oxford Shirt", "Denim Jeans", "Crewneck T-Shirt", "Boxer Briefs", "BeardMaster", "PROD-021", "PROD-031"])
+        # Must not say 'unable to locate requested record'
+        assert "unable to locate" not in resp.content.lower()
+
+    def test_category_search_empty_fallback(self):
+        """SEARCH-06: Unmatched product search returns a helpful store message instead of record-not-found error."""
+        orch = make_orch()
+        resp = orch.process_message(
+            "tell me every products for completelyrandomnonexistentxyz",
+            customer_id="CUST-001",
+            conversation_id=uuid.uuid4().hex
+        )
+        assert resp.route_type == "STRUCTURED"
+        assert "couldn't find any products" in resp.content.lower() or "not find" in resp.content.lower()
+        assert "unable to locate the requested record" not in resp.content.lower()
+
     def test_category_search_headphones(self):
         """SEARCH-01: 'Do you have headphones?' finds headphone products."""
         orch = make_orch()
