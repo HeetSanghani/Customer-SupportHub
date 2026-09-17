@@ -493,12 +493,14 @@ def _execute_tools(decision: RouteDecision, state: GraphState, ctx: Any) -> Dict
         "men", "mens", "women", "womens", "male", "female"
     ])
 
+    has_targeted_filter = has_category_filter or any(p in q_lower for p in [" for ", " in ", " under ", " with ", " called ", " named "])
+
     q_words = set(re.sub(r'[^\w\s]', ' ', q_lower).split())
     has_product_word = bool(q_words & {"product", "products", "item", "items", "catalog"})
     has_all_or_info = bool(q_words & {"all", "every", "info", "information", "details", "list", "show", "browse", "catalog", "sell", "have", "offer"})
 
     is_all_products_query = (
-        (has_product_word and has_all_or_info and not has_category_filter) or
+        (has_product_word and has_all_or_info and not has_targeted_filter) or
         any(w in q_lower for w in [
             "all product", "all products", "catalog", "what products", "list products",
             "show products", "show me products", "products do you have", "what do you sell",
@@ -508,7 +510,7 @@ def _execute_tools(decision: RouteDecision, state: GraphState, ctx: Any) -> Dict
             "all info of your products", "all info of products", "info of your products", "info of products",
             "your products", "info about products"
         ])
-    ) and not has_category_filter
+    ) and not has_targeted_filter
 
     if is_all_orders_query:
         order_id = None

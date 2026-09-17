@@ -62,7 +62,8 @@ class PostgresDictCursor:
                     self.last_result = future.result(timeout=10)
             else:
                 self.last_result = asyncio.run(_run())
-        except Exception:
+        except Exception as exc:
+            logger.error("[PostgresDictCursor] Execution failed for query '%s': %s", pg_query, exc)
             self.last_result = None
 
     def fetchone(self) -> Optional[Dict[str, Any]]:
@@ -75,13 +76,37 @@ class PostgresDictCursor:
 class PostgresBusinessDB:
     """Connection manager for the supporthub PostgreSQL database."""
 
-    def __init__(self):
+    def __init__(self, dsn: Optional[str] = None):
+        self._dsn = dsn
+
+    @property
+    def dsn(self) -> str:
+        if self._dsn:
+            return self._clean_dsn(self._dsn)
+
+        # 1. Primary: read DATABASE_URL from environment (Render / Docker / Heroku)
+        raw_db_url = os.getenv("DATABASE_URL")
+        if raw_db_url:
+            return self._clean_dsn(raw_db_url)
+
+        # 2. Fallback: decomposed POSTGRES_* environment variables
         host = os.getenv("POSTGRES_HOST", "127.0.0.1")
         port = os.getenv("POSTGRES_PORT", "5433")
         user = os.getenv("POSTGRES_USER", "supporthub")
         password = os.getenv("POSTGRES_PASSWORD", "supporthub_dev")
         db_name = os.getenv("POSTGRES_DB", "supporthub")
-        self.dsn = f"postgresql://{user}:{password}@{host}:{port}/{db_name}"
+        return f"postgresql://{user}:{password}@{host}:{port}/{db_name}"
+
+    @staticmethod
+    def _clean_dsn(url: str) -> str:
+        clean = url.strip()
+        if clean.startswith("postgres://"):
+            clean = "postgresql://" + clean[len("postgres://"):]
+        elif clean.startswith("postgresql+asyncpg://"):
+            clean = "postgresql://" + clean[len("postgresql+asyncpg://"):]
+        elif clean.startswith("postgresql+psycopg2://"):
+            clean = "postgresql://" + clean[len("postgresql+psycopg2://"):]
+        return clean
 
     @contextmanager
     def cursor(self) -> Generator[PostgresDictCursor, None, None]:
