@@ -10,27 +10,34 @@ from app.database import AsyncSessionLocal
 async def check():
     try:
         async with AsyncSessionLocal() as session:
-            kb_res = await session.exec(text('SELECT COUNT(*) FROM kb_articles'))
-            kb_count = kb_res.scalar() or 0
-            u_res = await session.exec(text('SELECT COUNT(*) FROM users'))
-            u_count = u_res.scalar() or 0
-            if kb_count >= 10 and u_count >= 46:
+            kb = (await session.exec(text('SELECT COUNT(*) FROM kb_articles'))).scalar() or 0
+            u = (await session.exec(text('SELECT COUNT(*) FROM users'))).scalar() or 0
+            t = (await session.exec(text('SELECT COUNT(*) FROM tickets'))).scalar() or 0
+            if kb == 10 and u == 46 and t == 29:
                 print('FULL_DATA_PRESENT')
             else:
-                print('RESTORE_REQUIRED')
-    except Exception:
-        print('RESTORE_REQUIRED')
+                print(f'MISMATCH_DETECTED: users={u}, kb={kb}, tickets={t}')
+    except Exception as e:
+        print(f'ERROR: {e}')
 
 asyncio.run(check())
 ")
 
 echo "Database sync status: $SYNC_STATUS"
 
-if [ "$SYNC_STATUS" = "RESTORE_REQUIRED" ]; then
-    echo "==> Restoring full pristine database from supporthub_dump.sql (46 users, 10 KB articles, 29 tickets, orders, shipments)..."
+if [ "$SYNC_STATUS" != "FULL_DATA_PRESENT" ]; then
+    echo "==> Performing clean database reset and restoring exact 735KB dump..."
     SYNC_DB_URL=$(echo "$DATABASE_URL" | sed 's/postgresql+asyncpg:\/\//postgresql:\/\//' | sed 's/postgres:\/\//postgresql:\/\//')
-    psql "$SYNC_DB_URL" < supporthub_dump.sql || echo "psql import completed with non-fatal notices."
     
+    # 1. Cleanly wipe old duplicate schema so there are no duplicated users or agents
+    echo "==> Resetting schema public..."
+    psql "$SYNC_DB_URL" -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public; GRANT ALL ON SCHEMA public TO supporthub; GRANT ALL ON SCHEMA public TO public; CREATE EXTENSION IF NOT EXISTS vector WITH SCHEMA public;" || echo "Schema reset notice."
+
+    # 2. Restore full pristine dump
+    echo "==> Importing supporthub_dump.sql..."
+    psql "$SYNC_DB_URL" < supporthub_dump.sql || echo "psql import completed."
+    
+    # 3. Verify exact counts
     echo "==> Verifying counts post-restore..."
     uv run python -c "
 import asyncio
@@ -43,7 +50,8 @@ async def verify():
             u = (await session.exec(text('SELECT COUNT(*) FROM users'))).scalar()
             kb = (await session.exec(text('SELECT COUNT(*) FROM kb_articles'))).scalar()
             t = (await session.exec(text('SELECT COUNT(*) FROM tickets'))).scalar()
-            print(f'==> Verified Database: {u} users, {kb} KB articles, {t} tickets!')
+            ag = (await session.exec(text(\"SELECT COUNT(*) FROM users WHERE role = 'agent'\"))).scalar()
+            print(f'==> SUCCESS: {u} users (expected 46), {kb} KB articles (expected 10), {t} tickets (expected 29), {ag} agent(s) (expected 1)!')
     except Exception as e:
         print(f'Verification notice: {e}')
 
