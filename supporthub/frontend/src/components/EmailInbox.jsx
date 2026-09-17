@@ -4,6 +4,7 @@ import { ticketsApi } from '../api/tickets'
 import { useAuthStore } from '../store/authStore'
 import client from '../api/client'
 import { formatDateTime, formatTime, formatSmartTime } from '../utils/dateUtils'
+import { buildTicketWsUrl } from '../utils/wsUrl'
 import { 
   Mail, Search, Filter, Bot, User, Send, Paperclip, 
   Sparkles, Check, CheckCheck, AlertCircle, Clock, Zap, 
@@ -338,9 +339,7 @@ export default function EmailInbox({ basePath = '/agent' }) {
   // 3. WebSocket Real-time Connection
   useEffect(() => {
     if (!selectedTicketId || !token) return
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const host = window.location.host
-    const wsUrl = `${protocol}//${host}/ws/chat/${selectedTicketId}?token=${token}`
+    const wsUrl = buildTicketWsUrl(selectedTicketId, token)
     const socket = new WebSocket(wsUrl)
 
     socket.onmessage = (event) => {

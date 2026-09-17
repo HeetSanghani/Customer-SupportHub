@@ -1,10 +1,15 @@
 import axios from 'axios'
 import { useAuthStore } from '../store/authStore'
 
+const API_BASE = import.meta.env.VITE_API_URL
+  ? `${import.meta.env.VITE_API_URL}/api/v1`
+  : '/api/v1'
+
 const client = axios.create({
-  baseURL: '/api/v1',
+  baseURL: API_BASE,
   headers: { 'Content-Type': 'application/json' },
 })
+
 
 // Attach JWT Bearer token to every request
 client.interceptors.request.use((config) => {
@@ -61,7 +66,7 @@ client.interceptors.response.use(
       isRefreshing = true
 
       try {
-        const response = await axios.post('/api/v1/auth/refresh', { refresh_token: refreshToken })
+        const response = await axios.post(`${API_BASE}/auth/refresh`, { refresh_token: refreshToken })
         const { access_token, refresh_token: newRefreshToken } = response.data
 
         setToken(access_token, newRefreshToken)

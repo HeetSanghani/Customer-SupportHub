@@ -6,6 +6,7 @@ import { useAuthStore } from '../../store/authStore'
 import { authApi } from '../../api/auth'
 import client from '../../api/client'
 import { formatSmartTime } from '../../utils/dateUtils'
+import { buildTicketWsUrl } from '../../utils/wsUrl'
 import {
   Plus, Send, Star, X, HelpCircle, CreditCard,
   Wrench, User as UserIcon, MessageSquare, Sparkles, AlertTriangle,
@@ -393,7 +394,7 @@ function ChatView({ ticketId, onBack, onQuickAction, sidebarOpen, onToggleSideba
   const connectWS = useCallback(() => {
     if (!ticketId || !token) return
     setWsStatus('connecting')
-    const wsUrl = `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host === 'localhost:5173' ? 'localhost:8000' : window.location.host}/ws/chat/${ticketId}?token=${token}`
+    const wsUrl = buildTicketWsUrl(ticketId, token)
     const ws = new WebSocket(wsUrl)
     wsRef.current = ws
     ws.onopen  = () => setWsStatus('connected')

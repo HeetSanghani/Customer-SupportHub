@@ -1,0 +1,157 @@
+databases:
+  - name: supporthub-db
+    databaseName: supporthub
+    user: supporthub
+    plan: free
+    postgresMajorVersion: 16
+
+services:
+  # ─── Redis ─────────────────────────────────────────────────────
+  - type: redis
+    name: supporthub-redis
+    plan: free
+    maxmemoryPolicy: noeviction
+    ipAllowList: []  # allow all internal services
+
+  # ─── FastAPI Backend ────────────────────────────────────────────
+  - type: web
+    name: supporthub-backend
+    runtime: docker
+    dockerfilePath: ./supporthub/backend/Dockerfile
+    dockerContext: ./supporthub/backend
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: supporthub-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          name: supporthub-redis
+          type: redis
+          property: connectionString
+      - key: CELERY_BROKER_URL
+        fromService:
+          name: supporthub-redis
+          type: redis
+          property: connectionString
+      - key: CELERY_RESULT_BACKEND
+        fromService:
+          name: supporthub-redis
+          type: redis
+          property: connectionString
+      # ── Secrets — fill these in the Render Dashboard ──
+      - key: SECRET_KEY
+        sync: false
+      - key: FRONTEND_URL
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_KEY
+        sync: false
+      - key: SUPABASE_BUCKET
+        value: supporthub-attachments
+      - key: MAILGUN_API_KEY
+        sync: false
+      - key: MAILGUN_DOMAIN
+        sync: false
+      - key: META_APP_SECRET
+        sync: false
+      - key: META_VERIFY_TOKEN
+        value: supporthub_verify
+      - key: WHATSAPP_PHONE_ID
+        sync: false
+      - key: WHATSAPP_ACCESS_TOKEN
+        sync: false
+      - key: PAGE_ACCESS_TOKEN
+        sync: false
+      - key: INSTAGRAM_ACCESS_TOKEN
+        sync: false
+      - key: INSTAGRAM_ACCOUNT_ID
+        sync: false
+      - key: IG_PAGE_ID
+        sync: false
+      - key: INSTAGRAM_APP_SECRET
+        sync: false
+      - key: FACEBOOK_PAGE_ID
+        sync: false
+      - key: FACEBOOK_ACCESS_TOKEN
+        sync: false
+      - key: FB_PAGE_ID
+        sync: false
+      - key: SENTRY_DSN
+        sync: false
+
+  # ─── Celery Worker ──────────────────────────────────────────────
+  - type: worker
+    name: supporthub-celery
+    runtime: docker
+    dockerfilePath: ./supporthub/backend/Dockerfile
+    dockerContext: ./supporthub/backend
+    dockerCommand: celery -A app.tasks.celery_app worker --loglevel=info --concurrency=2
+    plan: free
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: supporthub-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          name: supporthub-redis
+          type: redis
+          property: connectionString
+      - key: CELERY_BROKER_URL
+        fromService:
+          name: supporthub-redis
+          type: redis
+          property: connectionString
+      - key: CELERY_RESULT_BACKEND
+        fromService:
+          name: supporthub-redis
+          type: redis
+          property: connectionString
+      - key: SECRET_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_KEY
+        sync: false
+      - key: MAILGUN_API_KEY
+        sync: false
+      - key: MAILGUN_DOMAIN
+        sync: false
+
+  # ─── React Frontend (Static Site) ──────────────────────────────
+  - type: web
+    name: supporthub-frontend
+    runtime: static
+    buildCommand: cd supporthub/frontend && npm install && npm run build
+    staticPublishPath: ./supporthub/frontend/dist
+    pullRequestPreviewsEnabled: false
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      - key: VITE_API_URL
+        fromService:
+          name: supporthub-backend
+          type: web
+          property: host

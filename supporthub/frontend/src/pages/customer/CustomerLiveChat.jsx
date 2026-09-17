@@ -6,6 +6,7 @@ import { useAuthStore } from '../../store/authStore'
 import { Plus, Send, Star, CheckCircle, X, HelpCircle, CreditCard, Wrench, User as UserIcon } from 'lucide-react'
 import client from '../../api/client'
 import { formatTime, formatDate, formatSmartTime } from '../../utils/dateUtils'
+import { buildTicketWsUrl } from '../../utils/wsUrl'
 
 function CsatWidget({ ticketId }) {
   const navigate = useNavigate()
@@ -162,9 +163,7 @@ function ChatPane({ ticketId }) {
   useEffect(() => {
     if (!token || !ticketId) return
 
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const host = window.location.host
-    const wsUrl = `${protocol}//${host}/ws/chat/${ticketId}?token=${token}`
+    const wsUrl = buildTicketWsUrl(ticketId, token)
     const socket = new WebSocket(wsUrl)
     
     socket.onmessage = (event) => {

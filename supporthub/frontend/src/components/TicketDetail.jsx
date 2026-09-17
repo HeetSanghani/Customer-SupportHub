@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { ticketsApi } from '../api/tickets'
 import { ordersApi } from '../api/orders'
 import { useAuthStore } from '../store/authStore'
+import { buildTicketWsUrl } from '../utils/wsUrl'
 import { 
   ArrowLeft, Send, Clock, Zap, X, Search, 
   User, ShoppingBag, Sparkles, ChevronRight, CheckCircle2, 
@@ -143,9 +144,7 @@ export default function TicketDetail({ basePath }) {
       setWsConnected(false)
     }
 
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const host = window.location.host
-    const wsUrl = `${protocol}//${host}/ws/chat/${id}?token=${token}`
+    const wsUrl = buildTicketWsUrl(id, token)
     
     const socket = new WebSocket(wsUrl)
     wsRef.current = socket

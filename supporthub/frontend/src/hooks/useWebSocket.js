@@ -10,7 +10,12 @@ export function useWebSocket(ticketId, onMessage) {
   const connect = useCallback(() => {
     if (!ticketId || !token) return
 
-    const url = `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}/ws/chat/${ticketId}?token=${token}`
+    // In production VITE_API_URL = "https://supporthub-backend.onrender.com"
+    // We convert that to wss://supporthub-backend.onrender.com for WebSocket
+    const wsBase = import.meta.env.VITE_API_URL
+      ? import.meta.env.VITE_API_URL.replace(/^http/, 'ws')
+      : `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}`
+    const url = `${wsBase}/ws/chat/${ticketId}?token=${token}`
     const ws = new WebSocket(url)
     wsRef.current = ws
 

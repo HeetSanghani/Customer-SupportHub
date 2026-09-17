@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { ticketsApi } from '../api/tickets'
 import { useAuthStore } from '../store/authStore'
 import { formatTime, formatSmartTime } from '../utils/dateUtils'
+import { buildTicketWsUrl } from '../utils/wsUrl'
 import { adminApi } from '../api/admin'
 import {
   Facebook, Search, Bot, User, Send, Paperclip,
@@ -248,9 +249,7 @@ export default function FacebookInbox({ basePath = '/agent' }) {
   // 3. WebSocket Real-time Connection
   useEffect(() => {
     if (!selectedTicketId || !token) return
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const host = window.location.host
-    const wsUrl = `${protocol}//${host}/ws/chat/${selectedTicketId}?token=${token}`
+    const wsUrl = buildTicketWsUrl(selectedTicketId, token)
     const socket = new WebSocket(wsUrl)
 
     socket.onmessage = (event) => {
