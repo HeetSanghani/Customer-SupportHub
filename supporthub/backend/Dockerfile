@@ -21,6 +21,7 @@ COPY app ./app
 COPY main.py ./
 COPY alembic.ini ./
 COPY alembic ./alembic
+COPY clean_and_seed.py ./
 COPY start.sh ./
 RUN chmod +x start.sh
 

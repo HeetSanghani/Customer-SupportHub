@@ -38,8 +38,10 @@ limiter = Limiter(key_func=get_remote_address)
 # ─── Lifespan ─────────────────────────────────────────────────────────────────
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    if not settings.is_production:
-        await init_db()  # Use Alembic migrations in production
+    try:
+        await init_db()
+    except Exception as e:
+        logging.getLogger("app.main").warning(f"init_db warning during startup: {e}")
     yield
 
 # ─── App ──────────────────────────────────────────────────────────────────────
@@ -57,13 +59,18 @@ app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # ─── CORS ─────────────────────────────────────────────────────────────────────
-origins = [settings.frontend_url]
-if not settings.is_production:
-    origins += ["http://localhost:5173", "http://127.0.0.1:5173"]
+origins = [
+    settings.frontend_url,
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+]
+if settings.frontend_url:
+    origins.append(settings.frontend_url.rstrip("/"))
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
+    allow_origin_regex=r"https://.*\.onrender\.com",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
