@@ -1,35 +1,36 @@
 FROM python:3.13-slim
 
+# Install uv for fast, reliable package installation
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+
 WORKDIR /app
 
+# Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     build-essential \
     libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Upgrade pip and install dependencies
-COPY pyproject.toml ./
-RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir .
+# Install python dependencies with uv
+COPY pyproject.toml uv.lock ./
+RUN uv sync --frozen --no-dev
 
 # Copy application source
 COPY app ./app
 COPY main.py ./
-
-# Copy Alembic migrations (needed by the migrate service)
 COPY alembic.ini ./
 COPY alembic ./alembic
+COPY start.sh ./
+RUN chmod +x start.sh
 
 # Create uploads directory
 RUN mkdir -p /app/uploads
 
 ENV PYTHONUNBUFFERED=1
 ENV APP_ENV=production
+ENV PATH="/app/.venv/bin:$PATH"
 
 EXPOSE 8000
 
-HEALTHCHECK --interval=10s --timeout=5s --retries=3 \
-    CMD curl -f http://localhost:8000/health || exit 1
-
-CMD uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}
+CMD ["./start.sh"]
